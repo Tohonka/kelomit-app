@@ -32,3 +32,4 @@ google-services.json
 # Android Profiling
 *.hprof
 Kelomit-app-plan.txt
+node_modules

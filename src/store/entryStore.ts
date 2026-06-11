@@ -1,0 +1,74 @@
+import {create} from 'zustand';
+import {
+  getEntriesForDay,
+  createEntry,
+  updateEntry,
+  deleteEntry,
+  type CreateEntryParams,
+} from '../db/entries';
+import type {Entry} from '../types';
+
+interface EntryState {
+  entriesByDay: Record<number, Entry[]>;
+  isLoading: boolean;
+  error: string | null;
+  loadEntriesForDay: (dayId: number) => Promise<void>;
+  addEntry: (params: CreateEntryParams) => Promise<Entry>;
+  editEntry: (
+    id: number,
+    fields: Parameters<typeof updateEntry>[1],
+    dayId: number,
+  ) => Promise<void>;
+  removeEntry: (id: number, dayId: number) => Promise<void>;
+}
+
+export const useEntryStore = create<EntryState>((set, get) => ({
+  entriesByDay: {},
+  isLoading: false,
+  error: null,
+
+  loadEntriesForDay: async (dayId: number) => {
+    set({isLoading: true, error: null});
+    try {
+      const entries = await getEntriesForDay(dayId);
+      set(state => ({
+        entriesByDay: {...state.entriesByDay, [dayId]: entries},
+        isLoading: false,
+      }));
+    } catch (e) {
+      set({error: String(e), isLoading: false});
+    }
+  },
+
+  addEntry: async (params: CreateEntryParams) => {
+    const entry = await createEntry(params);
+    set(state => {
+      const existing = state.entriesByDay[params.day_id] ?? [];
+      return {
+        entriesByDay: {
+          ...state.entriesByDay,
+          [params.day_id]: [entry, ...existing],
+        },
+      };
+    });
+    return entry;
+  },
+
+  editEntry: async (id, fields, dayId) => {
+    await updateEntry(id, fields);
+    const entries = await getEntriesForDay(dayId);
+    set(state => ({
+      entriesByDay: {...state.entriesByDay, [dayId]: entries},
+    }));
+  },
+
+  removeEntry: async (id, dayId) => {
+    await deleteEntry(id);
+    set(state => ({
+      entriesByDay: {
+        ...state.entriesByDay,
+        [dayId]: (state.entriesByDay[dayId] ?? []).filter(e => e.id !== id),
+      },
+    }));
+  },
+}));
