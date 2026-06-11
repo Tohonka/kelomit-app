@@ -1,17 +1,19 @@
 import React from 'react';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import HomeScreen from '../screens/HomeScreen';
 import CalendarScreen from '../screens/CalendarScreen';
 import SettingsScreen from '../screens/SettingsScreen';
-import {colors, typography} from '../theme';
+import {useTheme, typography} from '../theme';
 import type {TabParamList} from './navigationTypes';
 
 const Tab = createBottomTabNavigator<TabParamList>();
 
 export default function MainTabs() {
+  const {colors} = useTheme();
   return (
     <Tab.Navigator
-      screenOptions={{
+      screenOptions={({route}) => ({
         headerShown: false,
         tabBarStyle: {
           backgroundColor: colors.bgCard,
@@ -23,7 +25,15 @@ export default function MainTabs() {
           fontSize: typography.sizes.xs,
           fontWeight: typography.weights.medium,
         },
-      }}>
+        tabBarIcon: ({color, size}) => {
+          const icons: Record<string, string> = {
+            Home: 'home-variant',
+            Calendar: 'calendar-month',
+            Settings: 'cog',
+          };
+          return <Icon name={icons[route.name] ?? 'circle'} size={size} color={color} />;
+        },
+      })}>
       <Tab.Screen
         name="Home"
         component={HomeScreen}

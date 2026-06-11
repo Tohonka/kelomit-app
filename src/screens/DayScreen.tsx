@@ -1,77 +1,151 @@
-import React, {useEffect} from 'react';
-import {StyleSheet, SafeAreaView, ScrollView} from 'react-native';
+import React, {useEffect, useState, useCallback, useMemo, useRef} from 'react';
+import {StyleSheet, ScrollView, PanResponder, View, Text} from 'react-native';
+import {SafeAreaView} from 'react-native-safe-area-context';
 import {useDayStore} from '../store/dayStore';
 import {useEntryStore} from '../store/entryStore';
-import {colors, spacing} from '../theme';
+import {useProjectStore} from '../store/projectStore';
+import {useTagStore} from '../store/tagStore';
+import {useTheme, typography, spacing} from '../theme';
+import type {Colors} from '../theme';
 import EntryList from '../components/entries/EntryList';
 import DaySummaryCard from '../components/day/DaySummaryCard';
+import FilterBar from '../components/day/FilterBar';
 import FAB from '../components/ui/FAB';
 import type {RootStackScreenProps} from '../navigation/navigationTypes';
+import type {Entry} from '../types';
+import {calcDayWorkSecs, formatHours} from '../utils/hoursUtils';
 
 type Props = RootStackScreenProps<'DayScreen'>;
 
+const makeStyles = (c: Colors) =>
+  StyleSheet.create({
+    container: {flex: 1, backgroundColor: c.bg},
+    flex: {flex: 1},
+    scrollContent: {paddingTop: spacing.md, paddingBottom: 100},
+    headerTotal: {
+      color: c.primary,
+      fontSize: typography.sizes.base,
+      fontWeight: typography.weights.semibold,
+      marginRight: spacing.md,
+    },
+  });
+
+function shiftDate(dateStr: string, days: number): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const date = new Date(y, m - 1, d + days);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
 export default function DayScreen({navigation, route}: Props) {
-  const {date} = route.params;
+  const [currentDate, setCurrentDate] = useState(route.params.date);
+  const {colors} = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const {loadDay, daysCache, updateDayTimes} = useDayStore();
   const {entriesByDay, loadEntriesForDay} = useEntryStore();
+  const {projects, loaded: projectsLoaded, load: loadProjects} = useProjectStore();
+  const {tags, loaded: tagsLoaded, load: loadTags} = useTagStore();
 
-  const day = daysCache[date];
-  const entries = day ? (entriesByDay[day.id] ?? []) : [];
+  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
+  const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
 
+  const day = daysCache[currentDate];
+  const allEntries = day ? (entriesByDay[day.id] ?? []) : [];
+
+  useEffect(() => { loadDay(currentDate); }, [currentDate, loadDay]);
+  useEffect(() => { if (day) { loadEntriesForDay(day.id); } }, [day, loadEntriesForDay]);
+  useEffect(() => { if (!projectsLoaded) { loadProjects(); } }, [projectsLoaded, loadProjects]);
+  useEffect(() => { if (!tagsLoaded) { loadTags(); } }, [tagsLoaded, loadTags]);
+
+  // Update navigation title and work-hours in header when day/entries change
   useEffect(() => {
-    loadDay(date);
-  }, [date, loadDay]);
+    const [y, m, d] = currentDate.split('-').map(Number);
+    const dateObj = new Date(y, m - 1, d);
+    const label = dateObj.toLocaleDateString('en-GB', {weekday: 'short', day: 'numeric', month: 'short'});
+    const totalSecs = day ? calcDayWorkSecs(day, allEntries) : 0;
+    navigation.setOptions({
+      title: label,
+      headerRight: totalSecs > 0
+        ? () => <Text style={styles.headerTotal}>{formatHours(totalSecs)}</Text>
+        : undefined,
+    });
+  }, [currentDate, day, allEntries, navigation, styles]);
 
-  useEffect(() => {
-    if (day) {
-      loadEntriesForDay(day.id);
+  const goToDate = useCallback((newDate: string) => {
+    setCurrentDate(newDate);
+    setSelectedProjectId(null);
+    setSelectedTagIds([]);
+  }, []);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, {dx, dy}) =>
+        Math.abs(dx) > 20 && Math.abs(dx) > Math.abs(dy) * 1.5,
+      onPanResponderRelease: (_, {dx}) => {
+        if (dx < -60) { goToDate(shiftDate(currentDate, 1)); }
+        else if (dx > 60) { goToDate(shiftDate(currentDate, -1)); }
+      },
+    }),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ).current;
+
+  const filteredEntries: Entry[] = allEntries.filter(e => {
+    if (selectedProjectId != null && e.project?.id !== selectedProjectId) { return false; }
+    if (selectedTagIds.length > 0) {
+      const entryTagIds = (e.tags ?? []).map(t => t.id);
+      if (!selectedTagIds.every(id => entryTagIds.includes(id))) { return false; }
     }
-  }, [day, loadEntriesForDay]);
+    return true;
+  });
+
+  const toggleTag = useCallback((id: number) => {
+    setSelectedTagIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id],
+    );
+  }, []);
+
+  const clearFilters = useCallback(() => {
+    setSelectedProjectId(null);
+    setSelectedTagIds([]);
+  }, []);
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView
-        style={styles.flex}
-        contentContainerStyle={styles.scrollContent}>
-        {day && (
-          <DaySummaryCard
-            day={day}
-            entries={entries}
-            onChangeStarted={iso => updateDayTimes(date, iso, day.ended_at)}
-            onChangeEnded={iso => updateDayTimes(date, day.started_at, iso)}
+      <FilterBar
+        projects={projects}
+        tags={tags}
+        selectedProjectId={selectedProjectId}
+        selectedTagIds={selectedTagIds}
+        onSelectProject={setSelectedProjectId}
+        onToggleTag={toggleTag}
+        onClear={clearFilters}
+      />
+      <View style={styles.flex} {...panResponder.panHandlers}>
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          {day && (
+            <DaySummaryCard
+              day={day}
+              entries={allEntries}
+              onUpdateTimes={fields => updateDayTimes(currentDate, fields)}
+            />
+          )}
+          <EntryList
+            inline
+            entries={filteredEntries}
+            onPressEntry={entry =>
+              navigation.navigate('EntryDetailScreen', {
+                entryId: entry.id,
+                dayId: entry.day_id,
+              })
+            }
           />
-        )}
-        <EntryList
-          inline
-          entries={entries}
-          onPressEntry={entry =>
-            navigation.navigate('EntryDetailScreen', {
-              entryId: entry.id,
-              dayId: entry.day_id,
-            })
-          }
-        />
-      </ScrollView>
+        </ScrollView>
+      </View>
       <FAB
         onPress={() => {
-          if (!day) {
-            return;
-          }
-          navigation.navigate('AddEntryModal', {date, dayId: day.id});
+          if (!day) { return; }
+          navigation.navigate('AddEntryModal', {date: currentDate, dayId: day.id});
         }}
       />
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  flex: {flex: 1},
-  scrollContent: {
-    paddingTop: spacing.md,
-    paddingBottom: 100,
-  },
-});

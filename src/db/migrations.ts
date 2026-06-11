@@ -86,4 +86,18 @@ export const migrations: Migration[] = [
       INSERT OR IGNORE INTO settings (key, value) VALUES ('default_project_id', '');
     `,
   },
+  {
+    version: 2,
+    up: `
+      INSERT OR IGNORE INTO settings (key, value) VALUES ('theme_mode', 'system');
+    `,
+  },
+  {
+    version: 3,
+    up: `
+      ALTER TABLE days ADD COLUMN started_at_2 TEXT;
+      ALTER TABLE days ADD COLUMN ended_at_2 TEXT;
+      INSERT OR IGNORE INTO settings (key, value) VALUES ('show_week_numbers', 'false');
+    `,
+  },
 ];

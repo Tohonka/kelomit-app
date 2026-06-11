@@ -1,17 +1,36 @@
-import React from 'react';
+import React, {useMemo} from 'react';
 import {FlatList, Text, StyleSheet, View} from 'react-native';
 import type {Entry} from '../../types';
 import EntryListItem from './EntryListItem';
-import {colors, typography, spacing} from '../../theme';
+import {useTheme, typography, spacing} from '../../theme';
+import type {Colors} from '../../theme';
 
 interface Props {
   entries: Entry[];
   onPressEntry: (entry: Entry) => void;
-  /** Render items inline (no FlatList) when inside a ScrollView */
   inline?: boolean;
 }
 
+const makeStyles = (c: Colors) =>
+  StyleSheet.create({
+    list: {paddingBottom: 100},
+    empty: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingTop: spacing.xxl,
+    },
+    emptyText: {
+      color: c.textMuted,
+      fontSize: typography.sizes.base,
+      textAlign: 'center',
+    },
+  });
+
 export default function EntryList({entries, onPressEntry, inline}: Props) {
+  const {colors} = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
   if (entries.length === 0) {
     return (
       <View style={styles.empty}>
@@ -24,11 +43,7 @@ export default function EntryList({entries, onPressEntry, inline}: Props) {
     return (
       <View>
         {entries.map(item => (
-          <EntryListItem
-            key={item.id}
-            entry={item}
-            onPress={() => onPressEntry(item)}
-          />
+          <EntryListItem key={item.id} entry={item} onPress={() => onPressEntry(item)} />
         ))}
       </View>
     );
@@ -45,20 +60,3 @@ export default function EntryList({entries, onPressEntry, inline}: Props) {
     />
   );
 }
-
-const styles = StyleSheet.create({
-  list: {
-    paddingBottom: 100,
-  },
-  empty: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: spacing.xxl,
-  },
-  emptyText: {
-    color: colors.textMuted,
-    fontSize: typography.sizes.base,
-    textAlign: 'center',
-  },
-});

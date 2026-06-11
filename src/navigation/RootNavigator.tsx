@@ -5,12 +5,13 @@ import DayScreen from '../screens/DayScreen';
 import EntryDetailScreen from '../screens/EntryDetailScreen';
 import AddEntryModal from '../screens/AddEntryModal';
 import ProjectsScreen from '../screens/ProjectsScreen';
-import {colors} from '../theme';
+import {useTheme} from '../theme';
 import type {RootStackParamList} from './navigationTypes';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function RootNavigator() {
+  const {colors} = useTheme();
   return (
     <Stack.Navigator
       screenOptions={{
@@ -37,11 +38,11 @@ export default function RootNavigator() {
       <Stack.Screen
         name="AddEntryModal"
         component={AddEntryModal}
-        options={{
-          title: 'Add Entry',
+        options={({route}) => ({
+          title: route.params.entryId ? 'Edit Entry' : 'Add Entry',
           presentation: 'modal',
           headerStyle: {backgroundColor: colors.bgCard},
-        }}
+        })}
       />
       <Stack.Screen
         name="ProjectsScreen"

@@ -257,3 +257,58 @@ export async function deleteEntry(id: number): Promise<void> {
   const db = getDB();
   await db.execute('DELETE FROM entries WHERE id = ?;', [id]);
 }
+
+/**
+ * Returns work seconds (activity_type='work') keyed by ISO date string,
+ * for all days in the given range that have tracked entries.
+ * Uses SQLite strftime('%s') for from/to interval math.
+ */
+export async function getWorkSecondsByDay(
+  startDate: string,
+  endDate: string,
+): Promise<Record<string, number>> {
+  const db = getDB();
+  // Day-level started_at/ended_at is the source of truth (mirrors calcDayWorkSecs).
+  // Falls back to summing entry durations when day times are absent.
+  const result = await db.execute(
+    `SELECT d.date,
+       CASE
+         WHEN d.started_at IS NOT NULL AND d.ended_at IS NOT NULL THEN
+           MAX(0, CAST(strftime('%s', d.ended_at) AS INTEGER)
+                  - CAST(strftime('%s', d.started_at) AS INTEGER))
+           + CASE WHEN d.started_at_2 IS NOT NULL AND d.ended_at_2 IS NOT NULL
+               THEN MAX(0, CAST(strftime('%s', d.ended_at_2) AS INTEGER)
+                           - CAST(strftime('%s', d.started_at_2) AS INTEGER))
+               ELSE 0 END
+         ELSE COALESCE(es.total, 0)
+       END AS work_seconds
+     FROM days d
+     LEFT JOIN (
+       SELECT day_id,
+         CAST(SUM(
+           CASE
+             WHEN duration_sec IS NOT NULL THEN duration_sec
+             WHEN time_from IS NOT NULL AND time_to IS NOT NULL
+               THEN MAX(0, CAST(strftime('%s', time_to) AS INTEGER)
+                          - CAST(strftime('%s', time_from) AS INTEGER))
+             ELSE 0
+           END
+         ) AS INTEGER) AS total
+       FROM entries
+       WHERE activity_type = 'work'
+       GROUP BY day_id
+     ) es ON es.day_id = d.id
+     WHERE d.date >= ? AND d.date <= ?;`,
+    [startDate, endDate],
+  );
+
+  const map: Record<string, number> = {};
+  for (const row of result.rows ?? []) {
+    const r = row as Record<string, unknown>;
+    const secs = (r.work_seconds as number | null) ?? 0;
+    if (secs > 0) {
+      map[r.date as string] = secs;
+    }
+  }
+  return map;
+}

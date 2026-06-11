@@ -1,14 +1,19 @@
 import {create} from 'zustand';
 import {getAllSettings, setSetting} from '../db/settings';
 import type {Settings, ActivityType} from '../types';
+import type {ThemeMode} from '../theme';
 
 interface SettingsState extends Settings {
   loaded: boolean;
+  theme_mode: ThemeMode;
+  show_week_numbers: boolean;
   load: () => Promise<void>;
   setGpsEnabled: (enabled: boolean) => Promise<void>;
   setGpsInterval: (ms: number) => Promise<void>;
   setDefaultActivityType: (type: ActivityType) => Promise<void>;
   setDefaultProjectId: (id: number | null) => Promise<void>;
+  setThemeMode: (mode: ThemeMode) => Promise<void>;
+  setShowWeekNumbers: (show: boolean) => Promise<void>;
 }
 
 export const useSettingsStore = create<SettingsState>(set => ({
@@ -16,11 +21,18 @@ export const useSettingsStore = create<SettingsState>(set => ({
   gps_interval_ms: 60000,
   default_activity_type: 'work',
   default_project_id: null,
+  theme_mode: 'system',
+  show_week_numbers: false,
   loaded: false,
 
   load: async () => {
     const settings = await getAllSettings();
-    set({...settings, loaded: true});
+    const raw = settings as unknown as Record<string, unknown>;
+    const themeRaw = raw.theme_mode as string | undefined;
+    const theme_mode: ThemeMode =
+      themeRaw === 'light' || themeRaw === 'dark' ? themeRaw : 'system';
+    const show_week_numbers = raw.show_week_numbers === 'true';
+    set({...settings, theme_mode, show_week_numbers, loaded: true});
   },
 
   setGpsEnabled: async enabled => {
@@ -41,5 +53,15 @@ export const useSettingsStore = create<SettingsState>(set => ({
   setDefaultProjectId: async id => {
     await setSetting('default_project_id', id == null ? '' : String(id));
     set({default_project_id: id});
+  },
+
+  setThemeMode: async mode => {
+    await setSetting('theme_mode', mode);
+    set({theme_mode: mode});
+  },
+
+  setShowWeekNumbers: async show => {
+    await setSetting('show_week_numbers', String(show));
+    set({show_week_numbers: show});
   },
 }));

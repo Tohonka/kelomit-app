@@ -2,6 +2,12 @@ apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
+// react-native-vector-icons: copy font files into the APK
+project.ext.vectoricons = [
+    iconFontNames: ['MaterialCommunityIcons.ttf']
+]
+apply from: "../../node_modules/react-native-vector-icons/fonts.gradle"
+
 /**
  * This is the configuration block to customize your React Native Android app.
  * By default you don't need to apply any configuration, just uncomment the lines you need.
@@ -71,6 +77,21 @@ def enableProguardInReleaseBuilds = false
  * this variant is about 6MiB larger per architecture than default.
  */
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
+
+// react-native-permissions: declare which permissions to include
+project.ext {
+    reactNativePermissionsAndroidPermissions = [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "READ_MEDIA_IMAGES",
+        "READ_MEDIA_VIDEO",
+        "READ_MEDIA_AUDIO",
+    ]
+}
 
 android {
     ndkVersion rootProject.ext.ndkVersion

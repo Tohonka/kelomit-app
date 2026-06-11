@@ -6,7 +6,7 @@ export type RootStackParamList = {
   MainTabs: undefined;
   DayScreen: {date: string};
   EntryDetailScreen: {entryId: number; dayId: number};
-  AddEntryModal: {date: string; dayId: number};
+  AddEntryModal: {date?: string; dayId: number; entryId?: number};
   ProjectsScreen: undefined;
 };
 

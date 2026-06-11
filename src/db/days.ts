@@ -7,6 +7,8 @@ function rowToDay(row: Record<string, unknown>): Day {
     date: row.date as string,
     started_at: (row.started_at as string | null) ?? null,
     ended_at: (row.ended_at as string | null) ?? null,
+    started_at_2: (row.started_at_2 as string | null) ?? null,
+    ended_at_2: (row.ended_at_2 as string | null) ?? null,
     notes: (row.notes as string | null) ?? null,
     created_at: row.created_at as string,
     updated_at: row.updated_at as string,
@@ -15,10 +17,7 @@ function rowToDay(row: Record<string, unknown>): Day {
 
 export async function getOrCreateDay(date: string): Promise<Day> {
   const db = getDB();
-  await db.execute(
-    `INSERT OR IGNORE INTO days (date) VALUES (?);`,
-    [date],
-  );
+  await db.execute(`INSERT OR IGNORE INTO days (date) VALUES (?);`, [date]);
   const result = await db.execute('SELECT * FROM days WHERE date = ?;', [date]);
   return rowToDay(result.rows![0] as Record<string, unknown>);
 }
@@ -26,16 +25,11 @@ export async function getOrCreateDay(date: string): Promise<Day> {
 export async function getDayByDate(date: string): Promise<Day | null> {
   const db = getDB();
   const result = await db.execute('SELECT * FROM days WHERE date = ?;', [date]);
-  if (!result.rows || result.rows.length === 0) {
-    return null;
-  }
+  if (!result.rows || result.rows.length === 0) { return null; }
   return rowToDay(result.rows[0] as Record<string, unknown>);
 }
 
-export async function getDaysInRange(
-  startDate: string,
-  endDate: string,
-): Promise<Day[]> {
+export async function getDaysInRange(startDate: string, endDate: string): Promise<Day[]> {
   const db = getDB();
   const result = await db.execute(
     'SELECT * FROM days WHERE date >= ? AND date <= ? ORDER BY date ASC;',
@@ -44,31 +38,26 @@ export async function getDaysInRange(
   return (result.rows ?? []).map(r => rowToDay(r as Record<string, unknown>));
 }
 
-export async function updateDay(
-  id: number,
-  fields: Partial<Pick<Day, 'started_at' | 'ended_at' | 'notes'>>,
-): Promise<void> {
+type DayTimeFields = Partial<Pick<Day,
+  'started_at' | 'ended_at' | 'started_at_2' | 'ended_at_2' | 'notes'
+>>;
+
+export async function updateDay(id: number, fields: DayTimeFields): Promise<void> {
   const db = getDB();
   const sets: string[] = [];
   const vals: unknown[] = [];
 
-  if ('started_at' in fields) {
-    sets.push('started_at = ?');
-    vals.push(fields.started_at);
-  }
-  if ('ended_at' in fields) {
-    sets.push('ended_at = ?');
-    vals.push(fields.ended_at);
-  }
-  if ('notes' in fields) {
-    sets.push('notes = ?');
-    vals.push(fields.notes);
+  const fieldKeys: (keyof DayTimeFields)[] = [
+    'started_at', 'ended_at', 'started_at_2', 'ended_at_2', 'notes',
+  ];
+  for (const key of fieldKeys) {
+    if (key in fields) {
+      sets.push(`${key} = ?`);
+      vals.push(fields[key] ?? null);
+    }
   }
 
-  if (sets.length === 0) {
-    return;
-  }
-
+  if (sets.length === 0) { return; }
   sets.push("updated_at = datetime('now')");
   vals.push(id);
 

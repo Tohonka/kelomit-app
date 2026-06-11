@@ -1,5 +1,5 @@
 import {differenceInSeconds, parseISO} from 'date-fns';
-import type {Entry} from '../types';
+import type {Entry, Day} from '../types';
 
 export interface HourBreakdown {
   workSeconds: number;
@@ -13,10 +13,7 @@ function entrySeconds(entry: Entry): number {
     return entry.duration_sec;
   }
   if (entry.time_from && entry.time_to) {
-    const s = differenceInSeconds(
-      parseISO(entry.time_to),
-      parseISO(entry.time_from),
-    );
+    const s = differenceInSeconds(parseISO(entry.time_to), parseISO(entry.time_from));
     return s > 0 ? s : 0;
   }
   return 0;
@@ -29,16 +26,10 @@ export function calcHourBreakdown(entries: Entry[]): HourBreakdown {
 
   for (const e of entries) {
     const secs = entrySeconds(e);
-    if (secs === 0) {
-      continue;
-    }
-    if (e.activity_type === 'work') {
-      workSeconds += secs;
-    } else if (e.activity_type === 'personal_work') {
-      personalWorkSeconds += secs;
-    } else {
-      personalSeconds += secs;
-    }
+    if (secs === 0) { continue; }
+    if (e.activity_type === 'work') { workSeconds += secs; }
+    else if (e.activity_type === 'personal_work') { personalWorkSeconds += secs; }
+    else { personalSeconds += secs; }
   }
 
   return {
@@ -49,7 +40,25 @@ export function calcHourBreakdown(entries: Entry[]): HourBreakdown {
   };
 }
 
+function legSecs(start: string | null, end: string | null): number {
+  if (!start || !end) { return 0; }
+  const diff = new Date(end).getTime() - new Date(start).getTime();
+  return diff > 0 ? diff / 1000 : 0;
+}
+
+/** Total work seconds for the day. Uses day start/end as source of truth if set,
+ *  otherwise falls back to the sum of entry durations. */
+export function calcDayWorkSecs(day: Day, entries: Entry[]): number {
+  const leg1 = legSecs(day.started_at, day.ended_at);
+  const leg2 = legSecs(day.started_at_2, day.ended_at_2);
+  if (leg1 > 0 || leg2 > 0) { return leg1 + leg2; }
+  return calcHourBreakdown(entries).workSeconds;
+}
+
 export function formatHours(seconds: number): string {
-  const h = seconds / 3600;
-  return `${h.toFixed(1)}h`;
+  if (seconds <= 0) { return '0h'; }
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (m === 0) { return `${h}h`; }
+  return `${h}h ${m}m`;
 }

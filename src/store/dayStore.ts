@@ -3,6 +3,10 @@ import {format} from 'date-fns';
 import {getOrCreateDay, getDayByDate, updateDay} from '../db/days';
 import type {Day} from '../types';
 
+type DayTimeFields = Partial<Pick<Day,
+  'started_at' | 'ended_at' | 'started_at_2' | 'ended_at_2'
+>>;
+
 interface DayState {
   today: Day | null;
   selectedDay: Day | null;
@@ -11,11 +15,7 @@ interface DayState {
   error: string | null;
   loadToday: () => Promise<void>;
   loadDay: (date: string) => Promise<Day>;
-  updateDayTimes: (
-    date: string,
-    started_at: string | null,
-    ended_at: string | null,
-  ) => Promise<void>;
+  updateDayTimes: (date: string, fields: DayTimeFields) => Promise<void>;
 }
 
 export const useDayStore = create<DayState>((set, get) => ({
@@ -54,25 +54,16 @@ export const useDayStore = create<DayState>((set, get) => ({
     return day;
   },
 
-  updateDayTimes: async (date, started_at, ended_at) => {
+  updateDayTimes: async (date, fields) => {
     const existing = get().daysCache[date];
-    if (!existing) {
-      return;
-    }
-    await updateDay(existing.id, {started_at, ended_at});
+    if (!existing) { return; }
+    await updateDay(existing.id, fields);
     const updated = await getDayByDate(date);
-    if (!updated) {
-      return;
-    }
-    set(state => {
-      const next = {...state.daysCache, [date]: updated};
-      return {
-        daysCache: next,
-        today:
-          state.today?.date === date ? updated : state.today,
-        selectedDay:
-          state.selectedDay?.date === date ? updated : state.selectedDay,
-      };
-    });
+    if (!updated) { return; }
+    set(state => ({
+      daysCache: {...state.daysCache, [date]: updated},
+      today: state.today?.date === date ? updated : state.today,
+      selectedDay: state.selectedDay?.date === date ? updated : state.selectedDay,
+    }));
   },
 }));
