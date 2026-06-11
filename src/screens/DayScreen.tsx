@@ -1,9 +1,10 @@
 import React, {useEffect} from 'react';
-import {View, StyleSheet, SafeAreaView} from 'react-native';
+import {StyleSheet, SafeAreaView, ScrollView} from 'react-native';
 import {useDayStore} from '../store/dayStore';
 import {useEntryStore} from '../store/entryStore';
 import {colors, spacing} from '../theme';
 import EntryList from '../components/entries/EntryList';
+import DaySummaryCard from '../components/day/DaySummaryCard';
 import FAB from '../components/ui/FAB';
 import type {RootStackScreenProps} from '../navigation/navigationTypes';
 
@@ -11,7 +12,7 @@ type Props = RootStackScreenProps<'DayScreen'>;
 
 export default function DayScreen({navigation, route}: Props) {
   const {date} = route.params;
-  const {loadDay, daysCache} = useDayStore();
+  const {loadDay, daysCache, updateDayTimes} = useDayStore();
   const {entriesByDay, loadEntriesForDay} = useEntryStore();
 
   const day = daysCache[date];
@@ -29,8 +30,19 @@ export default function DayScreen({navigation, route}: Props) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.flex}>
+      <ScrollView
+        style={styles.flex}
+        contentContainerStyle={styles.scrollContent}>
+        {day && (
+          <DaySummaryCard
+            day={day}
+            entries={entries}
+            onChangeStarted={iso => updateDayTimes(date, iso, day.ended_at)}
+            onChangeEnded={iso => updateDayTimes(date, day.started_at, iso)}
+          />
+        )}
         <EntryList
+          inline
           entries={entries}
           onPressEntry={entry =>
             navigation.navigate('EntryDetailScreen', {
@@ -39,7 +51,7 @@ export default function DayScreen({navigation, route}: Props) {
             })
           }
         />
-      </View>
+      </ScrollView>
       <FAB
         onPress={() => {
           if (!day) {
@@ -57,7 +69,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.bg,
   },
-  flex: {
-    flex: 1,
+  flex: {flex: 1},
+  scrollContent: {
+    paddingTop: spacing.md,
+    paddingBottom: 100,
   },
 });

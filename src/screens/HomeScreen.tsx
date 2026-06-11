@@ -1,18 +1,18 @@
 import React, {useEffect} from 'react';
-import {View, Text, StyleSheet, SafeAreaView} from 'react-native';
+import {View, Text, StyleSheet, SafeAreaView, ScrollView} from 'react-native';
 import {useDayStore} from '../store/dayStore';
 import {useEntryStore} from '../store/entryStore';
 import {colors, typography, spacing} from '../theme';
 import EntryList from '../components/entries/EntryList';
+import DaySummaryCard from '../components/day/DaySummaryCard';
 import FAB from '../components/ui/FAB';
 import type {TabScreenProps} from '../navigation/navigationTypes';
-import {formatDate} from '../utils/dateUtils';
-import {todayDate} from '../utils/dateUtils';
+import {formatDate, todayDate} from '../utils/dateUtils';
 
 type Props = TabScreenProps<'Home'>;
 
 export default function HomeScreen({navigation}: Props) {
-  const {today, loadToday} = useDayStore();
+  const {today, loadToday, updateDayTimes} = useDayStore();
   const {entriesByDay, loadEntriesForDay} = useEntryStore();
 
   const date = todayDate();
@@ -40,19 +40,36 @@ export default function HomeScreen({navigation}: Props) {
       <View style={styles.header}>
         <Text style={styles.headerDate}>{formatDate(date)}</Text>
         <Text style={styles.headerSub}>
-          {new Date().toLocaleDateString('en-US', {weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'})}
+          {new Date().toLocaleDateString('en-US', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+          })}
         </Text>
       </View>
 
-      <EntryList
-        entries={entries}
-        onPressEntry={entry =>
-          navigation.navigate('EntryDetailScreen', {
-            entryId: entry.id,
-            dayId: entry.day_id,
-          })
-        }
-      />
+      <ScrollView style={styles.flex} contentContainerStyle={styles.scrollContent}>
+        {today && (
+          <DaySummaryCard
+            day={today}
+            entries={entries}
+            onChangeStarted={iso => updateDayTimes(date, iso, today.ended_at)}
+            onChangeEnded={iso => updateDayTimes(date, today.started_at, iso)}
+          />
+        )}
+
+        <EntryList
+          inline
+          entries={entries}
+          onPressEntry={entry =>
+            navigation.navigate('EntryDetailScreen', {
+              entryId: entry.id,
+              dayId: entry.day_id,
+            })
+          }
+        />
+      </ScrollView>
 
       <FAB onPress={openAddEntry} />
     </SafeAreaView>
@@ -80,5 +97,10 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.sm,
     color: colors.textMuted,
     marginTop: 2,
+  },
+  flex: {flex: 1},
+  scrollContent: {
+    paddingTop: spacing.md,
+    paddingBottom: 100,
   },
 });

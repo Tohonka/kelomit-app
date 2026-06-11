@@ -13,8 +13,8 @@ import {useProjectStore} from '../store/projectStore';
 import {useTagStore} from '../store/tagStore';
 import {colors, typography, spacing, radius} from '../theme';
 import Button from '../components/ui/Button';
-import ActivityBadge from '../components/entries/ActivityBadge';
 import TagChip from '../components/entries/TagChip';
+import TimePicker from '../components/ui/TimePicker';
 import type {RootStackScreenProps} from '../navigation/navigationTypes';
 import type {EntryType, ActivityType, Tag} from '../types';
 
@@ -47,6 +47,13 @@ export default function AddEntryModal({navigation, route}: Props) {
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+
+  // Time tracking
+  type TimeMode = 'none' | 'duration' | 'range';
+  const [timeMode, setTimeMode] = useState<TimeMode>('none');
+  const [durationMinutes, setDurationMinutes] = useState('');
+  const [timeFrom, setTimeFrom] = useState<string | null>(null);
+  const [timeTo, setTimeTo] = useState<string | null>(null);
 
   useEffect(() => {
     if (!projectsLoaded) {
@@ -81,6 +88,11 @@ export default function AddEntryModal({navigation, route}: Props) {
   const handleSave = async () => {
     setIsSaving(true);
     try {
+      const durationSec =
+        timeMode === 'duration' && durationMinutes.trim()
+          ? Math.round(parseFloat(durationMinutes) * 60)
+          : null;
+
       await addEntry({
         day_id: dayId,
         entry_type: entryType,
@@ -89,6 +101,9 @@ export default function AddEntryModal({navigation, route}: Props) {
         body: body.trim() || null,
         project_id: selectedProjectId,
         tagIds: selectedTags.map(t => t.id),
+        duration_sec: durationSec,
+        time_from: timeMode === 'range' ? timeFrom : null,
+        time_to: timeMode === 'range' ? timeTo : null,
       });
       navigation.goBack();
     } catch (e) {
@@ -264,6 +279,57 @@ export default function AddEntryModal({navigation, route}: Props) {
         </View>
       )}
 
+      {/* Time tracking */}
+      <Text style={styles.sectionLabel}>Time tracking (optional)</Text>
+      <View style={styles.timeModeRow}>
+        {(['none', 'duration', 'range'] as const).map(mode => (
+          <TouchableOpacity
+            key={mode}
+            style={[
+              styles.timeModeBtn,
+              timeMode === mode && styles.timeModeBtnActive,
+            ]}
+            onPress={() => setTimeMode(mode)}>
+            <Text
+              style={[
+                styles.timeModeBtnText,
+                timeMode === mode && styles.timeModeBtnTextActive,
+              ]}>
+              {mode === 'none' ? 'None' : mode === 'duration' ? 'Duration' : 'From → To'}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {timeMode === 'duration' && (
+        <View style={styles.durationRow}>
+          <TextInput
+            style={[styles.input, styles.durationInput]}
+            value={durationMinutes}
+            onChangeText={setDurationMinutes}
+            placeholder="Minutes"
+            placeholderTextColor={colors.textMuted}
+            keyboardType="numeric"
+            maxLength={5}
+          />
+          <Text style={styles.durationUnit}>min</Text>
+        </View>
+      )}
+
+      {timeMode === 'range' && (
+        <View style={styles.rangeRow}>
+          <View style={styles.rangeBlock}>
+            <Text style={styles.rangeLabel}>From</Text>
+            <TimePicker value={timeFrom} onChange={setTimeFrom} />
+          </View>
+          <Text style={styles.rangeSep}>→</Text>
+          <View style={styles.rangeBlock}>
+            <Text style={styles.rangeLabel}>To</Text>
+            <TimePicker value={timeTo} onChange={setTimeTo} />
+          </View>
+        </View>
+      )}
+
       <View style={styles.saveRow}>
         <Button
           label="Save"
@@ -434,5 +500,69 @@ const styles = StyleSheet.create({
   },
   saveBtn: {
     width: '100%',
+  },
+  timeModeRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  timeModeBtn: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    alignItems: 'center',
+    backgroundColor: colors.bgCard,
+  },
+  timeModeBtnActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primary + '15',
+  },
+  timeModeBtnText: {
+    fontSize: typography.sizes.sm,
+    color: colors.textSecondary,
+    fontWeight: typography.weights.medium,
+  },
+  timeModeBtnTextActive: {
+    color: colors.primary,
+    fontWeight: typography.weights.semibold,
+  },
+  durationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  durationInput: {
+    flex: 1,
+    textAlign: 'center',
+  },
+  durationUnit: {
+    fontSize: typography.sizes.base,
+    color: colors.textSecondary,
+    fontWeight: typography.weights.medium,
+  },
+  rangeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  rangeBlock: {
+    flex: 1,
+    gap: spacing.xs,
+    alignItems: 'center',
+  },
+  rangeLabel: {
+    fontSize: typography.sizes.xs,
+    color: colors.textMuted,
+    fontWeight: typography.weights.medium,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  rangeSep: {
+    fontSize: typography.sizes.md,
+    color: colors.textMuted,
+    marginTop: spacing.lg,
   },
 });

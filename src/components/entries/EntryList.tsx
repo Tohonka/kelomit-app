@@ -7,13 +7,29 @@ import {colors, typography, spacing} from '../../theme';
 interface Props {
   entries: Entry[];
   onPressEntry: (entry: Entry) => void;
+  /** Render items inline (no FlatList) when inside a ScrollView */
+  inline?: boolean;
 }
 
-export default function EntryList({entries, onPressEntry}: Props) {
+export default function EntryList({entries, onPressEntry, inline}: Props) {
   if (entries.length === 0) {
     return (
       <View style={styles.empty}>
         <Text style={styles.emptyText}>No entries yet. Tap + to add one.</Text>
+      </View>
+    );
+  }
+
+  if (inline) {
+    return (
+      <View>
+        {entries.map(item => (
+          <EntryListItem
+            key={item.id}
+            entry={item}
+            onPress={() => onPressEntry(item)}
+          />
+        ))}
       </View>
     );
   }
