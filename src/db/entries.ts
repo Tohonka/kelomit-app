@@ -85,7 +85,7 @@ async function fetchProjectById(
 export async function getEntriesForDay(dayId: number): Promise<Entry[]> {
   const db = getDB();
   const result = await db.execute(
-    'SELECT * FROM entries WHERE day_id = ? ORDER BY created_at DESC;',
+    'SELECT * FROM entries WHERE day_id = ? ORDER BY time_from ASC;',
     [dayId],
   );
   const rows = (result.rows ?? []) as RawRow[];
@@ -311,4 +311,148 @@ export async function getWorkSecondsByDay(
     }
   }
   return map;
+}
+
+// ─── Search ─────────────────────────────────────────────────────────────────
+
+export interface SearchResult {
+  entry: Entry;
+  date: string;
+}
+
+/** Full-text-ish search across entry title/body, tag names and project names. */
+export async function searchEntries(query: string, limit = 60): Promise<SearchResult[]> {
+  const q = query.trim();
+  if (!q) {
+    return [];
+  }
+  const db = getDB();
+  const like = `%${q}%`;
+  const result = await db.execute(
+    `SELECT DISTINCT e.*, d.date AS day_date
+       FROM entries e
+       JOIN days d ON d.id = e.day_id
+       LEFT JOIN projects p ON p.id = e.project_id
+       LEFT JOIN entry_tags et ON et.entry_id = e.id
+       LEFT JOIN tags t ON t.id = et.tag_id
+      WHERE e.title LIKE ? OR e.body LIKE ? OR p.name LIKE ? OR t.name LIKE ?
+      ORDER BY d.date DESC, e.created_at DESC
+      LIMIT ?;`,
+    [like, like, like, like, limit],
+  );
+  const rows = (result.rows ?? []) as RawRow[];
+  if (rows.length === 0) {
+    return [];
+  }
+
+  const entryIds = rows.map(r => r.id as number);
+  const tagsMap = await fetchTagsForEntries(entryIds);
+  const projectIds = [
+    ...new Set(rows.map(r => r.project_id as number | null).filter(Boolean)),
+  ] as number[];
+  const projectsMap = new Map<number, Project>();
+  if (projectIds.length > 0) {
+    const pr = await db.execute(
+      `SELECT * FROM projects WHERE id IN (${projectIds.map(() => '?').join(',')});`,
+      projectIds,
+    );
+    for (const row of pr.rows ?? []) {
+      const r = row as RawRow;
+      projectsMap.set(r.id as number, {
+        id: r.id as number,
+        name: r.name as string,
+        type: r.type as Project['type'],
+        archived: Boolean(r.archived),
+        created_at: r.created_at as string,
+        updated_at: r.updated_at as string,
+      });
+    }
+  }
+
+  return rows.map(r => ({
+    entry: rowToEntry(
+      r,
+      tagsMap.get(r.id as number) ?? [],
+      projectsMap.get(r.project_id as number) ?? null,
+    ),
+    date: r.day_date as string,
+  }));
+}
+
+// ─── Insights ───────────────────────────────────────────────────────────────
+
+export interface InsightSlice {
+  key: string;
+  label: string;
+  seconds: number;
+}
+
+export interface InsightsData {
+  totalSeconds: number;
+  byActivity: InsightSlice[];
+  byProject: InsightSlice[];
+  byTag: InsightSlice[];
+}
+
+// Per-entry tracked seconds: explicit duration, else from→to interval.
+const ENTRY_SECS_SQL = `CASE
+    WHEN duration_sec IS NOT NULL THEN duration_sec
+    WHEN time_from IS NOT NULL AND time_to IS NOT NULL
+      THEN MAX(0, CAST(strftime('%s', time_to) AS INTEGER) - CAST(strftime('%s', time_from) AS INTEGER))
+    ELSE 0
+  END`;
+
+const ACTIVITY_LABELS: Record<string, string> = {
+  work: 'Work',
+  personal_work: 'Personal (work)',
+  personal: 'Personal',
+};
+
+/** Aggregated time breakdowns over a date range, for the Insights screen. */
+export async function getInsightsBreakdown(
+  startDate: string,
+  endDate: string,
+): Promise<InsightsData> {
+  const db = getDB();
+
+  const activityRes = await db.execute(
+    `SELECT e.activity_type AS k, CAST(SUM(${ENTRY_SECS_SQL}) AS INTEGER) AS s
+       FROM entries e JOIN days d ON d.id = e.day_id
+      WHERE d.date >= ? AND d.date <= ?
+      GROUP BY e.activity_type;`,
+    [startDate, endDate],
+  );
+  const projectRes = await db.execute(
+    `SELECT e.project_id AS k, p.name AS name, CAST(SUM(${ENTRY_SECS_SQL}) AS INTEGER) AS s
+       FROM entries e JOIN days d ON d.id = e.day_id
+       LEFT JOIN projects p ON p.id = e.project_id
+      WHERE d.date >= ? AND d.date <= ?
+      GROUP BY e.project_id;`,
+    [startDate, endDate],
+  );
+  const tagRes = await db.execute(
+    `SELECT t.id AS k, t.name AS name, CAST(SUM(${ENTRY_SECS_SQL}) AS INTEGER) AS s
+       FROM entries e JOIN days d ON d.id = e.day_id
+       JOIN entry_tags et ON et.entry_id = e.id
+       JOIN tags t ON t.id = et.tag_id
+      WHERE d.date >= ? AND d.date <= ?
+      GROUP BY t.id;`,
+    [startDate, endDate],
+  );
+
+  const toSlices = (
+    rows: RawRow[] | undefined,
+    label: (r: RawRow) => string,
+  ): InsightSlice[] =>
+    (rows ?? [])
+      .map(r => ({key: String(r.k), label: label(r), seconds: (r.s as number | null) ?? 0}))
+      .filter(s => s.seconds > 0)
+      .sort((a, b) => b.seconds - a.seconds);
+
+  const byActivity = toSlices(activityRes.rows as RawRow[], r => ACTIVITY_LABELS[String(r.k)] ?? String(r.k));
+  const byProject = toSlices(projectRes.rows as RawRow[], r => (r.name as string | null) ?? 'No project');
+  const byTag = toSlices(tagRes.rows as RawRow[], r => (r.name as string | null) ?? '—');
+  const totalSeconds = byActivity.reduce((sum, s) => sum + s.seconds, 0);
+
+  return {totalSeconds, byActivity, byProject, byTag};
 }

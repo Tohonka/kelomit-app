@@ -7,6 +7,7 @@ import {useTheme, typography, spacing} from '../theme';
 import type {Colors} from '../theme';
 import EntryList from '../components/entries/EntryList';
 import DaySummaryCard from '../components/day/DaySummaryCard';
+import DaySplitBar from '../components/day/DaySplitBar';
 import FAB from '../components/ui/FAB';
 import {buildQuickAddActions} from '../components/entries/quickAddActions';
 import type {TabScreenProps} from '../navigation/navigationTypes';
@@ -97,6 +98,7 @@ export default function HomeScreen({navigation}: Props) {
             onUpdateTimes={fields => updateDayTimes(date, fields)}
           />
         )}
+        {today && <DaySplitBar entries={entries} />}
         <EntryList
           inline
           entries={entries}

@@ -6,6 +6,8 @@ import EntryDetailScreen from '../screens/EntryDetailScreen';
 import AddEntryModal from '../screens/AddEntryModal';
 import QuickAddModal from '../screens/QuickAddModal';
 import ProjectsScreen from '../screens/ProjectsScreen';
+import SearchScreen from '../screens/SearchScreen';
+import InsightsScreen from '../screens/InsightsScreen';
 import InterfaceSettings from '../screens/settings/InterfaceSettings';
 import TrackingSettings from '../screens/settings/TrackingSettings';
 import DataSettings from '../screens/settings/DataSettings';
@@ -62,6 +64,16 @@ export default function RootNavigator() {
         name="ProjectsScreen"
         component={ProjectsScreen}
         options={{title: 'Projects'}}
+      />
+      <Stack.Screen
+        name="SearchScreen"
+        component={SearchScreen}
+        options={{title: 'Search'}}
+      />
+      <Stack.Screen
+        name="InsightsScreen"
+        component={InsightsScreen}
+        options={{title: 'Insights'}}
       />
       <Stack.Screen
         name="InterfaceSettings"

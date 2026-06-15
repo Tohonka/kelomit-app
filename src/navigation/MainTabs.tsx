@@ -1,6 +1,7 @@
 import React from 'react';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import CustomTabBar from './CustomTabBar';
 import HomeScreen from '../screens/HomeScreen';
 import CalendarScreen from '../screens/CalendarScreen';
 import SettingsScreen from '../screens/SettingsScreen';
@@ -13,6 +14,7 @@ export default function MainTabs() {
   const {colors} = useTheme();
   return (
     <Tab.Navigator
+      tabBar={tabBarProps => <CustomTabBar {...tabBarProps} />}
       screenOptions={({route}) => ({
         headerShown: false,
         tabBarStyle: {

@@ -78,7 +78,7 @@ export default function SettingsScreen({navigation}: Props) {
         <Text style={styles.sectionHeader}>App</Text>
         <View style={styles.row}>
           <Text style={styles.rowTitle}>Version</Text>
-          <Text style={styles.rowValue}>0.1.0</Text>
+          <Text style={styles.rowValue}>0.2.5</Text>
         </View>
       </ScrollView>
     </SafeAreaView>

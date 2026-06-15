@@ -10,6 +10,7 @@ import {useTheme, typography, spacing} from '../theme';
 import type {Colors} from '../theme';
 import EntryList from '../components/entries/EntryList';
 import DaySummaryCard from '../components/day/DaySummaryCard';
+import DaySplitBar from '../components/day/DaySplitBar';
 import FilterBar from '../components/day/FilterBar';
 import FAB from '../components/ui/FAB';
 import {buildQuickAddActions} from '../components/entries/quickAddActions';
@@ -136,6 +137,7 @@ export default function DayScreen({navigation, route}: Props) {
                 onUpdateTimes={fields => updateDayTimes(currentDate, fields)}
               />
             )}
+            {day && <DaySplitBar entries={allEntries} />}
             <EntryList
               inline
               entries={filteredEntries}

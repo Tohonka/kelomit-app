@@ -59,7 +59,9 @@ const makeStyles = (c: Colors) =>
 export default function EntryListItem({entry, onPress}: Props) {
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const timeLabel = entry.time_from ? formatTime(entry.time_from) : formatTime(entry.created_at);
+  const timeLabel = entry.time_from
+    ? `${formatTime(entry.time_from)}${entry.time_to ? ` - ${formatTime(entry.time_to)}` : ''}`
+    : formatTime(entry.created_at);
 
   return (
     <TouchableOpacity style={styles.item} onPress={onPress} activeOpacity={0.7}>
