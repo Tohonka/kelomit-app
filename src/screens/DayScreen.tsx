@@ -12,6 +12,7 @@ import EntryList from '../components/entries/EntryList';
 import DaySummaryCard from '../components/day/DaySummaryCard';
 import FilterBar from '../components/day/FilterBar';
 import FAB from '../components/ui/FAB';
+import {buildQuickAddActions} from '../components/entries/quickAddActions';
 import type {RootStackScreenProps} from '../navigation/navigationTypes';
 import type {Entry} from '../types';
 import {calcDayWorkSecs, formatHours} from '../utils/hoursUtils';
@@ -153,6 +154,13 @@ export default function DayScreen({navigation, route}: Props) {
           if (!day) { return; }
           navigation.navigate('AddEntryModal', {date: currentDate, dayId: day.id});
         }}
+        actions={
+          day
+            ? buildQuickAddActions(entryType =>
+                navigation.navigate('QuickAddModal', {date: currentDate, dayId: day.id, entryType}),
+              )
+            : undefined
+        }
       />
     </SafeAreaView>
   );

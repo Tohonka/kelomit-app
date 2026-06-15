@@ -8,6 +8,7 @@ import type {Colors} from '../theme';
 import EntryList from '../components/entries/EntryList';
 import DaySummaryCard from '../components/day/DaySummaryCard';
 import FAB from '../components/ui/FAB';
+import {buildQuickAddActions} from '../components/entries/quickAddActions';
 import type {TabScreenProps} from '../navigation/navigationTypes';
 import {formatDate, todayDate} from '../utils/dateUtils';
 import {calcDayWorkSecs, formatHours} from '../utils/hoursUtils';
@@ -64,6 +65,12 @@ export default function HomeScreen({navigation}: Props) {
     navigation.navigate('AddEntryModal', {date, dayId: today.id});
   };
 
+  const quickActions = today
+    ? buildQuickAddActions(entryType =>
+        navigation.navigate('QuickAddModal', {date, dayId: today.id, entryType}),
+      )
+    : undefined;
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -101,7 +108,7 @@ export default function HomeScreen({navigation}: Props) {
           }
         />
       </ScrollView>
-      <FAB onPress={openAddEntry} />
+      <FAB onPress={openAddEntry} actions={quickActions} />
     </SafeAreaView>
   );
 }

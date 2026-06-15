@@ -9,13 +9,14 @@ import type {TabScreenProps} from '../navigation/navigationTypes';
 type Props = TabScreenProps<'Settings'>;
 
 type Section = {
-  key: 'InterfaceSettings' | 'TrackingSettings' | 'DataSettings';
+  key: 'InterfaceSettings' | 'TrackingSettings' | 'DataSettings' | 'QuickAddSettings';
   title: string;
   subtitle: string;
 };
 
 const SECTIONS: Section[] = [
   {key: 'InterfaceSettings', title: 'Interface', subtitle: 'Theme, week numbers, time entry'},
+  {key: 'QuickAddSettings', title: 'Quick add', subtitle: 'Defaults for long-press add'},
   {key: 'TrackingSettings', title: 'Tracking', subtitle: 'GPS, defaults'},
   {key: 'DataSettings', title: 'Data', subtitle: 'Projects, export'},
 ];

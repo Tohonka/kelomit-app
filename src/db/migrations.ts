@@ -106,4 +106,12 @@ export const migrations: Migration[] = [
       "INSERT OR IGNORE INTO settings (key, value) VALUES ('time_selector_mode', 'clock')",
     ],
   },
+  {
+    version: 5,
+    up: [
+      "INSERT OR IGNORE INTO settings (key, value) VALUES ('quickadd_default_project_id', '')",
+      "INSERT OR IGNORE INTO settings (key, value) VALUES ('quickadd_default_tag', 'Quick add')",
+      "INSERT OR IGNORE INTO settings (key, value) VALUES ('quickadd_default_activity', 'work')",
+    ],
+  },
 ];

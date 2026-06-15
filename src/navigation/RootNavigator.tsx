@@ -4,10 +4,12 @@ import MainTabs from './MainTabs';
 import DayScreen from '../screens/DayScreen';
 import EntryDetailScreen from '../screens/EntryDetailScreen';
 import AddEntryModal from '../screens/AddEntryModal';
+import QuickAddModal from '../screens/QuickAddModal';
 import ProjectsScreen from '../screens/ProjectsScreen';
 import InterfaceSettings from '../screens/settings/InterfaceSettings';
 import TrackingSettings from '../screens/settings/TrackingSettings';
 import DataSettings from '../screens/settings/DataSettings';
+import QuickAddSettings from '../screens/settings/QuickAddSettings';
 import {useTheme} from '../theme';
 import type {RootStackParamList} from './navigationTypes';
 
@@ -48,6 +50,15 @@ export default function RootNavigator() {
         })}
       />
       <Stack.Screen
+        name="QuickAddModal"
+        component={QuickAddModal}
+        options={{
+          title: 'Quick add',
+          presentation: 'modal',
+          headerStyle: {backgroundColor: colors.bgCard},
+        }}
+      />
+      <Stack.Screen
         name="ProjectsScreen"
         component={ProjectsScreen}
         options={{title: 'Projects'}}
@@ -66,6 +77,11 @@ export default function RootNavigator() {
         name="DataSettings"
         component={DataSettings}
         options={{title: 'Data'}}
+      />
+      <Stack.Screen
+        name="QuickAddSettings"
+        component={QuickAddSettings}
+        options={{title: 'Quick add'}}
       />
     </Stack.Navigator>
   );

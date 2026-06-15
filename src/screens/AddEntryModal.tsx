@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useMemo, useRef} from 'react';
+import React, {useState, useEffect, useCallback, useMemo, useRef} from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   Alert,
   Vibration,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
@@ -20,6 +21,7 @@ import {useTheme, typography, spacing, radius} from '../theme';
 import type {Colors} from '../theme';
 import Button from '../components/ui/Button';
 import TagChip from '../components/entries/TagChip';
+import ProjectPicker from '../components/entries/ProjectPicker';
 import TimePicker from '../components/ui/TimePicker';
 import PhotoCapture from '../components/media/PhotoCapture';
 import VideoCapture from '../components/media/VideoCapture';
@@ -106,23 +108,6 @@ const makeStyles = (c: Colors) =>
       minHeight: 48,
     },
     inputMultiline: {minHeight: 96, paddingTop: spacing.md},
-    projectScroll: {flexGrow: 0},
-    projectChip: {
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
-      borderRadius: radius.pill,
-      borderWidth: 1.5,
-      borderColor: c.border,
-      marginRight: spacing.sm,
-      backgroundColor: c.bgCard,
-    },
-    projectChipActive: {borderColor: c.primary, backgroundColor: c.primary + '15'},
-    projectChipText: {
-      fontSize: typography.sizes.sm,
-      color: c.textSecondary,
-      fontWeight: typography.weights.medium,
-    },
-    projectChipTextActive: {color: c.primary, fontWeight: typography.weights.semibold},
     tagInputRow: {flexDirection: 'row', gap: spacing.sm, alignItems: 'center'},
     tagInput: {flex: 1},
     tagAddBtn: {
@@ -197,7 +182,7 @@ export default function AddEntryModal({navigation, route}: Props) {
   const entryDate = route.params.date;
   const isEdit = entryId != null;
   const {addEntry, editEntry} = useEntryStore();
-  const {projects, loaded: projectsLoaded, load: loadProjects} = useProjectStore();
+  const {projects, loaded: projectsLoaded, load: loadProjects, add: addProject} = useProjectStore();
   const {tags, loaded: tagsLoaded, load: loadTags, getOrCreate} = useTagStore();
   const {
     loaded: settingsLoaded,
@@ -229,20 +214,41 @@ export default function AddEntryModal({navigation, route}: Props) {
   const [timeTo, setTimeTo] = useState<string | null>(null);
   const defaultsApplied = useRef(false);
 
-  // Keep the focused text field visible above the keyboard (Android adjustResize
-  // shrinks the window but doesn't auto-scroll RN's ScrollView to the input).
+  // Keep the focused text field visible above the keyboard. Android adjustResize
+  // shrinks the window but doesn't scroll RN's ScrollView, and bottom fields have
+  // nothing below them to scroll into view. Fix: add keyboard-height padding (a
+  // scroll "runway") and lift the focused field up once the keyboard is shown.
   const scrollRef = useRef<ScrollView>(null);
   const inputY = useRef<Record<string, number>>({});
+  const focusedKey = useRef<string | null>(null);
+  const [kbHeight, setKbHeight] = useState(0);
+
   const rememberY = (key: string) => (e: LayoutChangeEvent) => {
     inputY.current[key] = e.nativeEvent.layout.y;
   };
-  const scrollToField = (key: string) => {
-    const y = inputY.current[key];
+  const scrollToFocused = useCallback(() => {
+    const key = focusedKey.current;
+    const y = key ? inputY.current[key] : undefined;
     if (y == null) { return; }
-    setTimeout(() => {
-      scrollRef.current?.scrollTo({y: Math.max(y - 90, 0), animated: true});
-    }, 60);
+    scrollRef.current?.scrollTo({y: Math.max(y - 12, 0), animated: true});
+  }, []);
+  const onFieldFocus = (key: string) => () => {
+    focusedKey.current = key;
+    // Switching fields while the keyboard is already open fires no didShow event.
+    setTimeout(scrollToFocused, 50);
   };
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener('keyboardDidShow', e => {
+      setKbHeight(e.endCoordinates?.height ?? 0);
+      setTimeout(scrollToFocused, 20);
+    });
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => {
+      setKbHeight(0);
+      focusedKey.current = null;
+    });
+    return () => { showSub.remove(); hideSub.remove(); };
+  }, [scrollToFocused]);
 
   useEffect(() => {
     if (!projectsLoaded) { loadProjects(); }
@@ -412,7 +418,7 @@ export default function AddEntryModal({navigation, route}: Props) {
       <ScrollView
         ref={scrollRef}
         style={styles.container}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, {paddingBottom: spacing.xxl + kbHeight}]}
         keyboardShouldPersistTaps="handled">
 
       <Text style={styles.sectionLabel}>Type</Text>
@@ -493,7 +499,7 @@ export default function AddEntryModal({navigation, route}: Props) {
         value={title}
         onChangeText={setTitle}
         onLayout={rememberY('title')}
-        onFocus={() => scrollToField('title')}
+        onFocus={onFieldFocus('title')}
         placeholder="Short title…"
         placeholderTextColor={colors.textMuted}
         maxLength={120}
@@ -505,33 +511,23 @@ export default function AddEntryModal({navigation, route}: Props) {
         value={body}
         onChangeText={setBody}
         onLayout={rememberY('body')}
-        onFocus={() => scrollToField('body')}
+        onFocus={onFieldFocus('body')}
         placeholder="Write something…"
         placeholderTextColor={colors.textMuted}
         multiline
         textAlignVertical="top"
       />
 
-      <Text style={styles.sectionLabel}>Project (optional)</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.projectScroll}>
-        <TouchableOpacity
-          style={[styles.projectChip, selectedProjectId == null && styles.projectChipActive]}
-          onPress={() => setSelectedProjectId(null)}>
-          <Text style={[styles.projectChipText, selectedProjectId == null && styles.projectChipTextActive]}>
-            None
-          </Text>
-        </TouchableOpacity>
-        {activeProjects.map(p => (
-          <TouchableOpacity
-            key={p.id}
-            style={[styles.projectChip, selectedProjectId === p.id && styles.projectChipActive]}
-            onPress={() => setSelectedProjectId(p.id)}>
-            <Text style={[styles.projectChipText, selectedProjectId === p.id && styles.projectChipTextActive]}>
-              {p.name}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      <View onLayout={rememberY('project')}>
+        <Text style={styles.sectionLabel}>Project (optional)</Text>
+        <ProjectPicker
+          projects={activeProjects}
+          selectedProjectId={selectedProjectId}
+          onSelect={setSelectedProjectId}
+          onCreate={addProject}
+          onSearchFocus={onFieldFocus('project')}
+        />
+      </View>
 
       <Text style={styles.sectionLabel}>Tags</Text>
       <View style={styles.tagInputRow} onLayout={rememberY('tags')}>
@@ -539,7 +535,7 @@ export default function AddEntryModal({navigation, route}: Props) {
           style={[styles.input, styles.tagInput]}
           value={tagInput}
           onChangeText={setTagInput}
-          onFocus={() => scrollToField('tags')}
+          onFocus={onFieldFocus('tags')}
           placeholder="Add a tag…"
           placeholderTextColor={colors.textMuted}
           autoCapitalize="none"
@@ -588,11 +584,12 @@ export default function AddEntryModal({navigation, route}: Props) {
       </View>
 
       {timeMode === 'duration' && (
-        <View style={styles.durationRow}>
+        <View style={styles.durationRow} onLayout={rememberY('duration')}>
           <TextInput
             style={[styles.input, styles.durationInput]}
             value={durationMinutes}
             onChangeText={setDurationMinutes}
+            onFocus={onFieldFocus('duration')}
             placeholder="Minutes"
             placeholderTextColor={colors.textMuted}
             keyboardType="numeric"

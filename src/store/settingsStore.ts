@@ -8,6 +8,9 @@ interface SettingsState extends Settings {
   theme_mode: ThemeMode;
   show_week_numbers: boolean;
   time_selector_mode: TimeSelectorMode;
+  quickadd_default_project_id: number | null;
+  quickadd_default_tag: string;
+  quickadd_default_activity: ActivityType;
   load: () => Promise<void>;
   setGpsEnabled: (enabled: boolean) => Promise<void>;
   setGpsInterval: (ms: number) => Promise<void>;
@@ -16,7 +19,12 @@ interface SettingsState extends Settings {
   setThemeMode: (mode: ThemeMode) => Promise<void>;
   setShowWeekNumbers: (show: boolean) => Promise<void>;
   setTimeSelectorMode: (mode: TimeSelectorMode) => Promise<void>;
+  setQuickAddDefaultProjectId: (id: number | null) => Promise<void>;
+  setQuickAddDefaultTag: (tag: string) => Promise<void>;
+  setQuickAddDefaultActivity: (type: ActivityType) => Promise<void>;
 }
+
+const ACTIVITY_TYPES: ActivityType[] = ['work', 'personal_work', 'personal'];
 
 export const useSettingsStore = create<SettingsState>(set => ({
   gps_enabled: true,
@@ -26,6 +34,9 @@ export const useSettingsStore = create<SettingsState>(set => ({
   theme_mode: 'system',
   show_week_numbers: false,
   time_selector_mode: 'clock',
+  quickadd_default_project_id: null,
+  quickadd_default_tag: 'Quick add',
+  quickadd_default_activity: 'work',
   loaded: false,
 
   load: async () => {
@@ -38,11 +49,23 @@ export const useSettingsStore = create<SettingsState>(set => ({
     const show_week_numbers = raw.show_week_numbers === 'true';
     const time_selector_mode: TimeSelectorMode =
       raw.time_selector_mode === 'keyboard' ? 'keyboard' : 'clock';
+    const quickadd_default_project_id = raw.quickadd_default_project_id
+      ? parseInt(raw.quickadd_default_project_id, 10)
+      : null;
+    const quickadd_default_tag = raw.quickadd_default_tag ?? 'Quick add';
+    const quickadd_default_activity: ActivityType = ACTIVITY_TYPES.includes(
+      raw.quickadd_default_activity as ActivityType,
+    )
+      ? (raw.quickadd_default_activity as ActivityType)
+      : 'work';
     set({
       ...settings,
       theme_mode,
       show_week_numbers,
       time_selector_mode,
+      quickadd_default_project_id,
+      quickadd_default_tag,
+      quickadd_default_activity,
       loaded: true,
     });
   },
@@ -80,5 +103,20 @@ export const useSettingsStore = create<SettingsState>(set => ({
   setTimeSelectorMode: async mode => {
     await setSetting('time_selector_mode', mode);
     set({time_selector_mode: mode});
+  },
+
+  setQuickAddDefaultProjectId: async id => {
+    await setSetting('quickadd_default_project_id', id == null ? '' : String(id));
+    set({quickadd_default_project_id: id});
+  },
+
+  setQuickAddDefaultTag: async tag => {
+    await setSetting('quickadd_default_tag', tag);
+    set({quickadd_default_tag: tag});
+  },
+
+  setQuickAddDefaultActivity: async type => {
+    await setSetting('quickadd_default_activity', type);
+    set({quickadd_default_activity: type});
   },
 }));
