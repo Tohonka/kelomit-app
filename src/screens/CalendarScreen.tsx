@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useCallback, useMemo} from 'react';
+import React, {useState, useCallback, useMemo} from 'react';
 import {
   View,
   Text,
@@ -6,10 +6,11 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  PanResponder,
   Platform,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
+import {GestureDetector, Gesture} from 'react-native-gesture-handler';
+import {useFocusEffect} from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import {format, eachDayOfInterval, isToday, getISOWeek, subDays} from 'date-fns';
 import {useTheme, typography, spacing, radius} from '../theme';
@@ -170,7 +171,13 @@ export default function CalendarScreen({navigation}: Props) {
     }
   }, [rangeStart, rangeEnd]);
 
-  useEffect(() => { loadHours(); }, [loadHours]);
+  // Reload on focus so totals refresh after editing a day/entries elsewhere.
+  // Also re-runs whenever the period (loadHours identity) changes.
+  useFocusEffect(
+    useCallback(() => {
+      loadHours();
+    }, [loadHours]),
+  );
 
   const periodTotal = Object.values(hoursMap).reduce((a, b) => a + b, 0);
 
@@ -194,17 +201,21 @@ export default function CalendarScreen({navigation}: Props) {
     }
   }, [viewMode]);
 
-  const panResponder = useMemo(() =>
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, {dx, dy}) =>
-        Math.abs(dx) > 20 && Math.abs(dx) > Math.abs(dy) * 1.5,
-      onPanResponderRelease: (_, {dx}) => {
-        if (Math.abs(dx) > 60 && viewMode !== 'range') {
-          if (dx < 0) { goForward(); } else { goBack(); }
-        }
-      },
-    }),
-  [goBack, goForward, viewMode]);
+  // Horizontal swipe = prev/next period. activeOffsetX requires a clear
+  // horizontal intent; failOffsetY hands vertical drags to the inner ScrollView.
+  const swipe = useMemo(
+    () =>
+      Gesture.Pan()
+        .runOnJS(true)
+        .activeOffsetX([-20, 20])
+        .failOffsetY([-18, 18])
+        .onEnd(e => {
+          if (viewMode === 'range') { return; }
+          if (e.translationX <= -50) { goForward(); }
+          else if (e.translationX >= 50) { goBack(); }
+        }),
+    [goBack, goForward, viewMode],
+  );
 
   const weekDays = getWeekDays(currentDate);
   const headerLabel =
@@ -216,7 +227,9 @@ export default function CalendarScreen({navigation}: Props) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View {...panResponder.panHandlers}>
+      <GestureDetector gesture={swipe}>
+        <View style={styles.flex}>
+        <View>
         {/* Header nav */}
         <View style={styles.header}>
           {viewMode !== 'range' ? (
@@ -315,6 +328,8 @@ export default function CalendarScreen({navigation}: Props) {
           />
         )}
       </ScrollView>
+        </View>
+      </GestureDetector>
     </SafeAreaView>
   );
 }

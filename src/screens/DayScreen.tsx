@@ -1,6 +1,7 @@
 import React, {useEffect, useState, useCallback, useMemo} from 'react';
-import {StyleSheet, ScrollView, PanResponder, View, Text} from 'react-native';
+import {StyleSheet, ScrollView, View, Text} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
+import {GestureDetector, Gesture} from 'react-native-gesture-handler';
 import {useDayStore} from '../store/dayStore';
 import {useEntryStore} from '../store/entryStore';
 import {useProjectStore} from '../store/projectStore';
@@ -79,16 +80,19 @@ export default function DayScreen({navigation, route}: Props) {
     setSelectedTagIds([]);
   }, []);
 
-  const panResponder = useMemo(() =>
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, {dx, dy}) =>
-        Math.abs(dx) > 20 && Math.abs(dx) > Math.abs(dy) * 1.5,
-      onPanResponderRelease: (_, {dx}) => {
-        if (dx < -60) { goToDate(shiftDate(currentDate, 1)); }
-        else if (dx > 60) { goToDate(shiftDate(currentDate, -1)); }
-      },
-    }),
-  [currentDate, goToDate]);
+  // Horizontal swipe = prev/next day. failOffsetY keeps vertical scrolling intact.
+  const swipe = useMemo(
+    () =>
+      Gesture.Pan()
+        .runOnJS(true)
+        .activeOffsetX([-20, 20])
+        .failOffsetY([-18, 18])
+        .onEnd(e => {
+          if (e.translationX <= -50) { goToDate(shiftDate(currentDate, 1)); }
+          else if (e.translationX >= 50) { goToDate(shiftDate(currentDate, -1)); }
+        }),
+    [currentDate, goToDate],
+  );
 
   const filteredEntries: Entry[] = allEntries.filter(e => {
     if (selectedProjectId != null && e.project?.id !== selectedProjectId) { return false; }
@@ -121,27 +125,29 @@ export default function DayScreen({navigation, route}: Props) {
         onToggleTag={toggleTag}
         onClear={clearFilters}
       />
-      <View style={styles.flex} {...panResponder.panHandlers}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          {day && (
-            <DaySummaryCard
-              day={day}
-              entries={allEntries}
-              onUpdateTimes={fields => updateDayTimes(currentDate, fields)}
+      <GestureDetector gesture={swipe}>
+        <View style={styles.flex}>
+          <ScrollView contentContainerStyle={styles.scrollContent}>
+            {day && (
+              <DaySummaryCard
+                day={day}
+                entries={allEntries}
+                onUpdateTimes={fields => updateDayTimes(currentDate, fields)}
+              />
+            )}
+            <EntryList
+              inline
+              entries={filteredEntries}
+              onPressEntry={entry =>
+                navigation.navigate('EntryDetailScreen', {
+                  entryId: entry.id,
+                  dayId: entry.day_id,
+                })
+              }
             />
-          )}
-          <EntryList
-            inline
-            entries={filteredEntries}
-            onPressEntry={entry =>
-              navigation.navigate('EntryDetailScreen', {
-                entryId: entry.id,
-                dayId: entry.day_id,
-              })
-            }
-          />
-        </ScrollView>
-      </View>
+          </ScrollView>
+        </View>
+      </GestureDetector>
       <FAB
         onPress={() => {
           if (!day) { return; }

@@ -5,6 +5,9 @@ import DayScreen from '../screens/DayScreen';
 import EntryDetailScreen from '../screens/EntryDetailScreen';
 import AddEntryModal from '../screens/AddEntryModal';
 import ProjectsScreen from '../screens/ProjectsScreen';
+import InterfaceSettings from '../screens/settings/InterfaceSettings';
+import TrackingSettings from '../screens/settings/TrackingSettings';
+import DataSettings from '../screens/settings/DataSettings';
 import {useTheme} from '../theme';
 import type {RootStackParamList} from './navigationTypes';
 
@@ -48,6 +51,21 @@ export default function RootNavigator() {
         name="ProjectsScreen"
         component={ProjectsScreen}
         options={{title: 'Projects'}}
+      />
+      <Stack.Screen
+        name="InterfaceSettings"
+        component={InterfaceSettings}
+        options={{title: 'Interface'}}
+      />
+      <Stack.Screen
+        name="TrackingSettings"
+        component={TrackingSettings}
+        options={{title: 'Tracking'}}
+      />
+      <Stack.Screen
+        name="DataSettings"
+        component={DataSettings}
+        options={{title: 'Data'}}
       />
     </Stack.Navigator>
   );

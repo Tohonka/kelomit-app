@@ -5,7 +5,7 @@ import type {Colors} from '../../theme';
 import Card from '../ui/Card';
 import TimePicker from '../ui/TimePicker';
 import HourBreakdown from './HourBreakdown';
-import {calcHourBreakdown} from '../../utils/hoursUtils';
+import {calcHourBreakdown, segmentWorkSecs, formatHours} from '../../utils/hoursUtils';
 import type {Entry, Day} from '../../types';
 
 interface Props {
@@ -29,7 +29,15 @@ const makeStyles = (c: Colors) =>
       color: c.textMuted,
       marginHorizontal: 2,
     },
-    legSpacer: {flex: 1},
+    legHours: {
+      flex: 1,
+      textAlign: 'right',
+      fontSize: typography.sizes.sm,
+      fontWeight: typography.weights.semibold,
+      marginRight: spacing.xs,
+    },
+    legHoursActive: {color: c.badgeWork},
+    legHoursEmpty: {color: c.textMuted},
     addBtn: {
       width: 28,
       height: 28,
@@ -74,6 +82,11 @@ export default function DaySummaryCard({day, entries, onUpdateTimes}: Props) {
 
   const breakdown = calcHourBreakdown(entries);
 
+  const seg1Secs = segmentWorkSecs(day.started_at, day.ended_at);
+  const seg2Secs = segmentWorkSecs(day.started_at_2, day.ended_at_2);
+  const seg1HasInput = !!(day.started_at || day.ended_at);
+  const seg2HasInput = !!(day.started_at_2 || day.ended_at_2);
+
   const addLeg2 = () => setShowLeg2(true);
   const removeLeg2 = () => {
     setShowLeg2(false);
@@ -97,7 +110,13 @@ export default function DaySummaryCard({day, entries, onUpdateTimes}: Props) {
           placeholder="End"
           onChange={iso => onUpdateTimes({ended_at: iso})}
         />
-        <View style={styles.legSpacer} />
+        <Text
+          style={[
+            styles.legHours,
+            seg1Secs > 0 ? styles.legHoursActive : styles.legHoursEmpty,
+          ]}>
+          {seg1Secs > 0 ? formatHours(seg1Secs) : seg1HasInput ? '—' : ''}
+        </Text>
         {!showLeg2 && (
           <TouchableOpacity style={styles.addBtn} onPress={addLeg2}>
             <Text style={styles.addBtnText}>+</Text>
@@ -121,7 +140,13 @@ export default function DaySummaryCard({day, entries, onUpdateTimes}: Props) {
             placeholder="End"
             onChange={iso => onUpdateTimes({ended_at_2: iso})}
           />
-          <View style={styles.legSpacer} />
+          <Text
+            style={[
+              styles.legHours,
+              seg2Secs > 0 ? styles.legHoursActive : styles.legHoursEmpty,
+            ]}>
+            {seg2Secs > 0 ? formatHours(seg2Secs) : seg2HasInput ? '—' : ''}
+          </Text>
           <TouchableOpacity style={styles.removeBtn} onPress={removeLeg2}>
             <Text style={styles.removeBtnText}>×</Text>
           </TouchableOpacity>

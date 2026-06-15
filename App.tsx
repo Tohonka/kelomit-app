@@ -2,6 +2,7 @@ import React, {useEffect, useState, useRef} from 'react';
 import {View, Text, StyleSheet, ActivityIndicator, AppState, StatusBar} from 'react-native';
 import type {AppStateStatus} from 'react-native';
 import {NavigationContainer} from '@react-navigation/native';
+import {GestureHandlerRootView} from 'react-native-gesture-handler';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
 import {initDB} from './src/db/database';
 import {getAllSettings} from './src/db/settings';
@@ -95,13 +96,16 @@ function AppContent() {
 
 export default function App() {
   return (
-    <SafeAreaProvider>
-      <AppContent />
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={styles.root}>
+      <SafeAreaProvider>
+        <AppContent />
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
+  root: {flex: 1},
   center: {
     flex: 1,
     alignItems: 'center',

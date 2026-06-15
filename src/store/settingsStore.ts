@@ -1,12 +1,13 @@
 import {create} from 'zustand';
-import {getAllSettings, setSetting} from '../db/settings';
+import {getAllSettings, getRawSettings, setSetting} from '../db/settings';
 import type {Settings, ActivityType} from '../types';
-import type {ThemeMode} from '../theme';
+import type {ThemeMode, TimeSelectorMode} from '../theme';
 
 interface SettingsState extends Settings {
   loaded: boolean;
   theme_mode: ThemeMode;
   show_week_numbers: boolean;
+  time_selector_mode: TimeSelectorMode;
   load: () => Promise<void>;
   setGpsEnabled: (enabled: boolean) => Promise<void>;
   setGpsInterval: (ms: number) => Promise<void>;
@@ -14,6 +15,7 @@ interface SettingsState extends Settings {
   setDefaultProjectId: (id: number | null) => Promise<void>;
   setThemeMode: (mode: ThemeMode) => Promise<void>;
   setShowWeekNumbers: (show: boolean) => Promise<void>;
+  setTimeSelectorMode: (mode: TimeSelectorMode) => Promise<void>;
 }
 
 export const useSettingsStore = create<SettingsState>(set => ({
@@ -23,16 +25,26 @@ export const useSettingsStore = create<SettingsState>(set => ({
   default_project_id: null,
   theme_mode: 'system',
   show_week_numbers: false,
+  time_selector_mode: 'clock',
   loaded: false,
 
   load: async () => {
     const settings = await getAllSettings();
-    const raw = settings as unknown as Record<string, unknown>;
-    const themeRaw = raw.theme_mode as string | undefined;
+    const raw = await getRawSettings();
     const theme_mode: ThemeMode =
-      themeRaw === 'light' || themeRaw === 'dark' ? themeRaw : 'system';
+      raw.theme_mode === 'light' || raw.theme_mode === 'dark'
+        ? raw.theme_mode
+        : 'system';
     const show_week_numbers = raw.show_week_numbers === 'true';
-    set({...settings, theme_mode, show_week_numbers, loaded: true});
+    const time_selector_mode: TimeSelectorMode =
+      raw.time_selector_mode === 'keyboard' ? 'keyboard' : 'clock';
+    set({
+      ...settings,
+      theme_mode,
+      show_week_numbers,
+      time_selector_mode,
+      loaded: true,
+    });
   },
 
   setGpsEnabled: async enabled => {
@@ -63,5 +75,10 @@ export const useSettingsStore = create<SettingsState>(set => ({
   setShowWeekNumbers: async show => {
     await setSetting('show_week_numbers', String(show));
     set({show_week_numbers: show});
+  },
+
+  setTimeSelectorMode: async mode => {
+    await setSetting('time_selector_mode', mode);
+    set({time_selector_mode: mode});
   },
 }));

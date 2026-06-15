@@ -100,4 +100,10 @@ export const migrations: Migration[] = [
       "INSERT OR IGNORE INTO settings (key, value) VALUES ('show_week_numbers', 'false')",
     ],
   },
+  {
+    version: 4,
+    up: [
+      "INSERT OR IGNORE INTO settings (key, value) VALUES ('time_selector_mode', 'clock')",
+    ],
+  },
 ];

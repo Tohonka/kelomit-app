@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import type {LayoutChangeEvent} from 'react-native';
 import {useEntryStore} from '../store/entryStore';
 import {useProjectStore} from '../store/projectStore';
 import {useTagStore} from '../store/tagStore';
@@ -228,6 +229,21 @@ export default function AddEntryModal({navigation, route}: Props) {
   const [timeTo, setTimeTo] = useState<string | null>(null);
   const defaultsApplied = useRef(false);
 
+  // Keep the focused text field visible above the keyboard (Android adjustResize
+  // shrinks the window but doesn't auto-scroll RN's ScrollView to the input).
+  const scrollRef = useRef<ScrollView>(null);
+  const inputY = useRef<Record<string, number>>({});
+  const rememberY = (key: string) => (e: LayoutChangeEvent) => {
+    inputY.current[key] = e.nativeEvent.layout.y;
+  };
+  const scrollToField = (key: string) => {
+    const y = inputY.current[key];
+    if (y == null) { return; }
+    setTimeout(() => {
+      scrollRef.current?.scrollTo({y: Math.max(y - 90, 0), animated: true});
+    }, 60);
+  };
+
   useEffect(() => {
     if (!projectsLoaded) { loadProjects(); }
     if (!tagsLoaded) { loadTags(); }
@@ -394,6 +410,7 @@ export default function AddEntryModal({navigation, route}: Props) {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView
+        ref={scrollRef}
         style={styles.container}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled">
@@ -475,6 +492,8 @@ export default function AddEntryModal({navigation, route}: Props) {
         style={styles.input}
         value={title}
         onChangeText={setTitle}
+        onLayout={rememberY('title')}
+        onFocus={() => scrollToField('title')}
         placeholder="Short title…"
         placeholderTextColor={colors.textMuted}
         maxLength={120}
@@ -485,6 +504,8 @@ export default function AddEntryModal({navigation, route}: Props) {
         style={[styles.input, styles.inputMultiline]}
         value={body}
         onChangeText={setBody}
+        onLayout={rememberY('body')}
+        onFocus={() => scrollToField('body')}
         placeholder="Write something…"
         placeholderTextColor={colors.textMuted}
         multiline
@@ -513,11 +534,12 @@ export default function AddEntryModal({navigation, route}: Props) {
       </ScrollView>
 
       <Text style={styles.sectionLabel}>Tags</Text>
-      <View style={styles.tagInputRow}>
+      <View style={styles.tagInputRow} onLayout={rememberY('tags')}>
         <TextInput
           style={[styles.input, styles.tagInput]}
           value={tagInput}
           onChangeText={setTagInput}
+          onFocus={() => scrollToField('tags')}
           placeholder="Add a tag…"
           placeholderTextColor={colors.textMuted}
           autoCapitalize="none"

@@ -1,7 +1,7 @@
 export {lightColors, darkColors, lightColors as colors} from './colors';
 export type {Colors} from './colors';
 export {useTheme} from './useTheme';
-export type {ThemeMode} from './useTheme';
+export type {ThemeMode, TimeSelectorMode} from './useTheme';
 
 export const typography = {
   fontFamily: 'System',

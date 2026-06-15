@@ -4,6 +4,8 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import {useTheme, typography, spacing, radius} from '../../theme';
 import type {Colors} from '../../theme';
 import {formatTime} from '../../utils/dateUtils';
+import {useSettingsStore} from '../../store/settingsStore';
+import TypedTimeModal from './TypedTimeModal';
 
 interface Props {
   value: string | null;
@@ -49,38 +51,57 @@ function pickerDate(value: string | null, baseDate?: string): Date {
   return baseDate ? dateFromLocalDay(baseDate) : new Date();
 }
 
-function applySelectedTime(targetDate: Date, selectedTime: Date): string {
+function applyTime(targetDate: Date, hours: number, minutes: number): string {
   const next = new Date(targetDate);
-  next.setHours(selectedTime.getHours(), selectedTime.getMinutes(), 0, 0);
+  next.setHours(hours, minutes, 0, 0);
   return next.toISOString();
 }
 
 export default function TimePicker({value, baseDate, placeholder = '–:––', onChange}: Props) {
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const [show, setShow] = useState(false);
+  const mode = useSettingsStore(s => s.time_selector_mode);
+  const [showClock, setShowClock] = useState(false);
+  const [showTyped, setShowTyped] = useState(false);
   const date = pickerDate(value, baseDate);
+
+  const open = () => {
+    if (mode === 'keyboard') { setShowTyped(true); } else { setShowClock(true); }
+  };
 
   return (
     <>
-      <TouchableOpacity style={styles.btn} onPress={() => setShow(true)} activeOpacity={0.7}>
+      <TouchableOpacity style={styles.btn} onPress={open} activeOpacity={0.7}>
         <Text style={value ? styles.value : styles.placeholder}>
           {value ? formatTime(value) : placeholder}
         </Text>
       </TouchableOpacity>
 
-      {show && (
+      {showClock && (
         <DateTimePicker
           value={date}
           mode="time"
           is24Hour
-          display={Platform.OS === 'android' ? 'spinner' : 'spinner'}
+          display={Platform.OS === 'android' ? 'clock' : 'spinner'}
           onChange={(_event, selected) => {
-            setShow(false);
-            if (selected) { onChange(applySelectedTime(date, selected)); }
+            setShowClock(false);
+            if (selected) {
+              onChange(applyTime(date, selected.getHours(), selected.getMinutes()));
+            }
           }}
         />
       )}
+
+      <TypedTimeModal
+        visible={showTyped}
+        initialHours={date.getHours()}
+        initialMinutes={date.getMinutes()}
+        onCancel={() => setShowTyped(false)}
+        onConfirm={(h, m) => {
+          setShowTyped(false);
+          onChange(applyTime(date, h, m));
+        }}
+      />
     </>
   );
 }

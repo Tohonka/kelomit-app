@@ -5,6 +5,7 @@ import {lightColors, darkColors} from './colors';
 import type {Colors} from './colors';
 
 export type ThemeMode = 'system' | 'light' | 'dark';
+export type TimeSelectorMode = 'clock' | 'keyboard';
 
 export function useTheme(): {colors: Colors; isDark: boolean} {
   const themeMode = useSettingsStore(s => s.theme_mode);

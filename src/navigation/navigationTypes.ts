@@ -8,6 +8,9 @@ export type RootStackParamList = {
   EntryDetailScreen: {entryId: number; dayId: number};
   AddEntryModal: {date?: string; dayId: number; entryId?: number};
   ProjectsScreen: undefined;
+  InterfaceSettings: undefined;
+  TrackingSettings: undefined;
+  DataSettings: undefined;
 };
 
 export type TabParamList = {

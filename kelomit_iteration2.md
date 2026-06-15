@@ -1,12 +1,11 @@
 # Changes to Kelomit-app
 
-Notes and needed changes based on on-device use of the app.
+Notes and needed changes based on on-device use of the app. Some changes have been made to the code after previous iteration.
 
 ## Functionality
 
 - Implement the previously talked about "share to" functionality.
-- Export as xlm, export as Json needed in addition to csv.
-- Calendar views not updating hour data unless user changes views.
+- Calendar views not updating hour data unless user changes views, countent should be up to date when user enters view.
 - Time selector: Current scrollable version slow to use. Needs to be a hybrid: User can type in the time, or select from UI. The "analog clockface" selector is preferred, but this needs to be an option.
 - Reg. previous: Settings menu needs subsections at some point, so let's start now. Interface will be where the time selector lives.
 - Swipe to change month/day doesn't work well. Most often no change on swipe. Also, doesn't go in order (If swipe right from say, monday june 8th, it goes to 9th. Then swiping right isn't possible. Swiping back left goes to sunday june 7th).
@@ -19,7 +18,7 @@ Notes and needed changes based on on-device use of the app.
 
 ## Small issues
 
-- When adding tags, I'm writing blind. Keyboard covers the input field. Two possible solutions. 1: Dynamically move the view up with the keyboard so that input stays visible. 2: Add a "helper modal" for input that is shown above the keyboard. Modal could offer extended options for future features. The issue is for the description field and other fields too, essentially. What is the modern suggested solution for this? I suspect google has some ideas for UX design on things like this too.
+- When adding tags, I'm writing blind. Keyboard covers the input field. Two possible solutions. 1: Dynamically move the view up with the keyboard so that input stays visible. 2: Add a "helper modal" for input that is shown above the keyboard. Modal could offer extended options for future features. This issue exists for the description field and other fields too, essentially. What is the modern suggested solution for this? I suspect google has some ideas for UX design on things like this too.
 
 ## Bigger feature additions
 
@@ -28,5 +27,7 @@ Notes and needed changes based on on-device use of the app.
 - Upcoming items that are coming "next day" should be visible on the "today" view, at the very bottom. Visually different. On fridays, monday is considered to be "next day" in addition to saturday.
 - Calendar view: The week view should show a list of upcoming items that week if there are any.
 - Use the GPS-data. Possibility to set / use work and home location. If possible, could offer to use android / google maps home/work locations, if that data is available to apps. If not, user can set a work location with a simple "Currently at work" that saves the position.
-- GPS use intention: Allow user to add a "radius" and an optional to-from timeframe. If the location is within these parameters, it should pre-set the from-time when user arrives to work and set the to-time when leaving. It would not overwrite values that user has written themselves. This data should be saved anyway. Specifically, log every time the user (me) leaves the radius. This will help me remember things if I miss logging things manually.
-- Preparation: Map view for gps data. Items plotted over the map. Does google provide map access for this use?
+- GPS use intention: Allow user to add a "radius" and an optional to-from timeframe. If the location is within these parameters it should pre-set the "from-time" when user arrives to work and set the to-time when leaving. It should not overwrite values that user has written themselves. This data should be saved anyway. Specifically, log every time the user (me) leaves the radius. This will help me remember things if I miss logging things manually.
+- Alternative to GPS: Detect location based on wifi-name available.
+- Preparation: Map view for gps data. Items plotted over the map. Does google provide map access for this use? Continuos "path" not needed over the map.
+

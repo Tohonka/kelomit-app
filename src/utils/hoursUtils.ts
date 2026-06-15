@@ -46,6 +46,11 @@ function legSecs(start: string | null, end: string | null): number {
   return diff > 0 ? diff / 1000 : 0;
 }
 
+/** Work seconds for a single day segment (leg). 0 if incomplete or invalid. */
+export function segmentWorkSecs(start: string | null, end: string | null): number {
+  return legSecs(start, end);
+}
+
 /** Total work seconds for the day. Uses day start/end as source of truth if set,
  *  otherwise falls back to the sum of entry durations. */
 export function calcDayWorkSecs(day: Day, entries: Entry[]): number {
