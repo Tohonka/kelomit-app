@@ -85,7 +85,7 @@ async function fetchProjectById(
 export async function getEntriesForDay(dayId: number): Promise<Entry[]> {
   const db = getDB();
   const result = await db.execute(
-    'SELECT * FROM entries WHERE day_id = ? ORDER BY time_from ASC;',
+    'SELECT * FROM entries WHERE day_id = ? ORDER BY time_from DESC;',
     [dayId],
   );
   const rows = (result.rows ?? []) as RawRow[];

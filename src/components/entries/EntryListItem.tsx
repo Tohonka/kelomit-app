@@ -8,11 +8,18 @@ import MediaThumbnail from '../media/MediaThumbnail';
 import ActivityBadge from './ActivityBadge';
 import ProjectChip from './ProjectChip';
 import TagChip from './TagChip';
-import {formatTime} from '../../utils/dateUtils';
+import {formatTime, durationBetween} from '../../utils/dateUtils';
 
 interface Props {
   entry: Entry;
   onPress: () => void;
+}
+
+function formatDurationClock(seconds: number): string {
+  const totalMinutes = Math.floor(seconds / 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${hours}:${String(minutes).padStart(2, '0')}`;
 }
 
 const makeStyles = (c: Colors) =>
@@ -45,6 +52,16 @@ const makeStyles = (c: Colors) =>
       color: c.textSecondary,
       fontStyle: 'italic',
     },
+    timeGroup: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+    },
+    duration: {
+      fontSize: typography.sizes.sm,
+      color: c.success,
+      fontWeight: typography.weights.medium,
+    },
     time: {fontSize: typography.sizes.sm, color: c.textMuted},
     body: {fontSize: typography.sizes.sm, color: c.textSecondary, lineHeight: 18},
     chips: {
@@ -59,6 +76,16 @@ const makeStyles = (c: Colors) =>
 export default function EntryListItem({entry, onPress}: Props) {
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const resolvedDurationSec =
+    entry.duration_sec != null
+      ? entry.duration_sec
+      : entry.time_from && entry.time_to
+        ? Math.max(0, durationBetween(entry.time_from, entry.time_to))
+        : null;
+  const durationLabel =
+    resolvedDurationSec != null && resolvedDurationSec > 0
+      ? formatDurationClock(resolvedDurationSec)
+      : null;
   const timeLabel = entry.time_from
     ? `${formatTime(entry.time_from)}${entry.time_to ? ` - ${formatTime(entry.time_to)}` : ''}`
     : formatTime(entry.created_at);
@@ -79,7 +106,10 @@ export default function EntryListItem({entry, onPress}: Props) {
               {entry.body ?? entry.entry_type}
             </Text>
           )}
-          <Text style={styles.time}>{timeLabel}</Text>
+          <View style={styles.timeGroup}>
+            {durationLabel ? <Text style={styles.duration}>{durationLabel}</Text> : null}
+            <Text style={styles.time}>{timeLabel}</Text>
+          </View>
         </View>
         {entry.body && entry.title ? (
           <Text style={styles.body} numberOfLines={2}>{entry.body}</Text>
