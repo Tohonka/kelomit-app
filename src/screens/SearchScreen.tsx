@@ -1,4 +1,5 @@
 import React, {useEffect, useMemo, useState} from 'react';
+import {useTranslation} from 'react-i18next';
 import {View, Text, TextInput, StyleSheet, ScrollView, ActivityIndicator} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {searchEntries, type SearchResult} from '../db/entries';
@@ -51,6 +52,7 @@ const makeStyles = (c: Colors) =>
   });
 
 export default function SearchScreen({navigation}: Props) {
+  const {t: translate} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [query, setQuery] = useState('');
@@ -96,7 +98,7 @@ export default function SearchScreen({navigation}: Props) {
           style={styles.input}
           value={query}
           onChangeText={setQuery}
-          placeholder="Search notes, tags, projects…"
+          placeholder={translate('search.placeholder')}
           placeholderTextColor={colors.textMuted}
           autoFocus
           autoCapitalize="none"
@@ -108,20 +110,20 @@ export default function SearchScreen({navigation}: Props) {
 
       {!loading && searched && results.length === 0 && (
         <View style={styles.empty}>
-          <Text style={styles.emptyText}>No matches for “{query.trim()}”.</Text>
+          <Text style={styles.emptyText}>{translate('search.noMatches', {query: query.trim()})}</Text>
         </View>
       )}
 
       {!searched && !loading && (
         <View style={styles.empty}>
-          <Text style={styles.emptyText}>Search across your notes, tags and projects.</Text>
+          <Text style={styles.emptyText}>{translate('search.prompt')}</Text>
         </View>
       )}
 
       {results.length > 0 && (
         <ScrollView keyboardShouldPersistTaps="handled">
           <Text style={styles.countText}>
-            {results.length} result{results.length === 1 ? '' : 's'}
+            {translate('search.results', {count: results.length})}
           </Text>
           {groups.map(group => (
             <View key={group.date}>

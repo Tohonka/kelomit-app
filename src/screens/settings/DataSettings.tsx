@@ -1,4 +1,5 @@
 import React, {useMemo, useState} from 'react';
+import {useTranslation} from 'react-i18next';
 import {
   View,
   Text,
@@ -13,6 +14,8 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import {subDays, format} from 'date-fns';
 import {exportToCsv} from '../../utils/exportUtils';
 import {useTheme, typography, spacing, radius} from '../../theme';
+import {getDateFnsLocale} from '../../i18n';
+import {useSettingsStore} from '../../store/settingsStore';
 import type {Colors} from '../../theme';
 import type {RootStackScreenProps} from '../../navigation/navigationTypes';
 import {makeSettingsStyles} from './settingsStyles';
@@ -69,7 +72,9 @@ const makeLocalStyles = (c: Colors) =>
   });
 
 export default function DataSettings({navigation}: Props) {
+  const {t} = useTranslation();
   const {colors} = useTheme();
+  const language = useSettingsStore(s => s.language);
   const styles = useMemo(() => makeSettingsStyles(colors), [colors]);
   const local = useMemo(() => makeLocalStyles(colors), [colors]);
 
@@ -86,7 +91,7 @@ export default function DataSettings({navigation}: Props) {
         format(exportTo, 'yyyy-MM-dd'),
       );
     } catch (e) {
-      Alert.alert('Export failed', String(e));
+      Alert.alert(t('settings.exportFailed'), String(e));
     } finally {
       setExporting(false);
     }
@@ -95,17 +100,17 @@ export default function DataSettings({navigation}: Props) {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.sectionHeader}>Data</Text>
+        <Text style={styles.sectionHeader}>{t('common.data')}</Text>
 
         <TouchableOpacity style={styles.row} onPress={() => navigation.navigate('ProjectsScreen')}>
-          <Text style={styles.rowLabel}>Projects</Text>
+          <Text style={styles.rowLabel}>{t('common.projects')}</Text>
           <Text style={styles.rowCaret}>›</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.row}
           onPress={() => setExportState(s => (s === 'hidden' ? 'ready' : 'hidden'))}>
-          <Text style={styles.rowLabel}>Export CSV</Text>
+          <Text style={styles.rowLabel}>{t('settings.exportCsv')}</Text>
           <Text style={styles.rowCaret}>{exportState !== 'hidden' ? '↓' : '›'}</Text>
         </TouchableOpacity>
 
@@ -113,17 +118,23 @@ export default function DataSettings({navigation}: Props) {
           <View style={local.exportPanel}>
             <View style={local.exportDateRow}>
               <TouchableOpacity style={local.exportDateBtn} onPress={() => setExportState('picking_from')}>
-                <Text style={local.exportDateLabel}>From</Text>
-                <Text style={local.exportDateValue}>{format(exportFrom, 'MMM d, yyyy')}</Text>
+                <Text style={local.exportDateLabel}>{t('common.from')}</Text>
+                <Text style={local.exportDateValue}>
+                  {format(exportFrom, 'MMM d, yyyy', {locale: getDateFnsLocale(language)})}
+                </Text>
               </TouchableOpacity>
               <Text style={local.exportSep}>→</Text>
               <TouchableOpacity style={local.exportDateBtn} onPress={() => setExportState('picking_to')}>
-                <Text style={local.exportDateLabel}>To</Text>
-                <Text style={local.exportDateValue}>{format(exportTo, 'MMM d, yyyy')}</Text>
+                <Text style={local.exportDateLabel}>{t('common.to')}</Text>
+                <Text style={local.exportDateValue}>
+                  {format(exportTo, 'MMM d, yyyy', {locale: getDateFnsLocale(language)})}
+                </Text>
               </TouchableOpacity>
             </View>
             <TouchableOpacity style={local.exportBtn} onPress={handleExport} disabled={exporting}>
-              <Text style={local.exportBtnText}>{exporting ? 'Exporting…' : 'Share CSV'}</Text>
+              <Text style={local.exportBtnText}>
+                {exporting ? t('settings.exporting') : t('settings.shareCsv')}
+              </Text>
             </TouchableOpacity>
           </View>
         )}

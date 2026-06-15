@@ -1,4 +1,5 @@
 import React, {useEffect, useMemo, useState} from 'react';
+import {useTranslation} from 'react-i18next';
 import {View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useSettingsStore} from '../../store/settingsStore';
@@ -8,10 +9,10 @@ import type {Colors} from '../../theme';
 import type {ActivityType} from '../../types';
 import {makeSettingsStyles} from './settingsStyles';
 
-const ACTIVITIES: {type: ActivityType; label: string}[] = [
-  {type: 'work', label: 'Work'},
-  {type: 'personal_work', label: 'Personal (work)'},
-  {type: 'personal', label: 'Personal'},
+const ACTIVITIES: {type: ActivityType; labelKey: string}[] = [
+  {type: 'work', labelKey: 'activity.work'},
+  {type: 'personal_work', labelKey: 'activity.personal_work'},
+  {type: 'personal', labelKey: 'activity.personal'},
 ];
 
 const makeLocalStyles = (c: Colors) =>
@@ -44,6 +45,7 @@ const makeLocalStyles = (c: Colors) =>
   });
 
 export default function QuickAddSettings() {
+  const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeSettingsStyles(colors), [colors]);
   const local = useMemo(() => makeLocalStyles(colors), [colors]);
@@ -65,18 +67,18 @@ export default function QuickAddSettings() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.sectionHeader}>Quick add defaults</Text>
+        <Text style={styles.sectionHeader}>{t('settings.quickAddDefaults')}</Text>
 
         <View style={local.block}>
-          <Text style={local.blockLabel}>Activity</Text>
+          <Text style={local.blockLabel}>{t('entries.activity')}</Text>
           <View style={local.chips}>
-            {ACTIVITIES.map(({type, label}) => (
+            {ACTIVITIES.map(({type, labelKey}) => (
               <TouchableOpacity
                 key={type}
                 style={[local.chip, quickadd_default_activity === type && local.chipActive]}
                 onPress={() => setQuickAddDefaultActivity(type)}>
                 <Text style={[local.chipText, quickadd_default_activity === type && local.chipTextActive]}>
-                  {label}
+                  {t(labelKey)}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -84,26 +86,26 @@ export default function QuickAddSettings() {
         </View>
 
         <View style={local.block}>
-          <Text style={local.blockLabel}>Tag</Text>
+          <Text style={local.blockLabel}>{t('settings.tag')}</Text>
           <TextInput
             style={local.input}
             value={tagDraft}
             onChangeText={setTagDraft}
             onEndEditing={() => setQuickAddDefaultTag(tagDraft.trim())}
             onSubmitEditing={() => setQuickAddDefaultTag(tagDraft.trim())}
-            placeholder="No tag"
+            placeholder={t('settings.noTag')}
             placeholderTextColor={colors.textMuted}
             autoCapitalize="none"
           />
         </View>
 
         <View style={local.block}>
-          <Text style={local.blockLabel}>Project</Text>
+          <Text style={local.blockLabel}>{t('settings.project')}</Text>
           <View style={local.chips}>
             <TouchableOpacity
               style={[local.chip, quickadd_default_project_id == null && local.chipActive]}
               onPress={() => setQuickAddDefaultProjectId(null)}>
-              <Text style={[local.chipText, quickadd_default_project_id == null && local.chipTextActive]}>None</Text>
+              <Text style={[local.chipText, quickadd_default_project_id == null && local.chipTextActive]}>{t('common.none')}</Text>
             </TouchableOpacity>
             {activeProjects.map(p => (
               <TouchableOpacity

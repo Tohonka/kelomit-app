@@ -1,4 +1,5 @@
 import {Platform, Alert} from 'react-native';
+import i18n from '../i18n';
 import {
   check,
   request,
@@ -18,8 +19,8 @@ async function ensurePermission(permission: Permission): Promise<boolean> {
   }
   // BLOCKED or UNAVAILABLE
   Alert.alert(
-    'Permission required',
-    'Please enable this permission in your device Settings to use this feature.',
+    i18n.t('permissions.requiredTitle'),
+    i18n.t('permissions.requiredMessage'),
   );
   return false;
 }

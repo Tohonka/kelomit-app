@@ -2,12 +2,14 @@ import {create} from 'zustand';
 import {getAllSettings, getRawSettings, setSetting} from '../db/settings';
 import type {Settings, ActivityType} from '../types';
 import type {ThemeMode, TimeSelectorMode} from '../theme';
+import i18n, {resolveLanguageSetting, type Language} from '../i18n';
 
 interface SettingsState extends Settings {
   loaded: boolean;
   theme_mode: ThemeMode;
   show_week_numbers: boolean;
   time_selector_mode: TimeSelectorMode;
+  language: Language;
   quickadd_default_project_id: number | null;
   quickadd_default_tag: string;
   quickadd_default_activity: ActivityType;
@@ -19,6 +21,7 @@ interface SettingsState extends Settings {
   setThemeMode: (mode: ThemeMode) => Promise<void>;
   setShowWeekNumbers: (show: boolean) => Promise<void>;
   setTimeSelectorMode: (mode: TimeSelectorMode) => Promise<void>;
+  setLanguage: (language: Language) => Promise<void>;
   setQuickAddDefaultProjectId: (id: number | null) => Promise<void>;
   setQuickAddDefaultTag: (tag: string) => Promise<void>;
   setQuickAddDefaultActivity: (type: ActivityType) => Promise<void>;
@@ -34,6 +37,7 @@ export const useSettingsStore = create<SettingsState>(set => ({
   theme_mode: 'system',
   show_week_numbers: false,
   time_selector_mode: 'clock',
+  language: 'en',
   quickadd_default_project_id: null,
   quickadd_default_tag: 'Quick add',
   quickadd_default_activity: 'work',
@@ -49,6 +53,8 @@ export const useSettingsStore = create<SettingsState>(set => ({
     const show_week_numbers = raw.show_week_numbers === 'true';
     const time_selector_mode: TimeSelectorMode =
       raw.time_selector_mode === 'keyboard' ? 'keyboard' : 'clock';
+    const language = resolveLanguageSetting(raw.language);
+    await i18n.changeLanguage(language);
     const quickadd_default_project_id = raw.quickadd_default_project_id
       ? parseInt(raw.quickadd_default_project_id, 10)
       : null;
@@ -63,6 +69,7 @@ export const useSettingsStore = create<SettingsState>(set => ({
       theme_mode,
       show_week_numbers,
       time_selector_mode,
+      language,
       quickadd_default_project_id,
       quickadd_default_tag,
       quickadd_default_activity,
@@ -103,6 +110,12 @@ export const useSettingsStore = create<SettingsState>(set => ({
   setTimeSelectorMode: async mode => {
     await setSetting('time_selector_mode', mode);
     set({time_selector_mode: mode});
+  },
+
+  setLanguage: async language => {
+    await setSetting('language', language);
+    await i18n.changeLanguage(language);
+    set({language});
   },
 
   setQuickAddDefaultProjectId: async id => {

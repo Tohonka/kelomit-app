@@ -1,4 +1,5 @@
 import React, {useState, useCallback, useMemo} from 'react';
+import {useTranslation} from 'react-i18next';
 import {
   View,
   Text,
@@ -14,6 +15,7 @@ import {useFocusEffect} from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import {format, eachDayOfInterval, isToday, getISOWeek, subDays} from 'date-fns';
 import {useTheme, typography, spacing, radius} from '../theme';
+import {getDateFnsLocale} from '../i18n';
 import type {Colors} from '../theme';
 import {useSettingsStore} from '../store/settingsStore';
 import {getWorkSecondsByDay} from '../db/entries';
@@ -134,9 +136,10 @@ const makeStyles = (c: Colors) =>
   });
 
 export default function CalendarScreen({navigation}: Props) {
+  const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const {show_week_numbers} = useSettingsStore();
+  const {show_week_numbers, language} = useSettingsStore();
   const [viewMode, setViewMode] = useState<CalendarView>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [hoursMap, setHoursMap] = useState<Record<string, number>>({});
@@ -218,12 +221,13 @@ export default function CalendarScreen({navigation}: Props) {
   );
 
   const weekDays = getWeekDays(currentDate);
+  const dateLocale = getDateFnsLocale(language);
   const headerLabel =
     viewMode === 'range'
-      ? `${format(rangeFrom, 'MMM d')} – ${format(rangeTo, 'MMM d, yyyy')}`
+      ? `${format(rangeFrom, 'MMM d', {locale: dateLocale})} – ${format(rangeTo, 'MMM d, yyyy', {locale: dateLocale})}`
       : viewMode === 'month'
-      ? format(currentDate, 'MMMM yyyy')
-      : `${format(weekDays[0], 'MMM d')} – ${format(weekDays[6], 'MMM d, yyyy')}`;
+      ? format(currentDate, 'MMMM yyyy', {locale: dateLocale})
+      : `${format(weekDays[0], 'MMM d', {locale: dateLocale})} – ${format(weekDays[6], 'MMM d, yyyy', {locale: dateLocale})}`;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -253,7 +257,11 @@ export default function CalendarScreen({navigation}: Props) {
               style={[styles.segment, viewMode === mode && styles.segmentActive]}
               onPress={() => setViewMode(mode)}>
               <Text style={[styles.segmentText, viewMode === mode && styles.segmentTextActive]}>
-                {mode === 'month' ? 'Month' : mode === 'week' ? 'Week' : 'Range'}
+                {mode === 'month'
+                  ? t('calendar.month')
+                  : mode === 'week'
+                  ? t('calendar.week')
+                  : t('calendar.range')}
               </Text>
             </TouchableOpacity>
           ))}
@@ -263,13 +271,17 @@ export default function CalendarScreen({navigation}: Props) {
         {viewMode === 'range' && (
           <View style={styles.rangePickers}>
             <TouchableOpacity style={styles.rangeDateBtn} onPress={() => setShowFromPicker(true)}>
-              <Text style={styles.rangeDateLabel}>From</Text>
-              <Text style={styles.rangeDateValue}>{format(rangeFrom, 'MMM d, yyyy')}</Text>
+              <Text style={styles.rangeDateLabel}>{t('common.from')}</Text>
+              <Text style={styles.rangeDateValue}>
+                {format(rangeFrom, 'MMM d, yyyy', {locale: dateLocale})}
+              </Text>
             </TouchableOpacity>
             <Text style={styles.rangeSep}>→</Text>
             <TouchableOpacity style={styles.rangeDateBtn} onPress={() => setShowToPicker(true)}>
-              <Text style={styles.rangeDateLabel}>To</Text>
-              <Text style={styles.rangeDateValue}>{format(rangeTo, 'MMM d, yyyy')}</Text>
+              <Text style={styles.rangeDateLabel}>{t('common.to')}</Text>
+              <Text style={styles.rangeDateValue}>
+                {format(rangeTo, 'MMM d, yyyy', {locale: dateLocale})}
+              </Text>
             </TouchableOpacity>
           </View>
         )}
@@ -296,7 +308,7 @@ export default function CalendarScreen({navigation}: Props) {
 
         {/* Period summary */}
         <View style={styles.summaryBar}>
-          <Text style={styles.summaryLabel}>Total work this period</Text>
+          <Text style={styles.summaryLabel}>{t('calendar.totalWorkThisPeriod')}</Text>
           {loading
             ? <ActivityIndicator size="small" color={colors.primary} />
             : <Text style={styles.summaryValue}>{periodTotal > 0 ? formatHours(periodTotal) : '—'}</Text>
@@ -310,6 +322,7 @@ export default function CalendarScreen({navigation}: Props) {
             currentDate={currentDate}
             hoursMap={hoursMap}
             showWeekNumbers={show_week_numbers}
+            language={language}
             onDayPress={navigateToDay}
           />
         ) : viewMode === 'week' ? (
@@ -317,6 +330,7 @@ export default function CalendarScreen({navigation}: Props) {
             currentDate={currentDate}
             hoursMap={hoursMap}
             showWeekNumbers={show_week_numbers}
+            language={language}
             onDayPress={navigateToDay}
           />
         ) : (
@@ -324,6 +338,7 @@ export default function CalendarScreen({navigation}: Props) {
             rangeFrom={rangeFrom}
             rangeTo={rangeTo}
             hoursMap={hoursMap}
+            language={language}
             onDayPress={navigateToDay}
           />
         )}
@@ -389,12 +404,22 @@ function MonthGrid({currentDate, hoursMap, showWeekNumbers, onDayPress}: {
   currentDate: Date;
   hoursMap: Record<string, number>;
   showWeekNumbers: boolean;
+  language: 'en' | 'fi';
   onDayPress: (d: Date) => void;
 }) {
+  const {t} = useTranslation();
   const {colors} = useTheme();
   const gridStyles = useMemo(() => makeGridStyles(colors), [colors]);
   const days = getMonthGridDays(currentDate);
-  const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const weekdays = [
+    t('calendar.weekdaysShort.mon'),
+    t('calendar.weekdaysShort.tue'),
+    t('calendar.weekdaysShort.wed'),
+    t('calendar.weekdaysShort.thu'),
+    t('calendar.weekdaysShort.fri'),
+    t('calendar.weekdaysShort.sat'),
+    t('calendar.weekdaysShort.sun'),
+  ];
 
   // Group into weeks of 7
   const weeks: Date[][] = [];
@@ -405,7 +430,7 @@ function MonthGrid({currentDate, hoursMap, showWeekNumbers, onDayPress}: {
   return (
     <View style={gridStyles.container}>
       <View style={gridStyles.headerRow}>
-        {showWeekNumbers && <Text style={gridStyles.weekNumHeader}>W</Text>}
+        {showWeekNumbers && <Text style={gridStyles.weekNumHeader}>{t('dates.weekShort')}</Text>}
         {weekdays.map(d => <Text key={d} style={gridStyles.weekday}>{d}</Text>)}
       </View>
       {weeks.map((week, wi) => (
@@ -483,21 +508,24 @@ const makeWeekStyles = (c: Colors) =>
     hoursEmpty: {fontSize: typography.sizes.xs, color: c.textMuted},
   });
 
-function WeekView({currentDate, hoursMap, showWeekNumbers, onDayPress}: {
+function WeekView({currentDate, hoursMap, showWeekNumbers, language, onDayPress}: {
   currentDate: Date;
   hoursMap: Record<string, number>;
   showWeekNumbers: boolean;
+  language: 'en' | 'fi';
   onDayPress: (d: Date) => void;
 }) {
+  const {t} = useTranslation();
   const {colors} = useTheme();
   const weekStyles = useMemo(() => makeWeekStyles(colors), [colors]);
   const days = getWeekDays(currentDate);
+  const dateLocale = getDateFnsLocale(language);
 
   return (
     <View style={weekStyles.container}>
       {showWeekNumbers && (
         <View style={weekStyles.weekNumRow}>
-          <Text style={weekStyles.weekNumLabel}>Week {getISOWeek(days[0])}</Text>
+          <Text style={weekStyles.weekNumLabel}>{t('dates.weekNumber', {week: getISOWeek(days[0])})}</Text>
         </View>
       )}
       <View style={weekStyles.row}>
@@ -511,7 +539,7 @@ function WeekView({currentDate, hoursMap, showWeekNumbers, onDayPress}: {
               style={[weekStyles.cell, today && weekStyles.cellToday]}
               onPress={() => onDayPress(d)}
               activeOpacity={0.7}>
-              <Text style={weekStyles.dayName}>{format(d, 'EEE')}</Text>
+              <Text style={weekStyles.dayName}>{format(d, 'EEE', {locale: dateLocale})}</Text>
               <Text style={[weekStyles.dayNum, today && weekStyles.dayNumToday]}>{d.getDate()}</Text>
               {workSecs > 0
                 ? <Text style={weekStyles.hours}>{formatHours(workSecs)}</Text>
@@ -549,15 +577,17 @@ const makeRangeStyles = (c: Colors) =>
     empty: {fontSize: typography.sizes.md, color: c.textMuted},
   });
 
-function RangeView({rangeFrom, rangeTo, hoursMap, onDayPress}: {
+function RangeView({rangeFrom, rangeTo, hoursMap, language, onDayPress}: {
   rangeFrom: Date;
   rangeTo: Date;
   hoursMap: Record<string, number>;
+  language: 'en' | 'fi';
   onDayPress: (d: Date) => void;
 }) {
   const {colors} = useTheme();
   const rangeStyles = useMemo(() => makeRangeStyles(colors), [colors]);
   const days = eachDayOfInterval({start: rangeFrom, end: rangeTo});
+  const dateLocale = getDateFnsLocale(language);
 
   return (
     <View style={rangeStyles.list}>
@@ -572,8 +602,12 @@ function RangeView({rangeFrom, rangeTo, hoursMap, onDayPress}: {
             onPress={() => onDayPress(d)}
             activeOpacity={0.7}>
             <View>
-              <Text style={[rangeStyles.weekday, today && rangeStyles.today]}>{format(d, 'EEE')}</Text>
-              <Text style={[rangeStyles.date, today && rangeStyles.today]}>{format(d, 'MMM d')}</Text>
+              <Text style={[rangeStyles.weekday, today && rangeStyles.today]}>
+                {format(d, 'EEE', {locale: dateLocale})}
+              </Text>
+              <Text style={[rangeStyles.date, today && rangeStyles.today]}>
+                {format(d, 'MMM d', {locale: dateLocale})}
+              </Text>
             </View>
             <Text style={workSecs > 0 ? rangeStyles.hours : rangeStyles.empty}>
               {workSecs > 0 ? formatHours(workSecs) : '—'}

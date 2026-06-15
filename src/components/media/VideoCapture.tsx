@@ -1,4 +1,5 @@
 import React, {useMemo} from 'react';
+import {useTranslation} from 'react-i18next';
 import {View, Text, TouchableOpacity, StyleSheet, Alert} from 'react-native';
 import {launchCamera, launchImageLibrary} from 'react-native-image-picker';
 import RNFS from 'react-native-fs';
@@ -50,6 +51,7 @@ const makeStyles = (c: Colors) =>
   });
 
 export default function VideoCapture({filePath, onCapture}: Props) {
+  const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
@@ -74,7 +76,7 @@ export default function VideoCapture({filePath, onCapture}: Props) {
       await RNFS.copyFile(src, destPath);
       onCapture(destPath, null);
     } catch (e) {
-      Alert.alert('Error saving video', String(e));
+      Alert.alert(t('media.errorSavingVideo'), String(e));
     }
   };
 
@@ -82,9 +84,9 @@ export default function VideoCapture({filePath, onCapture}: Props) {
     return (
       <View style={styles.captured}>
         <Text style={styles.capturedIcon}>🎥</Text>
-        <Text style={styles.capturedText}>Video captured</Text>
+        <Text style={styles.capturedText}>{t('media.videoCaptured')}</Text>
         <TouchableOpacity onPress={handleCamera}>
-          <Text style={styles.replaceBtnText}>Replace</Text>
+          <Text style={styles.replaceBtnText}>{t('common.replace')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -94,11 +96,11 @@ export default function VideoCapture({filePath, onCapture}: Props) {
     <View style={styles.row}>
       <TouchableOpacity style={styles.btn} onPress={handleCamera} activeOpacity={0.7}>
         <Text style={styles.btnEmoji}>🎥</Text>
-        <Text style={styles.btnLabel}>Camera</Text>
+        <Text style={styles.btnLabel}>{t('media.camera')}</Text>
       </TouchableOpacity>
       <TouchableOpacity style={styles.btn} onPress={handleGallery} activeOpacity={0.7}>
         <Text style={styles.btnEmoji}>🗂️</Text>
-        <Text style={styles.btnLabel}>Gallery</Text>
+        <Text style={styles.btnLabel}>{t('media.gallery')}</Text>
       </TouchableOpacity>
     </View>
   );

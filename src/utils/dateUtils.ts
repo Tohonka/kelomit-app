@@ -1,4 +1,5 @@
 import {format, parseISO, differenceInSeconds, isToday, isYesterday} from 'date-fns';
+import i18n, {getDateFnsLocale} from '../i18n';
 
 export function todayDate(): string {
   return format(new Date(), 'yyyy-MM-dd');
@@ -7,12 +8,12 @@ export function todayDate(): string {
 export function formatDate(isoDate: string): string {
   const d = parseISO(isoDate);
   if (isToday(d)) {
-    return 'Today';
+    return i18n.t('dates.today');
   }
   if (isYesterday(d)) {
-    return 'Yesterday';
+    return i18n.t('dates.yesterday');
   }
-  return format(d, 'EEE, MMM d');
+  return format(d, 'EEE, MMM d', {locale: getDateFnsLocale(i18n.resolvedLanguage === 'fi' ? 'fi' : 'en')});
 }
 
 export function formatTime(isoDatetime: string): string {

@@ -1,4 +1,5 @@
 import React from 'react';
+import {useTranslation} from 'react-i18next';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import MainTabs from './MainTabs';
 import DayScreen from '../screens/DayScreen';
@@ -18,6 +19,7 @@ import type {RootStackParamList} from './navigationTypes';
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function RootNavigator() {
+  const {t} = useTranslation();
   const {colors} = useTheme();
   return (
     <Stack.Navigator
@@ -40,13 +42,13 @@ export default function RootNavigator() {
       <Stack.Screen
         name="EntryDetailScreen"
         component={EntryDetailScreen}
-        options={{title: 'Entry'}}
+        options={{title: t('navigation.entry')}}
       />
       <Stack.Screen
         name="AddEntryModal"
         component={AddEntryModal}
         options={({route}) => ({
-          title: route.params.entryId ? 'Edit Entry' : 'Add Entry',
+          title: route.params.entryId ? t('navigation.editEntry') : t('navigation.addEntry'),
           presentation: 'modal',
           headerStyle: {backgroundColor: colors.bgCard},
         })}
@@ -55,7 +57,7 @@ export default function RootNavigator() {
         name="QuickAddModal"
         component={QuickAddModal}
         options={{
-          title: 'Quick add',
+          title: t('navigation.quickAdd'),
           presentation: 'modal',
           headerStyle: {backgroundColor: colors.bgCard},
         }}
@@ -63,37 +65,37 @@ export default function RootNavigator() {
       <Stack.Screen
         name="ProjectsScreen"
         component={ProjectsScreen}
-        options={{title: 'Projects'}}
+        options={{title: t('common.projects')}}
       />
       <Stack.Screen
         name="SearchScreen"
         component={SearchScreen}
-        options={{title: 'Search'}}
+        options={{title: t('navigation.search')}}
       />
       <Stack.Screen
         name="InsightsScreen"
         component={InsightsScreen}
-        options={{title: 'Insights'}}
+        options={{title: t('navigation.insights')}}
       />
       <Stack.Screen
         name="InterfaceSettings"
         component={InterfaceSettings}
-        options={{title: 'Interface'}}
+        options={{title: t('navigation.interface')}}
       />
       <Stack.Screen
         name="TrackingSettings"
         component={TrackingSettings}
-        options={{title: 'Tracking'}}
+        options={{title: t('navigation.tracking')}}
       />
       <Stack.Screen
         name="DataSettings"
         component={DataSettings}
-        options={{title: 'Data'}}
+        options={{title: t('common.data')}}
       />
       <Stack.Screen
         name="QuickAddSettings"
         component={QuickAddSettings}
-        options={{title: 'Quick add'}}
+        options={{title: t('navigation.quickAdd')}}
       />
     </Stack.Navigator>
   );

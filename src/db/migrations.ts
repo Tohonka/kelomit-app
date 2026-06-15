@@ -114,4 +114,10 @@ export const migrations: Migration[] = [
       "INSERT OR IGNORE INTO settings (key, value) VALUES ('quickadd_default_activity', 'work')",
     ],
   },
+  {
+    version: 6,
+    up: [
+      "INSERT OR IGNORE INTO settings (key, value) VALUES ('language', '')",
+    ],
+  },
 ];

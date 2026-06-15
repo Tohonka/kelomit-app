@@ -1,4 +1,5 @@
 import React, {useMemo} from 'react';
+import {useTranslation} from 'react-i18next';
 import {View, Text, ScrollView, TouchableOpacity} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useSettingsStore} from '../../store/settingsStore';
@@ -7,6 +8,7 @@ import {useTheme} from '../../theme';
 import {makeSettingsStyles} from './settingsStyles';
 
 export default function TrackingSettings() {
+  const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeSettingsStyles(colors), [colors]);
   const {
@@ -22,22 +24,22 @@ export default function TrackingSettings() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.sectionHeader}>Location</Text>
+        <Text style={styles.sectionHeader}>{t('settings.location')}</Text>
 
         <TouchableOpacity style={styles.row} onPress={handleGpsToggle}>
-          <Text style={styles.rowLabel}>GPS tracking</Text>
+          <Text style={styles.rowLabel}>{t('settings.gpsTracking')}</Text>
           <View style={[styles.toggle, gps_enabled && styles.toggleOn]}>
             <Text style={[styles.toggleText, gps_enabled && styles.toggleTextOn]}>
-              {gps_enabled ? 'On' : 'Off'}
+              {gps_enabled ? t('common.on') : t('common.off')}
             </Text>
           </View>
         </TouchableOpacity>
 
-        <Text style={styles.sectionHeader}>Defaults</Text>
+        <Text style={styles.sectionHeader}>{t('settings.defaults')}</Text>
 
         <View style={styles.row}>
-          <Text style={styles.rowLabel}>Default activity</Text>
-          <Text style={styles.rowValue}>{default_activity_type}</Text>
+          <Text style={styles.rowLabel}>{t('settings.defaultActivity')}</Text>
+          <Text style={styles.rowValue}>{t(`activity.${default_activity_type}`)}</Text>
         </View>
       </ScrollView>
     </SafeAreaView>

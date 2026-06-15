@@ -1,4 +1,5 @@
 import React, {useEffect, useMemo, useState} from 'react';
+import {useTranslation} from 'react-i18next';
 import {View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {getInsightsBreakdown, type InsightsData, type InsightSlice} from '../db/entries';
@@ -8,10 +9,10 @@ import {formatHours} from '../utils/hoursUtils';
 
 type Period = 'week' | 'month' | 'last30';
 
-const PERIODS: {key: Period; label: string}[] = [
-  {key: 'week', label: 'This week'},
-  {key: 'month', label: 'This month'},
-  {key: 'last30', label: 'Last 30 days'},
+const PERIODS: {key: Period; labelKey: string}[] = [
+  {key: 'week', labelKey: 'insights.thisWeek'},
+  {key: 'month', labelKey: 'insights.thisMonth'},
+  {key: 'last30', labelKey: 'insights.last30'},
 ];
 
 // Warm, slightly retro palette for the breakdown bars.
@@ -121,6 +122,7 @@ function Breakdown({title, slices, styles}: {title: string; slices: InsightSlice
 }
 
 export default function InsightsScreen() {
+  const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [period, setPeriod] = useState<Period>('week');
@@ -149,7 +151,7 @@ export default function InsightsScreen() {
               style={[styles.periodChip, period === p.key && styles.periodChipActive]}
               onPress={() => setPeriod(p.key)}>
               <Text style={[styles.periodChipText, period === p.key && styles.periodChipTextActive]}>
-                {p.label}
+                {t(p.labelKey)}
               </Text>
             </TouchableOpacity>
           ))}
@@ -159,19 +161,19 @@ export default function InsightsScreen() {
 
         {!loading && !hasData && (
           <View style={styles.empty}>
-            <Text style={styles.emptyText}>No tracked time in this period yet.</Text>
+            <Text style={styles.emptyText}>{t('insights.empty')}</Text>
           </View>
         )}
 
         {!loading && hasData && (
           <>
             <View style={styles.totalCard}>
-              <Text style={styles.totalLabel}>Total tracked</Text>
+              <Text style={styles.totalLabel}>{t('insights.totalTracked')}</Text>
               <Text style={styles.totalValue}>{formatHours(data!.totalSeconds)}</Text>
             </View>
-            <Breakdown title="By activity" slices={data!.byActivity} styles={styles} />
-            <Breakdown title="By project" slices={data!.byProject} styles={styles} />
-            <Breakdown title="By tag" slices={data!.byTag} styles={styles} />
+            <Breakdown title={t('insights.byActivity')} slices={data!.byActivity} styles={styles} />
+            <Breakdown title={t('insights.byProject')} slices={data!.byProject} styles={styles} />
+            <Breakdown title={t('insights.byTag')} slices={data!.byTag} styles={styles} />
           </>
         )}
       </ScrollView>

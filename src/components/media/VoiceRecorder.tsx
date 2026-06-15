@@ -1,4 +1,5 @@
 import React, {useMemo, useState, useEffect, useRef} from 'react';
+import {useTranslation} from 'react-i18next';
 import {View, Text, TouchableOpacity, StyleSheet, Alert} from 'react-native';
 import audioRecorderPlayer from 'react-native-audio-recorder-player';
 import type {RecordBackType, PlayBackType} from 'react-native-audio-recorder-player';
@@ -87,6 +88,7 @@ const makeStyles = (c: Colors) =>
   });
 
 export default function VoiceRecorder({filePath, onRecord, onDiscard}: Props) {
+  const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [state, setState] = useState<RecordState>(filePath ? 'done' : 'idle');
@@ -115,7 +117,7 @@ export default function VoiceRecorder({filePath, onRecord, onDiscard}: Props) {
       });
       setState('recording');
     } catch (e) {
-      Alert.alert('Recording error', String(e));
+      Alert.alert(t('media.recordingError'), String(e));
     }
   };
 
@@ -126,7 +128,7 @@ export default function VoiceRecorder({filePath, onRecord, onDiscard}: Props) {
       setState('done');
       onRecord(result, elapsedRef.current);
     } catch (e) {
-      Alert.alert('Stop recording error', String(e));
+      Alert.alert(t('media.stopRecordingError'), String(e));
     }
   };
 
@@ -162,7 +164,7 @@ export default function VoiceRecorder({filePath, onRecord, onDiscard}: Props) {
         <Text style={styles.recordingDot}>⏺</Text>
         <Text style={styles.timer}>{fmtTime(elapsed)}</Text>
         <TouchableOpacity style={styles.stopBtn} onPress={stopRecording}>
-          <Text style={styles.stopBtnText}>Stop</Text>
+          <Text style={styles.stopBtnText}>{t('common.stop')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -173,14 +175,16 @@ export default function VoiceRecorder({filePath, onRecord, onDiscard}: Props) {
       <View style={styles.card}>
         <Text style={styles.doneIcon}>🎙️</Text>
         <Text style={styles.doneText}>
-          Recording saved{elapsed > 0 ? ` · ${fmtTime(elapsed)}` : ''}
+          {t('media.recordingSaved')}{elapsed > 0 ? ` · ${fmtTime(elapsed)}` : ''}
         </Text>
         <View style={styles.doneActions}>
           <TouchableOpacity style={styles.playBtn} onPress={togglePlay}>
-            <Text style={styles.playBtnText}>{isPlaying ? '⏹ Stop' : '▶ Play'}</Text>
+            <Text style={styles.playBtnText}>
+              {isPlaying ? `⏹ ${t('common.stop')}` : `▶ ${t('media.play')}`}
+            </Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={discard}>
-            <Text style={styles.discardText}>Discard</Text>
+            <Text style={styles.discardText}>{t('common.discard')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -190,7 +194,7 @@ export default function VoiceRecorder({filePath, onRecord, onDiscard}: Props) {
   return (
     <TouchableOpacity style={styles.startBtn} onPress={startRecording} activeOpacity={0.7}>
       <Text style={styles.startEmoji}>🎙️</Text>
-      <Text style={styles.startLabel}>Tap to record</Text>
+      <Text style={styles.startLabel}>{t('media.tapToRecord')}</Text>
     </TouchableOpacity>
   );
 }

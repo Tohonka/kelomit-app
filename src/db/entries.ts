@@ -1,4 +1,5 @@
 import {getDB} from './database';
+import i18n from '../i18n';
 import type {Entry, Tag, Project} from '../types';
 
 type RawRow = Record<string, unknown>;
@@ -402,12 +403,6 @@ const ENTRY_SECS_SQL = `CASE
     ELSE 0
   END`;
 
-const ACTIVITY_LABELS: Record<string, string> = {
-  work: 'Work',
-  personal_work: 'Personal (work)',
-  personal: 'Personal',
-};
-
 /** Aggregated time breakdowns over a date range, for the Insights screen. */
 export async function getInsightsBreakdown(
   startDate: string,
@@ -449,8 +444,8 @@ export async function getInsightsBreakdown(
       .filter(s => s.seconds > 0)
       .sort((a, b) => b.seconds - a.seconds);
 
-  const byActivity = toSlices(activityRes.rows as RawRow[], r => ACTIVITY_LABELS[String(r.k)] ?? String(r.k));
-  const byProject = toSlices(projectRes.rows as RawRow[], r => (r.name as string | null) ?? 'No project');
+  const byActivity = toSlices(activityRes.rows as RawRow[], r => i18n.t(`activity.${String(r.k)}`));
+  const byProject = toSlices(projectRes.rows as RawRow[], r => (r.name as string | null) ?? i18n.t('insights.noProject'));
   const byTag = toSlices(tagRes.rows as RawRow[], r => (r.name as string | null) ?? '—');
   const totalSeconds = byActivity.reduce((sum, s) => sum + s.seconds, 0);
 

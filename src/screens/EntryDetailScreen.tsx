@@ -1,4 +1,5 @@
 import React, {useEffect, useMemo, useState} from 'react';
+import {useTranslation} from 'react-i18next';
 import {
   View,
   Text,
@@ -105,6 +106,7 @@ const makeStyles = (c: Colors) =>
   });
 
 export default function EntryDetailScreen({navigation, route}: Props) {
+  const {t: translate} = useTranslation();
   const {entryId, dayId} = route.params;
   const {removeEntry} = useEntryStore();
   const {colors} = useTheme();
@@ -138,10 +140,10 @@ export default function EntryDetailScreen({navigation, route}: Props) {
   const handleDelete = () => {
     if (!entry) { return; }
     const entryToDelete = entry;
-    Alert.alert('Delete entry', 'This action cannot be undone.', [
-      {text: 'Cancel', style: 'cancel'},
+    Alert.alert(translate('entries.deleteTitle'), translate('entries.deleteMessage'), [
+      {text: translate('common.cancel'), style: 'cancel'},
       {
-        text: 'Delete',
+        text: translate('common.delete'),
         style: 'destructive',
         onPress: async () => {
           Vibration.vibrate([0, 40, 60, 40]);
@@ -167,7 +169,7 @@ export default function EntryDetailScreen({navigation, route}: Props) {
           <ActivityBadge type={entry.activity_type} />
           {entry.project ? <ProjectChip project={entry.project} /> : null}
           <TouchableOpacity style={styles.editBtn} onPress={handleEdit}>
-            <Text style={styles.editBtnText}>Edit</Text>
+            <Text style={styles.editBtnText}>{translate('common.edit')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -189,42 +191,44 @@ export default function EntryDetailScreen({navigation, route}: Props) {
         {entry.entry_type === 'video' && entry.file_path ? (
           <View style={styles.videoPlaceholder}>
             <Text style={styles.videoIcon}>🎥</Text>
-            <Text style={styles.videoHint}>Video file saved</Text>
+            <Text style={styles.videoHint}>{translate('entries.videoFileSaved')}</Text>
           </View>
         ) : null}
 
         <View style={styles.infoSection}>
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Type</Text>
-            <Text style={styles.infoValue}>{entry.entry_type}</Text>
+            <Text style={styles.infoLabel}>{translate('entries.type')}</Text>
+            <Text style={styles.infoValue}>{translate(`entryType.${entry.entry_type}`)}</Text>
           </View>
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Created</Text>
+            <Text style={styles.infoLabel}>{translate('entries.created')}</Text>
             <Text style={styles.infoValue}>
               {formatDate(entry.created_at.slice(0, 10))} {formatTime(entry.created_at)}
             </Text>
           </View>
           {entry.time_from ? (
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>From</Text>
+              <Text style={styles.infoLabel}>{translate('common.from')}</Text>
               <Text style={styles.infoValue}>{formatTime(entry.time_from)}</Text>
             </View>
           ) : null}
           {entry.time_to ? (
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>To</Text>
+              <Text style={styles.infoLabel}>{translate('common.to')}</Text>
               <Text style={styles.infoValue}>{formatTime(entry.time_to)}</Text>
             </View>
           ) : null}
           {entry.duration_sec ? (
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Duration</Text>
-              <Text style={styles.infoValue}>{Math.floor(entry.duration_sec / 60)}m</Text>
+              <Text style={styles.infoLabel}>{translate('entries.duration')}</Text>
+              <Text style={styles.infoValue}>
+                {Math.floor(entry.duration_sec / 60)}{translate('entries.minuteUnit')}
+              </Text>
             </View>
           ) : null}
           {entry.location_label ? (
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Location</Text>
+              <Text style={styles.infoLabel}>{translate('entries.location')}</Text>
               <Text style={styles.infoValue}>{entry.location_label}</Text>
             </View>
           ) : null}
@@ -237,7 +241,7 @@ export default function EntryDetailScreen({navigation, route}: Props) {
         ) : null}
 
         <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
-          <Text style={styles.deleteBtnText}>Delete entry</Text>
+          <Text style={styles.deleteBtnText}>{translate('entries.deleteEntry')}</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>

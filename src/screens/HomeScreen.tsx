@@ -1,9 +1,12 @@
 import React, {useEffect, useMemo} from 'react';
+import {useTranslation} from 'react-i18next';
 import {View, Text, StyleSheet, ScrollView} from 'react-native';
+import {format} from 'date-fns';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useDayStore} from '../store/dayStore';
 import {useEntryStore} from '../store/entryStore';
 import {useTheme, typography, spacing} from '../theme';
+import {getDateFnsLocale} from '../i18n';
 import type {Colors} from '../theme';
 import EntryList from '../components/entries/EntryList';
 import DaySummaryCard from '../components/day/DaySummaryCard';
@@ -47,6 +50,7 @@ const makeStyles = (c: Colors) =>
   });
 
 export default function HomeScreen({navigation}: Props) {
+  const {i18n} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const {today, loadToday, updateDayTimes} = useDayStore();
@@ -82,11 +86,8 @@ export default function HomeScreen({navigation}: Props) {
           )}
         </View>
         <Text style={styles.headerSub}>
-          {new Date().toLocaleDateString('en-US', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
+          {format(new Date(), 'EEEE, MMMM d, yyyy', {
+            locale: getDateFnsLocale(i18n.resolvedLanguage === 'fi' ? 'fi' : 'en'),
           })}
         </Text>
       </View>

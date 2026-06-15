@@ -1,4 +1,5 @@
 import React, {useMemo} from 'react';
+import {useTranslation} from 'react-i18next';
 import {ScrollView, TouchableOpacity, Text, View, StyleSheet} from 'react-native';
 import {useTheme, typography, spacing, radius} from '../../theme';
 import type {Colors} from '../../theme';
@@ -65,6 +66,7 @@ export default function FilterBar({
   onToggleTag,
   onClear,
 }: Props) {
+  const {t: translate} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
@@ -80,7 +82,7 @@ export default function FilterBar({
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
         {hasFilter && (
           <TouchableOpacity style={styles.clearChip} onPress={onClear}>
-            <Text style={styles.clearText}>✕ Clear</Text>
+            <Text style={styles.clearText}>✕ {translate('common.clear')}</Text>
           </TouchableOpacity>
         )}
         {activeProjects.map(p => (

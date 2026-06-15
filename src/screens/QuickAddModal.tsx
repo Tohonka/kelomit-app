@@ -1,4 +1,5 @@
 import React, {useState, useEffect, useMemo} from 'react';
+import {useTranslation} from 'react-i18next';
 import {
   View,
   Text,
@@ -22,13 +23,6 @@ import {getLastKnownPosition} from '../services/gpsService';
 import type {RootStackScreenProps} from '../navigation/navigationTypes';
 
 type Props = RootStackScreenProps<'QuickAddModal'>;
-
-const TYPE_LABEL: Record<string, string> = {
-  note: 'Quick note',
-  photo: 'Quick photo',
-  video: 'Quick video',
-  voice: 'Quick voice note',
-};
 
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
@@ -76,6 +70,7 @@ const makeStyles = (c: Colors) =>
 
 export default function QuickAddModal({navigation, route}: Props) {
   const {dayId, entryType} = route.params;
+  const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const {addEntry} = useEntryStore();
@@ -133,7 +128,7 @@ export default function QuickAddModal({navigation, route}: Props) {
       Vibration.vibrate(40);
       navigation.goBack();
     } catch (e) {
-      Alert.alert('Error', String(e));
+      Alert.alert(t('common.error'), String(e));
     } finally {
       setIsSaving(false);
     }
@@ -144,10 +139,12 @@ export default function QuickAddModal({navigation, route}: Props) {
       style={styles.container}
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled">
-      <Text style={styles.heading}>{TYPE_LABEL[entryType] ?? 'Quick add'}</Text>
+      <Text style={styles.heading}>{t(`quickEntryType.${entryType}`)}</Text>
       <Text style={styles.defaultsNote}>
-        Saved as {quickadd_default_activity.replace('_', ' ')}
-        {quickadd_default_tag.trim() ? ` · #${quickadd_default_tag.trim()}` : ''}
+        {t('entries.quickDefaults', {
+          activity: t(`activity.${quickadd_default_activity}`),
+          tag: quickadd_default_tag.trim() ? ` · #${quickadd_default_tag.trim()}` : '',
+        })}
       </Text>
 
       {entryType === 'photo' && (
@@ -168,33 +165,33 @@ export default function QuickAddModal({navigation, route}: Props) {
         />
       )}
 
-      <Text style={styles.sectionLabel}>Title</Text>
+      <Text style={styles.sectionLabel}>{t('entries.title')}</Text>
       <TextInput
         style={styles.input}
         value={title}
         onChangeText={setTitle}
-        placeholder="What is it?"
+        placeholder={t('entries.quickTitlePlaceholder')}
         placeholderTextColor={colors.textMuted}
         autoFocus={entryType === 'note'}
         maxLength={120}
       />
 
-      <Text style={styles.sectionLabel}>Duration (optional)</Text>
+      <Text style={styles.sectionLabel}>{t('entries.durationOptional')}</Text>
       <View style={styles.durationRow}>
         <TextInput
           style={[styles.input, styles.durationInput]}
           value={durationMinutes}
           onChangeText={setDurationMinutes}
-          placeholder="Minutes"
+          placeholder={t('entries.minutes')}
           placeholderTextColor={colors.textMuted}
           keyboardType="numeric"
           maxLength={5}
         />
-        <Text style={styles.durationUnit}>min</Text>
+        <Text style={styles.durationUnit}>{t('entries.minuteUnit')}</Text>
       </View>
 
       <View style={styles.saveRow}>
-        <Button label="Save" onPress={handleSave} loading={isSaving} />
+        <Button label={t('common.save')} onPress={handleSave} loading={isSaving} />
       </View>
     </ScrollView>
   );

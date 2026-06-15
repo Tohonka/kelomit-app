@@ -1,4 +1,5 @@
 import React, {useMemo} from 'react';
+import {useTranslation} from 'react-i18next';
 import {View, Text, TouchableOpacity, Image, StyleSheet, Alert} from 'react-native';
 import {launchCamera, launchImageLibrary} from 'react-native-image-picker';
 import RNFS from 'react-native-fs';
@@ -47,6 +48,7 @@ const makeStyles = (c: Colors) =>
   });
 
 export default function PhotoCapture({filePath, onCapture}: Props) {
+  const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
@@ -71,7 +73,7 @@ export default function PhotoCapture({filePath, onCapture}: Props) {
       await RNFS.copyFile(src, destPath);
       onCapture(destPath, destPath);
     } catch (e) {
-      Alert.alert('Error saving photo', String(e));
+      Alert.alert(t('media.errorSavingPhoto'), String(e));
     }
   };
 
@@ -80,7 +82,7 @@ export default function PhotoCapture({filePath, onCapture}: Props) {
       <View style={styles.preview}>
         <Image source={{uri: fileUri(filePath)}} style={styles.image} />
         <TouchableOpacity style={styles.replaceBtn} onPress={handleCamera}>
-          <Text style={styles.replaceBtnText}>Replace</Text>
+          <Text style={styles.replaceBtnText}>{t('common.replace')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -90,11 +92,11 @@ export default function PhotoCapture({filePath, onCapture}: Props) {
     <View style={styles.row}>
       <TouchableOpacity style={styles.btn} onPress={handleCamera} activeOpacity={0.7}>
         <Text style={styles.btnEmoji}>📷</Text>
-        <Text style={styles.btnLabel}>Camera</Text>
+        <Text style={styles.btnLabel}>{t('media.camera')}</Text>
       </TouchableOpacity>
       <TouchableOpacity style={styles.btn} onPress={handleGallery} activeOpacity={0.7}>
         <Text style={styles.btnEmoji}>🖼️</Text>
-        <Text style={styles.btnLabel}>Gallery</Text>
+        <Text style={styles.btnLabel}>{t('media.gallery')}</Text>
       </TouchableOpacity>
     </View>
   );

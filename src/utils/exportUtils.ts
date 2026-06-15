@@ -1,6 +1,7 @@
 import {Share} from 'react-native';
 import RNFS from 'react-native-fs';
 import {getDB} from '../db/database';
+import i18n from '../i18n';
 
 type RawRow = Record<string, unknown>;
 
@@ -67,7 +68,7 @@ export async function exportToCsv(
 
   const rows = (result.rows ?? []) as RawRow[];
   if (rows.length === 0) {
-    throw new Error('No entries found in the selected date range.');
+    throw new Error(i18n.t('settings.exportNoEntries'));
   }
 
   // Fetch tags for all entries in one query
@@ -124,8 +125,12 @@ export async function exportToCsv(
     {
       title: filename,
       url: `file://${filePath}`,
-      message: `Kelomit export ${startDate} → ${endDate} (${rows.length} entries)`,
+      message: i18n.t('settings.exportShareMessage', {
+        startDate,
+        endDate,
+        count: rows.length,
+      }),
     },
-    {dialogTitle: 'Export data'},
+    {dialogTitle: i18n.t('settings.exportDialogTitle')},
   );
 }

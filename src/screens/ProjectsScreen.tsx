@@ -1,4 +1,5 @@
 import React, {useEffect, useMemo, useState} from 'react';
+import {useTranslation} from 'react-i18next';
 import {
   View,
   Text,
@@ -15,10 +16,10 @@ import type {Colors} from '../theme';
 import Button from '../components/ui/Button';
 import type {Project} from '../types';
 
-const TYPE_OPTIONS: {type: Project['type']; label: string}[] = [
-  {type: 'work', label: 'Work'},
-  {type: 'personal', label: 'Personal'},
-  {type: 'other', label: 'Other'},
+const TYPE_OPTIONS: {type: Project['type']; labelKey: string}[] = [
+  {type: 'work', labelKey: 'projectType.work'},
+  {type: 'personal', labelKey: 'projectType.personal'},
+  {type: 'other', labelKey: 'projectType.other'},
 ];
 
 const makeStyles = (c: Colors) =>
@@ -111,6 +112,7 @@ const makeStyles = (c: Colors) =>
   });
 
 export default function ProjectsScreen() {
+  const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const {projects, loaded, load, add, archive, unarchive} = useProjectStore();
@@ -126,7 +128,7 @@ export default function ProjectsScreen() {
 
   const handleAdd = async () => {
     const n = name.trim();
-    if (!n) { Alert.alert('Name required'); return; }
+    if (!n) { Alert.alert(t('projects.nameRequired')); return; }
     setIsSaving(true);
     try {
       await add(n, type);
@@ -134,7 +136,7 @@ export default function ProjectsScreen() {
       setType('work');
       setShowForm(false);
     } catch (e) {
-      Alert.alert('Error', String(e));
+      Alert.alert(t('common.error'), String(e));
     } finally {
       setIsSaving(false);
     }
@@ -151,12 +153,12 @@ export default function ProjectsScreen() {
           <>
             {showForm ? (
               <View style={styles.form}>
-                <Text style={styles.formLabel}>New project</Text>
+                <Text style={styles.formLabel}>{t('projects.newProject')}</Text>
                 <TextInput
                   style={styles.input}
                   value={name}
                   onChangeText={setName}
-                  placeholder="Project name"
+                  placeholder={t('projects.projectName')}
                   placeholderTextColor={colors.textMuted}
                   autoFocus
                   maxLength={80}
@@ -168,24 +170,24 @@ export default function ProjectsScreen() {
                       style={[styles.typeBtn, type === o.type && styles.typeBtnActive]}
                       onPress={() => setType(o.type)}>
                       <Text style={[styles.typeBtnText, type === o.type && styles.typeBtnTextActive]}>
-                        {o.label}
+                        {t(o.labelKey)}
                       </Text>
                     </TouchableOpacity>
                   ))}
                 </View>
                 <View style={styles.formBtns}>
-                  <Button label="Cancel" variant="ghost" onPress={() => setShowForm(false)} style={styles.formBtn} />
-                  <Button label="Add" onPress={handleAdd} loading={isSaving} style={styles.formBtn} />
+                  <Button label={t('common.cancel')} variant="ghost" onPress={() => setShowForm(false)} style={styles.formBtn} />
+                  <Button label={t('common.add')} onPress={handleAdd} loading={isSaving} style={styles.formBtn} />
                 </View>
               </View>
             ) : (
               <TouchableOpacity style={styles.addRow} onPress={() => setShowForm(true)}>
-                <Text style={styles.addLabel}>+ New project</Text>
+                <Text style={styles.addLabel}>{t('projects.newProjectButton')}</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity style={styles.archiveToggle} onPress={() => setShowArchived(s => !s)}>
               <Text style={styles.archiveToggleText}>
-                {showArchived ? 'Hide archived' : 'Show archived'}
+                {showArchived ? t('projects.hideArchived') : t('projects.showArchived')}
               </Text>
             </TouchableOpacity>
           </>
@@ -196,22 +198,22 @@ export default function ProjectsScreen() {
               <Text style={[styles.projectName, item.archived && styles.archived]}>
                 {item.name}
               </Text>
-              <Text style={styles.projectType}>{item.type}</Text>
+              <Text style={styles.projectType}>{t(`projectType.${item.type}`)}</Text>
             </View>
             {item.archived ? (
               <TouchableOpacity onPress={() => unarchive(item.id)} style={styles.actionBtn}>
-                <Text style={styles.actionBtnText}>Restore</Text>
+                <Text style={styles.actionBtnText}>{t('common.restore')}</Text>
               </TouchableOpacity>
             ) : (
               <TouchableOpacity
                 onPress={() => {
-                  Alert.alert('Archive project', `Archive "${item.name}"?`, [
-                    {text: 'Cancel', style: 'cancel'},
-                    {text: 'Archive', onPress: () => archive(item.id)},
+                  Alert.alert(t('projects.archiveTitle'), t('projects.archiveMessage', {name: item.name}), [
+                    {text: t('common.cancel'), style: 'cancel'},
+                    {text: t('common.archive'), onPress: () => archive(item.id)},
                   ]);
                 }}
                 style={styles.actionBtn}>
-                <Text style={styles.actionBtnText}>Archive</Text>
+                <Text style={styles.actionBtnText}>{t('common.archive')}</Text>
               </TouchableOpacity>
             )}
           </View>

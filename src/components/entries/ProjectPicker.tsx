@@ -1,4 +1,5 @@
 import React, {useEffect, useMemo, useState} from 'react';
+import {useTranslation} from 'react-i18next';
 import {View, Text, TextInput, TouchableOpacity, StyleSheet} from 'react-native';
 import {useTheme, typography, spacing, radius} from '../../theme';
 import type {Colors} from '../../theme';
@@ -13,10 +14,10 @@ interface Props {
   onSearchFocus?: () => void;
 }
 
-const CREATE_TYPES: {type: ProjectType; label: string}[] = [
-  {type: 'work', label: 'Work'},
-  {type: 'personal', label: 'Personal'},
-  {type: 'other', label: 'Other'},
+const CREATE_TYPES: {type: ProjectType; labelKey: string}[] = [
+  {type: 'work', labelKey: 'projectType.work'},
+  {type: 'personal', labelKey: 'projectType.personal'},
+  {type: 'other', labelKey: 'projectType.other'},
 ];
 
 const makeStyles = (c: Colors) =>
@@ -83,6 +84,7 @@ export default function ProjectPicker({
   onCreate,
   onSearchFocus,
 }: Props) {
+  const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [search, setSearch] = useState('');
@@ -137,7 +139,9 @@ export default function ProjectPicker({
         <TouchableOpacity
           style={[styles.chip, selectedProjectId == null && styles.chipActive]}
           onPress={() => onSelect(null)}>
-          <Text style={[styles.chipText, selectedProjectId == null && styles.chipTextActive]}>None</Text>
+          <Text style={[styles.chipText, selectedProjectId == null && styles.chipTextActive]}>
+            {t('common.none')}
+          </Text>
         </TouchableOpacity>
         {quickProjects.map(p => (
           <TouchableOpacity
@@ -156,7 +160,7 @@ export default function ProjectPicker({
         value={search}
         onChangeText={setSearch}
         onFocus={onSearchFocus}
-        placeholder="Search or add a project…"
+        placeholder={t('entries.searchProjectPlaceholder')}
         placeholderTextColor={colors.textMuted}
         autoCapitalize="words"
       />
@@ -174,16 +178,18 @@ export default function ProjectPicker({
           {!exactMatch && (
             <View style={styles.createRow}>
               <Text style={styles.createLabel}>
-                Create <Text style={styles.createName}>“{search.trim()}”</Text> as
+                {t('entries.createProjectAs')}{' '}
+                <Text style={styles.createName}>“{search.trim()}”</Text>{' '}
+                {t('entries.createProjectAsSuffix')}
               </Text>
               <View style={styles.createTypes}>
-                {CREATE_TYPES.map(({type, label}) => (
+                {CREATE_TYPES.map(({type, labelKey}) => (
                   <TouchableOpacity
                     key={type}
                     style={styles.createBtn}
                     disabled={creating}
                     onPress={() => handleCreate(type)}>
-                    <Text style={styles.createBtnText}>{label}</Text>
+                    <Text style={styles.createBtnText}>{t(labelKey)}</Text>
                   </TouchableOpacity>
                 ))}
               </View>

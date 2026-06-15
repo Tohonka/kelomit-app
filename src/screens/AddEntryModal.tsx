@@ -1,4 +1,5 @@
 import React, {useState, useEffect, useCallback, useMemo, useRef} from 'react';
+import {useTranslation} from 'react-i18next';
 import {
   View,
   Text,
@@ -34,17 +35,17 @@ import type {EntryType, ActivityType, Tag} from '../types';
 
 type Props = RootStackScreenProps<'AddEntryModal'>;
 
-const ENTRY_TYPES: {type: EntryType; label: string; emoji: string}[] = [
-  {type: 'note', label: 'Note', emoji: '✏️'},
-  {type: 'photo', label: 'Photo', emoji: '📷'},
-  {type: 'video', label: 'Video', emoji: '🎥'},
-  {type: 'voice', label: 'Voice', emoji: '🎙️'},
+const ENTRY_TYPES: {type: EntryType; labelKey: string; emoji: string}[] = [
+  {type: 'note', labelKey: 'entryType.note', emoji: '✏️'},
+  {type: 'photo', labelKey: 'entryType.photo', emoji: '📷'},
+  {type: 'video', labelKey: 'entryType.video', emoji: '🎥'},
+  {type: 'voice', labelKey: 'entryType.voice', emoji: '🎙️'},
 ];
 
-const ACTIVITY_TYPES: {type: ActivityType; label: string}[] = [
-  {type: 'work', label: 'Work'},
-  {type: 'personal_work', label: 'Personal (work)'},
-  {type: 'personal', label: 'Personal'},
+const ACTIVITY_TYPES: {type: ActivityType; labelKey: string}[] = [
+  {type: 'work', labelKey: 'activity.work'},
+  {type: 'personal_work', labelKey: 'activity.personal_work'},
+  {type: 'personal', labelKey: 'activity.personal'},
 ];
 
 const makeStyles = (c: Colors) =>
@@ -178,6 +179,7 @@ const makeStyles = (c: Colors) =>
   });
 
 export default function AddEntryModal({navigation, route}: Props) {
+  const {t: translate} = useTranslation();
   const {dayId, entryId} = route.params;
   const entryDate = route.params.date;
   const isEdit = entryId != null;
@@ -391,7 +393,7 @@ export default function AddEntryModal({navigation, route}: Props) {
       Vibration.vibrate(40);
       navigation.goBack();
     } catch (e) {
-      Alert.alert('Error', String(e));
+      Alert.alert(translate('common.error'), String(e));
     } finally {
       setIsSaving(false);
     }
@@ -421,9 +423,9 @@ export default function AddEntryModal({navigation, route}: Props) {
         contentContainerStyle={[styles.content, {paddingBottom: spacing.xxl + kbHeight}]}
         keyboardShouldPersistTaps="handled">
 
-      <Text style={styles.sectionLabel}>Type</Text>
+      <Text style={styles.sectionLabel}>{translate('entries.type')}</Text>
       <View style={styles.typeRow}>
-        {ENTRY_TYPES.map(({type, label, emoji}) => (
+        {ENTRY_TYPES.map(({type, labelKey, emoji}) => (
           <TouchableOpacity
             key={type}
             style={[
@@ -435,22 +437,22 @@ export default function AddEntryModal({navigation, route}: Props) {
             activeOpacity={isEdit ? 1 : 0.7}>
             <Text style={styles.typeEmoji}>{emoji}</Text>
             <Text style={[styles.typeLabel, entryType === type && styles.typeLabelActive]}>
-              {label}
+              {translate(labelKey)}
             </Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      <Text style={styles.sectionLabel}>Activity</Text>
+      <Text style={styles.sectionLabel}>{translate('entries.activity')}</Text>
       <View style={styles.activityRow}>
-        {ACTIVITY_TYPES.map(({type, label}) => (
+        {ACTIVITY_TYPES.map(({type, labelKey}) => (
           <TouchableOpacity
             key={type}
             style={[styles.activityBtn, activityType === type && styles.activityBtnActive]}
             onPress={() => setActivityType(type)}
             activeOpacity={0.7}>
             <Text style={[styles.activityLabel, activityType === type && styles.activityLabelActive]}>
-              {label}
+              {translate(labelKey)}
             </Text>
           </TouchableOpacity>
         ))}
@@ -458,7 +460,7 @@ export default function AddEntryModal({navigation, route}: Props) {
 
       {entryType === 'photo' && (
         <>
-          <Text style={styles.sectionLabel}>Photo</Text>
+          <Text style={styles.sectionLabel}>{translate('entries.photo')}</Text>
           <PhotoCapture
             filePath={filePath}
             onCapture={(fp, tp) => setMedia(fp, tp)}
@@ -467,7 +469,7 @@ export default function AddEntryModal({navigation, route}: Props) {
       )}
       {entryType === 'video' && (
         <>
-          <Text style={styles.sectionLabel}>Video</Text>
+          <Text style={styles.sectionLabel}>{translate('entries.video')}</Text>
           <VideoCapture
             filePath={filePath}
             onCapture={(fp, tp) => setMedia(fp, tp)}
@@ -476,7 +478,7 @@ export default function AddEntryModal({navigation, route}: Props) {
       )}
       {entryType === 'voice' && (
         <>
-          <Text style={styles.sectionLabel}>Voice recording</Text>
+          <Text style={styles.sectionLabel}>{translate('entries.voiceRecording')}</Text>
           <VoiceRecorder
             filePath={filePath}
             onRecord={(fp, durSec) => {
@@ -493,33 +495,33 @@ export default function AddEntryModal({navigation, route}: Props) {
         </>
       )}
 
-      <Text style={styles.sectionLabel}>Title (optional)</Text>
+      <Text style={styles.sectionLabel}>{translate('entries.titleOptional')}</Text>
       <TextInput
         style={styles.input}
         value={title}
         onChangeText={setTitle}
         onLayout={rememberY('title')}
         onFocus={onFieldFocus('title')}
-        placeholder="Short title…"
+        placeholder={translate('entries.titlePlaceholder')}
         placeholderTextColor={colors.textMuted}
         maxLength={120}
       />
 
-      <Text style={styles.sectionLabel}>Note</Text>
+      <Text style={styles.sectionLabel}>{translate('entries.note')}</Text>
       <TextInput
         style={[styles.input, styles.inputMultiline]}
         value={body}
         onChangeText={setBody}
         onLayout={rememberY('body')}
         onFocus={onFieldFocus('body')}
-        placeholder="Write something…"
+        placeholder={translate('entries.notePlaceholder')}
         placeholderTextColor={colors.textMuted}
         multiline
         textAlignVertical="top"
       />
 
       <View onLayout={rememberY('project')}>
-        <Text style={styles.sectionLabel}>Project (optional)</Text>
+        <Text style={styles.sectionLabel}>{translate('entries.projectOptional')}</Text>
         <ProjectPicker
           projects={activeProjects}
           selectedProjectId={selectedProjectId}
@@ -529,14 +531,14 @@ export default function AddEntryModal({navigation, route}: Props) {
         />
       </View>
 
-      <Text style={styles.sectionLabel}>Tags</Text>
+      <Text style={styles.sectionLabel}>{translate('entries.tags')}</Text>
       <View style={styles.tagInputRow} onLayout={rememberY('tags')}>
         <TextInput
           style={[styles.input, styles.tagInput]}
           value={tagInput}
           onChangeText={setTagInput}
           onFocus={onFieldFocus('tags')}
-          placeholder="Add a tag…"
+          placeholder={translate('entries.tagPlaceholder')}
           placeholderTextColor={colors.textMuted}
           autoCapitalize="none"
           onSubmitEditing={() => addTag(tagInput)}
@@ -544,7 +546,7 @@ export default function AddEntryModal({navigation, route}: Props) {
         />
         {tagInput.trim().length > 0 && (
           <TouchableOpacity style={styles.tagAddBtn} onPress={() => addTag(tagInput)}>
-            <Text style={styles.tagAddBtnText}>Add</Text>
+            <Text style={styles.tagAddBtnText}>{translate('common.add')}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -569,7 +571,7 @@ export default function AddEntryModal({navigation, route}: Props) {
         </View>
       )}
 
-      <Text style={styles.sectionLabel}>Time tracking (optional)</Text>
+      <Text style={styles.sectionLabel}>{translate('entries.timeTrackingOptional')}</Text>
       <View style={styles.timeModeRow}>
         {(['none', 'duration', 'range'] as const).map(mode => (
           <TouchableOpacity
@@ -577,7 +579,11 @@ export default function AddEntryModal({navigation, route}: Props) {
             style={[styles.timeModeBtn, timeMode === mode && styles.timeModeBtnActive]}
             onPress={() => setTimeMode(mode)}>
             <Text style={[styles.timeModeBtnText, timeMode === mode && styles.timeModeBtnTextActive]}>
-              {mode === 'none' ? 'None' : mode === 'duration' ? 'Duration' : 'From → To'}
+              {mode === 'none'
+                ? translate('entries.noTimeTracking')
+                : mode === 'duration'
+                ? translate('entries.duration')
+                : translate('entries.fromTo')}
             </Text>
           </TouchableOpacity>
         ))}
@@ -590,24 +596,24 @@ export default function AddEntryModal({navigation, route}: Props) {
             value={durationMinutes}
             onChangeText={setDurationMinutes}
             onFocus={onFieldFocus('duration')}
-            placeholder="Minutes"
+            placeholder={translate('entries.minutes')}
             placeholderTextColor={colors.textMuted}
             keyboardType="numeric"
             maxLength={5}
           />
-          <Text style={styles.durationUnit}>min</Text>
+          <Text style={styles.durationUnit}>{translate('entries.minuteUnit')}</Text>
         </View>
       )}
 
       {timeMode === 'range' && (
         <View style={styles.rangeRow}>
           <View style={styles.rangeBlock}>
-            <Text style={styles.rangeLabel}>From</Text>
+            <Text style={styles.rangeLabel}>{translate('common.from')}</Text>
             <TimePicker value={timeFrom} baseDate={entryDate} onChange={setTimeFrom} />
           </View>
           <Text style={styles.rangeSep}>→</Text>
           <View style={styles.rangeBlock}>
-            <Text style={styles.rangeLabel}>To</Text>
+            <Text style={styles.rangeLabel}>{translate('common.to')}</Text>
             <TimePicker value={timeTo} baseDate={entryDate} onChange={setTimeTo} />
           </View>
         </View>
@@ -615,7 +621,7 @@ export default function AddEntryModal({navigation, route}: Props) {
 
       <View style={styles.saveRow}>
         <Button
-          label={isEdit ? 'Update' : 'Save'}
+          label={isEdit ? translate('common.update') : translate('common.save')}
           onPress={handleSave}
           loading={isSaving}
           style={styles.saveBtn}

@@ -1,4 +1,5 @@
 import React, {useMemo} from 'react';
+import {useTranslation} from 'react-i18next';
 import {View, Text, StyleSheet} from 'react-native';
 import {useTheme, typography, spacing, radius} from '../../theme';
 import type {Colors} from '../../theme';
@@ -55,6 +56,7 @@ function LegendItem({color, label, value}: {color: string; label: string; value:
 }
 
 export default function HourBreakdown({data}: Props) {
+  const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const total = data.totalTrackedSeconds;
@@ -62,7 +64,7 @@ export default function HourBreakdown({data}: Props) {
   if (total === 0) {
     return (
       <View style={styles.emptyBar}>
-        <Text style={styles.emptyText}>No time tracked yet</Text>
+        <Text style={styles.emptyText}>{t('time.noTimeTracked')}</Text>
       </View>
     );
   }
@@ -80,19 +82,19 @@ export default function HourBreakdown({data}: Props) {
       </View>
       <View style={styles.legend}>
         {data.workSeconds > 0 && (
-          <LegendItem color={colors.badgeWork} label="Work" value={formatHours(data.workSeconds)} />
+          <LegendItem color={colors.badgeWork} label={t('activity.work')} value={formatHours(data.workSeconds)} />
         )}
         {data.personalWorkSeconds > 0 && (
           <LegendItem
             color={colors.badgePersonalWork}
-            label="Personal (work)"
+            label={t('activity.personal_work')}
             value={formatHours(data.personalWorkSeconds)}
           />
         )}
         {data.personalSeconds > 0 && (
           <LegendItem
             color={colors.badgePersonal}
-            label="Personal"
+            label={t('activity.personal')}
             value={formatHours(data.personalSeconds)}
           />
         )}

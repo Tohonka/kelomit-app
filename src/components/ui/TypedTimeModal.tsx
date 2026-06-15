@@ -1,4 +1,5 @@
 import React, {useMemo, useRef, useState, useEffect} from 'react';
+import {useTranslation} from 'react-i18next';
 import {
   Modal,
   View,
@@ -78,6 +79,7 @@ export default function TypedTimeModal({
   onConfirm,
   onCancel,
 }: Props) {
+  const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const minuteRef = useRef<TextInput>(null);
@@ -118,7 +120,7 @@ export default function TypedTimeModal({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <Pressable style={styles.backdrop} onPress={onCancel}>
         <Pressable style={styles.card} onPress={() => {}}>
-          <Text style={styles.title}>Enter time</Text>
+          <Text style={styles.title}>{t('time.enterTime')}</Text>
           <View style={styles.fields}>
             <TextInput
               style={[styles.field, focused === 'hh' && styles.fieldFocused]}
@@ -149,16 +151,16 @@ export default function TypedTimeModal({
               placeholderTextColor={colors.textMuted}
             />
           </View>
-          <Text style={styles.hint}>24-hour format · 00:00 – 23:59</Text>
+          <Text style={styles.hint}>{t('time.formatHint')}</Text>
           <View style={styles.actions}>
             <TouchableOpacity style={[styles.btn, styles.cancelBtn]} onPress={onCancel}>
-              <Text style={styles.cancelText}>Cancel</Text>
+              <Text style={styles.cancelText}>{t('common.cancel')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.btn, styles.okBtn, !valid && styles.okBtnDisabled]}
               onPress={confirm}
               disabled={!valid}>
-              <Text style={styles.okText}>OK</Text>
+              <Text style={styles.okText}>{t('common.ok')}</Text>
             </TouchableOpacity>
           </View>
         </Pressable>

@@ -1,4 +1,5 @@
 import React from 'react';
+import {useTranslation} from 'react-i18next';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import CustomTabBar from './CustomTabBar';
@@ -11,6 +12,7 @@ import type {TabParamList} from './navigationTypes';
 const Tab = createBottomTabNavigator<TabParamList>();
 
 export default function MainTabs() {
+  const {t} = useTranslation();
   const {colors} = useTheme();
   return (
     <Tab.Navigator
@@ -39,17 +41,17 @@ export default function MainTabs() {
       <Tab.Screen
         name="Home"
         component={HomeScreen}
-        options={{tabBarLabel: 'Today'}}
+        options={{tabBarLabel: t('navigation.home')}}
       />
       <Tab.Screen
         name="Calendar"
         component={CalendarScreen}
-        options={{tabBarLabel: 'Calendar'}}
+        options={{tabBarLabel: t('navigation.calendar')}}
       />
       <Tab.Screen
         name="Settings"
         component={SettingsScreen}
-        options={{tabBarLabel: 'Settings'}}
+        options={{tabBarLabel: t('common.settings')}}
       />
     </Tab.Navigator>
   );

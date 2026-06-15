@@ -1,4 +1,5 @@
 import React, {useEffect, useMemo} from 'react';
+import {useTranslation} from 'react-i18next';
 import {View, Text, StyleSheet, ScrollView, TouchableOpacity} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useSettingsStore} from '../store/settingsStore';
@@ -10,15 +11,15 @@ type Props = TabScreenProps<'Settings'>;
 
 type Section = {
   key: 'InterfaceSettings' | 'TrackingSettings' | 'DataSettings' | 'QuickAddSettings';
-  title: string;
-  subtitle: string;
+  titleKey: string;
+  subtitleKey: string;
 };
 
 const SECTIONS: Section[] = [
-  {key: 'InterfaceSettings', title: 'Interface', subtitle: 'Theme, week numbers, time entry'},
-  {key: 'QuickAddSettings', title: 'Quick add', subtitle: 'Defaults for long-press add'},
-  {key: 'TrackingSettings', title: 'Tracking', subtitle: 'GPS, defaults'},
-  {key: 'DataSettings', title: 'Data', subtitle: 'Projects, export'},
+  {key: 'InterfaceSettings', titleKey: 'settings.interfaceTitle', subtitleKey: 'settings.interfaceSubtitle'},
+  {key: 'QuickAddSettings', titleKey: 'settings.quickAddTitle', subtitleKey: 'settings.quickAddSubtitle'},
+  {key: 'TrackingSettings', titleKey: 'settings.trackingTitle', subtitleKey: 'settings.trackingSubtitle'},
+  {key: 'DataSettings', titleKey: 'settings.dataTitle', subtitleKey: 'settings.dataSubtitle'},
 ];
 
 const makeStyles = (c: Colors) =>
@@ -53,6 +54,7 @@ const makeStyles = (c: Colors) =>
   });
 
 export default function SettingsScreen({navigation}: Props) {
+  const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const {loaded, load} = useSettingsStore();
@@ -64,20 +66,20 @@ export default function SettingsScreen({navigation}: Props) {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.sectionHeader}>Settings</Text>
+        <Text style={styles.sectionHeader}>{t('common.settings')}</Text>
         {SECTIONS.map(s => (
           <TouchableOpacity key={s.key} style={styles.row} onPress={() => navigation.navigate(s.key)}>
             <View>
-              <Text style={styles.rowTitle}>{s.title}</Text>
-              <Text style={styles.rowSubtitle}>{s.subtitle}</Text>
+              <Text style={styles.rowTitle}>{t(s.titleKey)}</Text>
+              <Text style={styles.rowSubtitle}>{t(s.subtitleKey)}</Text>
             </View>
             <Text style={styles.rowCaret}>›</Text>
           </TouchableOpacity>
         ))}
 
-        <Text style={styles.sectionHeader}>App</Text>
+        <Text style={styles.sectionHeader}>{t('settings.app')}</Text>
         <View style={styles.row}>
-          <Text style={styles.rowTitle}>Version</Text>
+          <Text style={styles.rowTitle}>{t('common.version')}</Text>
           <Text style={styles.rowValue}>0.2.5</Text>
         </View>
       </ScrollView>

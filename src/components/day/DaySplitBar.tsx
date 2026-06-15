@@ -1,4 +1,5 @@
 import React, {useMemo} from 'react';
+import {useTranslation} from 'react-i18next';
 import {View, Text, StyleSheet} from 'react-native';
 import {useTheme, typography, spacing, radius} from '../../theme';
 import type {Colors} from '../../theme';
@@ -39,6 +40,7 @@ const makeStyles = (c: Colors) =>
   });
 
 export default function DaySplitBar({entries}: Props) {
+  const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
@@ -47,13 +49,13 @@ export default function DaySplitBar({entries}: Props) {
     for (const e of entries) {
       const secs = entrySeconds(e);
       if (secs <= 0) { continue; }
-      const key = e.project?.name ?? 'No project';
+      const key = e.project?.name ?? t('insights.noProject');
       map.set(key, (map.get(key) ?? 0) + secs);
     }
     return [...map.entries()]
       .map(([label, seconds]) => ({label, seconds}))
       .sort((a, b) => b.seconds - a.seconds);
-  }, [entries]);
+  }, [entries, t]);
 
   const total = slices.reduce((sum, s) => sum + s.seconds, 0);
   if (total <= 0) {

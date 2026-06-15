@@ -1,5 +1,7 @@
 import React, {useEffect, useState, useCallback, useMemo} from 'react';
+import {useTranslation} from 'react-i18next';
 import {StyleSheet, ScrollView, View, Text} from 'react-native';
+import {format} from 'date-fns';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {GestureDetector, Gesture} from 'react-native-gesture-handler';
 import {useDayStore} from '../store/dayStore';
@@ -7,6 +9,7 @@ import {useEntryStore} from '../store/entryStore';
 import {useProjectStore} from '../store/projectStore';
 import {useTagStore} from '../store/tagStore';
 import {useTheme, typography, spacing} from '../theme';
+import {getDateFnsLocale} from '../i18n';
 import type {Colors} from '../theme';
 import EntryList from '../components/entries/EntryList';
 import DaySummaryCard from '../components/day/DaySummaryCard';
@@ -40,6 +43,7 @@ function shiftDate(dateStr: string, days: number): string {
 }
 
 export default function DayScreen({navigation, route}: Props) {
+  const {i18n} = useTranslation();
   const [currentDate, setCurrentDate] = useState(route.params.date);
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -66,7 +70,9 @@ export default function DayScreen({navigation, route}: Props) {
   useEffect(() => {
     const [y, m, d] = currentDate.split('-').map(Number);
     const dateObj = new Date(y, m - 1, d);
-    const label = dateObj.toLocaleDateString('en-GB', {weekday: 'short', day: 'numeric', month: 'short'});
+    const label = format(dateObj, 'EEE d MMM', {
+      locale: getDateFnsLocale(i18n.resolvedLanguage === 'fi' ? 'fi' : 'en'),
+    });
     const totalSecs = day ? calcDayWorkSecs(day, allEntries) : 0;
     navigation.setOptions({
       title: label,
@@ -74,7 +80,7 @@ export default function DayScreen({navigation, route}: Props) {
         ? () => <Text style={styles.headerTotal}>{formatHours(totalSecs)}</Text>
         : undefined,
     });
-  }, [currentDate, day, allEntries, navigation, styles]);
+  }, [currentDate, day, allEntries, navigation, styles, i18n.resolvedLanguage]);
 
   const goToDate = useCallback((newDate: string) => {
     setCurrentDate(newDate);

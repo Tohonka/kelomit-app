@@ -1,4 +1,5 @@
 import React, {useMemo, useState} from 'react';
+import {useTranslation} from 'react-i18next';
 import {View, Text, TouchableOpacity, StyleSheet} from 'react-native';
 import {BottomTabBar} from '@react-navigation/bottom-tabs';
 import type {BottomTabBarProps} from '@react-navigation/bottom-tabs';
@@ -8,9 +9,9 @@ import type {Colors} from '../theme';
 
 type SecondaryRoute = 'SearchScreen' | 'InsightsScreen';
 
-const SECONDARY: {route: SecondaryRoute; label: string; icon: string}[] = [
-  {route: 'SearchScreen', label: 'Search', icon: 'magnify'},
-  {route: 'InsightsScreen', label: 'Insights', icon: 'chart-box-outline'},
+const SECONDARY: {route: SecondaryRoute; labelKey: string; icon: string}[] = [
+  {route: 'SearchScreen', labelKey: 'navigation.search', icon: 'magnify'},
+  {route: 'InsightsScreen', labelKey: 'navigation.insights', icon: 'chart-box-outline'},
 ];
 
 const makeStyles = (c: Colors) =>
@@ -47,6 +48,7 @@ const makeStyles = (c: Colors) =>
   });
 
 export default function CustomTabBar(props: BottomTabBarProps) {
+  const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [expanded, setExpanded] = useState(false);
@@ -63,7 +65,7 @@ export default function CustomTabBar(props: BottomTabBarProps) {
           {SECONDARY.map(s => (
             <TouchableOpacity key={s.route} style={styles.secondaryBtn} onPress={() => go(s.route)} activeOpacity={0.7}>
               <Icon name={s.icon} size={20} color={colors.primary} />
-              <Text style={styles.secondaryText}>{s.label}</Text>
+              <Text style={styles.secondaryText}>{t(s.labelKey)}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -76,7 +78,7 @@ export default function CustomTabBar(props: BottomTabBarProps) {
           hitSlop={{top: 8, bottom: 8, left: 24, right: 24}}
           activeOpacity={0.7}>
           <Icon name={expanded ? 'chevron-down' : 'chevron-up'} size={16} color={colors.textMuted} />
-          <Text style={styles.handleText}>{expanded ? 'Less' : 'More'}</Text>
+          <Text style={styles.handleText}>{expanded ? t('fab.less') : t('fab.more')}</Text>
         </TouchableOpacity>
       </View>
 

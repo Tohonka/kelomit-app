@@ -1,4 +1,5 @@
 import React, {useMemo} from 'react';
+import {useTranslation} from 'react-i18next';
 import {FlatList, Text, StyleSheet, View} from 'react-native';
 import type {Entry} from '../../types';
 import EntryListItem from './EntryListItem';
@@ -28,13 +29,14 @@ const makeStyles = (c: Colors) =>
   });
 
 export default function EntryList({entries, onPressEntry, inline}: Props) {
+  const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   if (entries.length === 0) {
     return (
       <View style={styles.empty}>
-        <Text style={styles.emptyText}>No entries yet. Tap + to add one.</Text>
+        <Text style={styles.emptyText}>{t('entries.noEntries')}</Text>
       </View>
     );
   }

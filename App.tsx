@@ -1,5 +1,7 @@
 import React, {useEffect, useState, useRef} from 'react';
 import {View, Text, StyleSheet, ActivityIndicator, AppState, StatusBar} from 'react-native';
+import './src/i18n';
+import {useTranslation} from 'react-i18next';
 import type {AppStateStatus} from 'react-native';
 import {NavigationContainer} from '@react-navigation/native';
 import {GestureHandlerRootView} from 'react-native-gesture-handler';
@@ -13,6 +15,7 @@ import RootNavigator from './src/navigation/RootNavigator';
 
 function AppContent() {
   const {colors, isDark} = useTheme();
+  const {t} = useTranslation();
   const {loaded, load} = useSettingsStore();
   const [dbReady, setDbReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,14 +69,14 @@ function AppContent() {
     return (
       <View style={styles.center}>
         <Text style={[styles.errorText, {color: colors.error}]}>
-          Failed to open database:{'\n'}
+          {t('app.dbErrorTitle')}{'\n'}
           {error}
         </Text>
       </View>
     );
   }
 
-  if (!dbReady) {
+  if (!dbReady || !loaded) {
     return (
       <View style={[styles.center, {backgroundColor: colors.bg}]}>
         <ActivityIndicator size="large" color={colors.primary} />
