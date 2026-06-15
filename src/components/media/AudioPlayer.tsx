@@ -1,5 +1,5 @@
 import React, {useMemo, useState, useEffect} from 'react';
-import {View, Text, TouchableOpacity, StyleSheet} from 'react-native';
+import {View, Text, TouchableOpacity, StyleSheet, type ViewStyle} from 'react-native';
 import audioRecorderPlayer from 'react-native-audio-recorder-player';
 import type {PlayBackType} from 'react-native-audio-recorder-player';
 import {useTheme, typography, spacing, radius} from '../../theme';
@@ -58,6 +58,12 @@ export default function AudioPlayer({filePath, durationSec}: Props) {
   const [playing, setPlaying] = useState(false);
   const [positionSec, setPositionSec] = useState(0);
   const totalSec = durationSec ?? 0;
+  const progressStyle = useMemo<ViewStyle>(
+    () => ({
+      width: totalSec > 0 ? `${Math.min((positionSec / totalSec) * 100, 100)}%` : '0%',
+    }),
+    [positionSec, totalSec],
+  );
 
   useEffect(() => {
     return () => { audioRecorderPlayer.stopPlayer().catch(() => {}); };
@@ -92,7 +98,7 @@ export default function AudioPlayer({filePath, durationSec}: Props) {
           <View
             style={[
               styles.progressFill,
-              {width: totalSec > 0 ? `${Math.min((positionSec / totalSec) * 100, 100)}%` : '0%'},
+              progressStyle,
             ]}
           />
         </View>

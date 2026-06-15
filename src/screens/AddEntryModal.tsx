@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useMemo} from 'react';
+import React, {useState, useEffect, useMemo, useRef} from 'react';
 import {
   View,
   Text,
@@ -8,10 +8,13 @@ import {
   TouchableOpacity,
   Alert,
   Vibration,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import {useEntryStore} from '../store/entryStore';
 import {useProjectStore} from '../store/projectStore';
 import {useTagStore} from '../store/tagStore';
+import {useSettingsStore} from '../store/settingsStore';
 import {useTheme, typography, spacing, radius} from '../theme';
 import type {Colors} from '../theme';
 import Button from '../components/ui/Button';
@@ -20,7 +23,7 @@ import TimePicker from '../components/ui/TimePicker';
 import PhotoCapture from '../components/media/PhotoCapture';
 import VideoCapture from '../components/media/VideoCapture';
 import VoiceRecorder from '../components/media/VoiceRecorder';
-import {ensureMediaDir} from '../utils/mediaUtils';
+import {deleteMediaFile, ensureMediaDir} from '../utils/mediaUtils';
 import {getLastKnownPosition} from '../services/gpsService';
 import {getEntry} from '../db/entries';
 import type {RootStackScreenProps} from '../navigation/navigationTypes';
@@ -190,10 +193,17 @@ const makeStyles = (c: Colors) =>
 
 export default function AddEntryModal({navigation, route}: Props) {
   const {dayId, entryId} = route.params;
+  const entryDate = route.params.date;
   const isEdit = entryId != null;
   const {addEntry, editEntry} = useEntryStore();
   const {projects, loaded: projectsLoaded, load: loadProjects} = useProjectStore();
   const {tags, loaded: tagsLoaded, load: loadTags, getOrCreate} = useTagStore();
+  const {
+    loaded: settingsLoaded,
+    load: loadSettings,
+    default_activity_type,
+    default_project_id,
+  } = useSettingsStore();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
@@ -209,18 +219,30 @@ export default function AddEntryModal({navigation, route}: Props) {
 
   const [filePath, setFilePath] = useState<string | null>(null);
   const [thumbnailPath, setThumbnailPath] = useState<string | null>(null);
+  const [pendingDeletePaths, setPendingDeletePaths] = useState<string[]>([]);
 
   type TimeMode = 'none' | 'duration' | 'range';
   const [timeMode, setTimeMode] = useState<TimeMode>('none');
   const [durationMinutes, setDurationMinutes] = useState('');
   const [timeFrom, setTimeFrom] = useState<string | null>(null);
   const [timeTo, setTimeTo] = useState<string | null>(null);
+  const defaultsApplied = useRef(false);
 
   useEffect(() => {
     if (!projectsLoaded) { loadProjects(); }
     if (!tagsLoaded) { loadTags(); }
+    if (!settingsLoaded) { loadSettings(); }
     ensureMediaDir().catch(() => {});
-  }, [projectsLoaded, tagsLoaded, loadProjects, loadTags]);
+  }, [projectsLoaded, tagsLoaded, settingsLoaded, loadProjects, loadTags, loadSettings]);
+
+  useEffect(() => {
+    if (isEdit || !settingsLoaded || defaultsApplied.current) {
+      return;
+    }
+    setActivityType(default_activity_type);
+    setSelectedProjectId(default_project_id);
+    defaultsApplied.current = true;
+  }, [isEdit, settingsLoaded, default_activity_type, default_project_id]);
 
   // Pre-fill fields when editing
   useEffect(() => {
@@ -261,6 +283,37 @@ export default function AddEntryModal({navigation, route}: Props) {
 
   const removeTag = (id: number) => {
     setSelectedTags(prev => prev.filter(t => t.id !== id));
+  };
+
+  const rememberMediaForDeletion = (...paths: Array<string | null>) => {
+    setPendingDeletePaths(prev => [
+      ...prev,
+      ...paths.filter((path): path is string => path != null),
+    ]);
+  };
+
+  const setMedia = (nextFilePath: string | null, nextThumbnailPath: string | null) => {
+    if (filePath && filePath !== nextFilePath) {
+      rememberMediaForDeletion(filePath);
+    }
+    if (
+      thumbnailPath &&
+      thumbnailPath !== filePath &&
+      thumbnailPath !== nextFilePath &&
+      thumbnailPath !== nextThumbnailPath
+    ) {
+      rememberMediaForDeletion(thumbnailPath);
+    }
+    setFilePath(nextFilePath);
+    setThumbnailPath(nextThumbnailPath);
+  };
+
+  const handleEntryTypeChange = (type: EntryType) => {
+    if (isEdit || type === entryType) {
+      return;
+    }
+    setMedia(null, null);
+    setEntryType(type);
   };
 
   const handleSave = async () => {
@@ -307,6 +360,12 @@ export default function AddEntryModal({navigation, route}: Props) {
           longitude: gps?.longitude ?? null,
         });
       }
+      const pathsToDelete = [...new Set(
+        pendingDeletePaths.filter(
+          path => path !== filePath && path !== thumbnailPath,
+        ),
+      )];
+      await Promise.all(pathsToDelete.map(deleteMediaFile));
       Vibration.vibrate(40);
       navigation.goBack();
     } catch (e) {
@@ -331,10 +390,13 @@ export default function AddEntryModal({navigation, route}: Props) {
   }
 
   return (
-    <ScrollView
+    <KeyboardAvoidingView
       style={styles.container}
-      contentContainerStyle={styles.content}
-      keyboardShouldPersistTaps="handled">
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled">
 
       <Text style={styles.sectionLabel}>Type</Text>
       <View style={styles.typeRow}>
@@ -346,7 +408,7 @@ export default function AddEntryModal({navigation, route}: Props) {
               entryType === type && styles.typeBtnActive,
               isEdit && styles.typeBtnDisabled,
             ]}
-            onPress={() => !isEdit && setEntryType(type)}
+            onPress={() => handleEntryTypeChange(type)}
             activeOpacity={isEdit ? 1 : 0.7}>
             <Text style={styles.typeEmoji}>{emoji}</Text>
             <Text style={[styles.typeLabel, entryType === type && styles.typeLabelActive]}>
@@ -376,7 +438,7 @@ export default function AddEntryModal({navigation, route}: Props) {
           <Text style={styles.sectionLabel}>Photo</Text>
           <PhotoCapture
             filePath={filePath}
-            onCapture={(fp, tp) => { setFilePath(fp); setThumbnailPath(tp); }}
+            onCapture={(fp, tp) => setMedia(fp, tp)}
           />
         </>
       )}
@@ -385,7 +447,7 @@ export default function AddEntryModal({navigation, route}: Props) {
           <Text style={styles.sectionLabel}>Video</Text>
           <VideoCapture
             filePath={filePath}
-            onCapture={(fp, tp) => { setFilePath(fp); setThumbnailPath(tp); }}
+            onCapture={(fp, tp) => setMedia(fp, tp)}
           />
         </>
       )}
@@ -395,8 +457,14 @@ export default function AddEntryModal({navigation, route}: Props) {
           <VoiceRecorder
             filePath={filePath}
             onRecord={(fp, durSec) => {
-              setFilePath(fp);
+              setMedia(fp, null);
               setDurationMinutes(String(Math.round(durSec / 60)));
+              setTimeMode('duration');
+            }}
+            onDiscard={() => {
+              setMedia(null, null);
+              setDurationMinutes('');
+              setTimeMode('none');
             }}
           />
         </>
@@ -516,12 +584,12 @@ export default function AddEntryModal({navigation, route}: Props) {
         <View style={styles.rangeRow}>
           <View style={styles.rangeBlock}>
             <Text style={styles.rangeLabel}>From</Text>
-            <TimePicker value={timeFrom} onChange={setTimeFrom} />
+            <TimePicker value={timeFrom} baseDate={entryDate} onChange={setTimeFrom} />
           </View>
           <Text style={styles.rangeSep}>→</Text>
           <View style={styles.rangeBlock}>
             <Text style={styles.rangeLabel}>To</Text>
-            <TimePicker value={timeTo} onChange={setTimeTo} />
+            <TimePicker value={timeTo} baseDate={entryDate} onChange={setTimeTo} />
           </View>
         </View>
       )}
@@ -534,6 +602,7 @@ export default function AddEntryModal({navigation, route}: Props) {
           style={styles.saveBtn}
         />
       </View>
-    </ScrollView>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }

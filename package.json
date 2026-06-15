@@ -6,6 +6,7 @@
     "android": "react-native run-android",
     "ios": "react-native run-ios",
     "lint": "eslint .",
+    "check": "npm run lint -- --max-warnings=0 && npx tsc --noEmit && npm test -- --runInBand",
     "start": "react-native start",
     "test": "jest"
   },

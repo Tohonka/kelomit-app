@@ -5,11 +5,11 @@ import RNFS from 'react-native-fs';
 import {useTheme, typography, spacing, radius} from '../../theme';
 import type {Colors} from '../../theme';
 import {ensureCameraPermission, ensureMediaLibraryPermission} from '../../services/permissionService';
-import {makeMediaPath, makeThumbnailPath} from '../../utils/mediaUtils';
+import {makeMediaPath} from '../../utils/mediaUtils';
 
 interface Props {
   filePath: string | null;
-  onCapture: (filePath: string, thumbnailPath: string) => void;
+  onCapture: (filePath: string, thumbnailPath: string | null) => void;
 }
 
 const makeStyles = (c: Colors) =>
@@ -70,11 +70,9 @@ export default function VideoCapture({filePath, onCapture}: Props) {
   const saveVideo = async (sourceUri: string) => {
     try {
       const destPath = makeMediaPath('video', 'mp4');
-      const thumbPath = makeThumbnailPath(destPath);
       const src = sourceUri.replace('file://', '');
       await RNFS.copyFile(src, destPath);
-      await RNFS.writeFile(thumbPath, '', 'utf8');
-      onCapture(destPath, thumbPath);
+      onCapture(destPath, null);
     } catch (e) {
       Alert.alert('Error saving video', String(e));
     }

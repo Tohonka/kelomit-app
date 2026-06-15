@@ -7,6 +7,7 @@ import {formatTime} from '../../utils/dateUtils';
 
 interface Props {
   value: string | null;
+  baseDate?: string;
   placeholder?: string;
   onChange: (isoString: string) => void;
 }
@@ -36,11 +37,29 @@ const makeStyles = (c: Colors) =>
     },
   });
 
-export default function TimePicker({value, placeholder = '–:––', onChange}: Props) {
+function dateFromLocalDay(day: string): Date {
+  const [year, month, date] = day.split('-').map(Number);
+  return new Date(year, month - 1, date);
+}
+
+function pickerDate(value: string | null, baseDate?: string): Date {
+  if (value) {
+    return new Date(value);
+  }
+  return baseDate ? dateFromLocalDay(baseDate) : new Date();
+}
+
+function applySelectedTime(targetDate: Date, selectedTime: Date): string {
+  const next = new Date(targetDate);
+  next.setHours(selectedTime.getHours(), selectedTime.getMinutes(), 0, 0);
+  return next.toISOString();
+}
+
+export default function TimePicker({value, baseDate, placeholder = '–:––', onChange}: Props) {
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [show, setShow] = useState(false);
-  const date = value ? new Date(value) : new Date();
+  const date = pickerDate(value, baseDate);
 
   return (
     <>
@@ -58,7 +77,7 @@ export default function TimePicker({value, placeholder = '–:––', onChange}
           display={Platform.OS === 'android' ? 'spinner' : 'spinner'}
           onChange={(_event, selected) => {
             setShow(false);
-            if (selected) { onChange(selected.toISOString()); }
+            if (selected) { onChange(applySelectedTime(date, selected)); }
           }}
         />
       )}

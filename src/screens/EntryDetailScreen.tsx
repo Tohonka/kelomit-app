@@ -21,7 +21,7 @@ import AudioPlayer from '../components/media/AudioPlayer';
 import type {RootStackScreenProps} from '../navigation/navigationTypes';
 import type {Entry} from '../types';
 import {formatTime, formatDate} from '../utils/dateUtils';
-import {fileUri} from '../utils/mediaUtils';
+import {deleteMediaFile, fileUri} from '../utils/mediaUtils';
 
 type Props = RootStackScreenProps<'EntryDetailScreen'>;
 
@@ -136,6 +136,8 @@ export default function EntryDetailScreen({navigation, route}: Props) {
   };
 
   const handleDelete = () => {
+    if (!entry) { return; }
+    const entryToDelete = entry;
     Alert.alert('Delete entry', 'This action cannot be undone.', [
       {text: 'Cancel', style: 'cancel'},
       {
@@ -144,6 +146,12 @@ export default function EntryDetailScreen({navigation, route}: Props) {
         onPress: async () => {
           Vibration.vibrate([0, 40, 60, 40]);
           await removeEntry(entryId, dayId);
+          await Promise.all([
+            deleteMediaFile(entryToDelete.file_path),
+            entryToDelete.thumbnail_path !== entryToDelete.file_path
+              ? deleteMediaFile(entryToDelete.thumbnail_path)
+              : Promise.resolve(),
+          ]);
           navigation.goBack();
         },
       },

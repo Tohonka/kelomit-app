@@ -1,4 +1,4 @@
-import React, {useEffect, useState, useCallback, useMemo, useRef} from 'react';
+import React, {useEffect, useState, useCallback, useMemo} from 'react';
 import {StyleSheet, ScrollView, PanResponder, View, Text} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useDayStore} from '../store/dayStore';
@@ -49,7 +49,10 @@ export default function DayScreen({navigation, route}: Props) {
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
 
   const day = daysCache[currentDate];
-  const allEntries = day ? (entriesByDay[day.id] ?? []) : [];
+  const allEntries = useMemo(
+    () => (day ? (entriesByDay[day.id] ?? []) : []),
+    [day, entriesByDay],
+  );
 
   useEffect(() => { loadDay(currentDate); }, [currentDate, loadDay]);
   useEffect(() => { if (day) { loadEntriesForDay(day.id); } }, [day, loadEntriesForDay]);
@@ -76,7 +79,7 @@ export default function DayScreen({navigation, route}: Props) {
     setSelectedTagIds([]);
   }, []);
 
-  const panResponder = useRef(
+  const panResponder = useMemo(() =>
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, {dx, dy}) =>
         Math.abs(dx) > 20 && Math.abs(dx) > Math.abs(dy) * 1.5,
@@ -85,8 +88,7 @@ export default function DayScreen({navigation, route}: Props) {
         else if (dx > 60) { goToDate(shiftDate(currentDate, -1)); }
       },
     }),
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  ).current;
+  [currentDate, goToDate]);
 
   const filteredEntries: Entry[] = allEntries.filter(e => {
     if (selectedProjectId != null && e.project?.id !== selectedProjectId) { return false; }

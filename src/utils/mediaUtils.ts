@@ -19,9 +19,18 @@ export function makeMediaPath(
   return `${MEDIA_DIR}/${type}_${ts}_${rand}.${ext}`;
 }
 
-export function makeThumbnailPath(originalPath: string): string {
-  const base = originalPath.replace(/\.[^.]+$/, '');
-  return `${base}_thumb.jpg`;
+export async function deleteMediaFile(path: string | null | undefined): Promise<void> {
+  if (!path) {
+    return;
+  }
+  const fsPath = path.replace('file://', '');
+  try {
+    if (await RNFS.exists(fsPath)) {
+      await RNFS.unlink(fsPath);
+    }
+  } catch {
+    // Media cleanup should not block saving/deleting the journal entry.
+  }
 }
 
 /** Prefix file:// for RN Image/Video sources on Android */

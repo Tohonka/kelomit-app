@@ -5,7 +5,7 @@ import RNFS from 'react-native-fs';
 import {useTheme, typography, spacing, radius} from '../../theme';
 import type {Colors} from '../../theme';
 import {ensureCameraPermission, ensureMediaLibraryPermission} from '../../services/permissionService';
-import {makeMediaPath, makeThumbnailPath, fileUri} from '../../utils/mediaUtils';
+import {makeMediaPath, fileUri} from '../../utils/mediaUtils';
 
 interface Props {
   filePath: string | null;
@@ -67,11 +67,9 @@ export default function PhotoCapture({filePath, onCapture}: Props) {
   const savePhoto = async (sourceUri: string) => {
     try {
       const destPath = makeMediaPath('photo', 'jpg');
-      const thumbPath = makeThumbnailPath(destPath);
       const src = sourceUri.replace('file://', '');
       await RNFS.copyFile(src, destPath);
-      await RNFS.copyFile(src, thumbPath);
-      onCapture(destPath, thumbPath);
+      onCapture(destPath, destPath);
     } catch (e) {
       Alert.alert('Error saving photo', String(e));
     }

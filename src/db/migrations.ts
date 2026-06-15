@@ -1,13 +1,13 @@
 export interface Migration {
   version: number;
-  up: string;
+  up: string[];
 }
 
 export const migrations: Migration[] = [
   {
     version: 1,
-    up: `
-      CREATE TABLE IF NOT EXISTS days (
+    up: [
+      `CREATE TABLE IF NOT EXISTS days (
         id          INTEGER PRIMARY KEY AUTOINCREMENT,
         date        TEXT NOT NULL UNIQUE,
         started_at  TEXT,
@@ -15,9 +15,9 @@ export const migrations: Migration[] = [
         notes       TEXT,
         created_at  TEXT NOT NULL DEFAULT (datetime('now')),
         updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
-      );
+      )`,
 
-      CREATE TABLE IF NOT EXISTS projects (
+      `CREATE TABLE IF NOT EXISTS projects (
         id          INTEGER PRIMARY KEY AUTOINCREMENT,
         name        TEXT NOT NULL UNIQUE,
         type        TEXT NOT NULL DEFAULT 'work'
@@ -25,9 +25,9 @@ export const migrations: Migration[] = [
         archived    INTEGER NOT NULL DEFAULT 0,
         created_at  TEXT NOT NULL DEFAULT (datetime('now')),
         updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
-      );
+      )`,
 
-      CREATE TABLE IF NOT EXISTS entries (
+      `CREATE TABLE IF NOT EXISTS entries (
         id              INTEGER PRIMARY KEY AUTOINCREMENT,
         day_id          INTEGER NOT NULL REFERENCES days(id) ON DELETE CASCADE,
         entry_type      TEXT NOT NULL CHECK(entry_type IN ('note','photo','video','voice')),
@@ -46,9 +46,9 @@ export const migrations: Migration[] = [
         location_label  TEXT,
         created_at      TEXT NOT NULL DEFAULT (datetime('now')),
         updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
-      );
+      )`,
 
-      CREATE TABLE IF NOT EXISTS gps_track (
+      `CREATE TABLE IF NOT EXISTS gps_track (
         id          INTEGER PRIMARY KEY AUTOINCREMENT,
         day_id      INTEGER NOT NULL REFERENCES days(id) ON DELETE CASCADE,
         latitude    REAL NOT NULL,
@@ -57,47 +57,47 @@ export const migrations: Migration[] = [
         altitude    REAL,
         speed       REAL,
         timestamp   TEXT NOT NULL
-      );
+      )`,
 
-      CREATE TABLE IF NOT EXISTS tags (
+      `CREATE TABLE IF NOT EXISTS tags (
         id          INTEGER PRIMARY KEY AUTOINCREMENT,
         name        TEXT NOT NULL UNIQUE COLLATE NOCASE,
         created_at  TEXT NOT NULL DEFAULT (datetime('now'))
-      );
+      )`,
 
-      CREATE TABLE IF NOT EXISTS entry_tags (
+      `CREATE TABLE IF NOT EXISTS entry_tags (
         entry_id  INTEGER NOT NULL REFERENCES entries(id) ON DELETE CASCADE,
         tag_id    INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
         PRIMARY KEY (entry_id, tag_id)
-      );
+      )`,
 
-      CREATE TABLE IF NOT EXISTS settings (
+      `CREATE TABLE IF NOT EXISTS settings (
         key   TEXT PRIMARY KEY,
         value TEXT
-      );
+      )`,
 
-      CREATE TABLE IF NOT EXISTS schema_version (
+      `CREATE TABLE IF NOT EXISTS schema_version (
         version INTEGER PRIMARY KEY
-      );
+      )`,
 
-      INSERT OR IGNORE INTO settings (key, value) VALUES ('gps_enabled', 'true');
-      INSERT OR IGNORE INTO settings (key, value) VALUES ('gps_interval_ms', '60000');
-      INSERT OR IGNORE INTO settings (key, value) VALUES ('default_activity_type', 'work');
-      INSERT OR IGNORE INTO settings (key, value) VALUES ('default_project_id', '');
-    `,
+      "INSERT OR IGNORE INTO settings (key, value) VALUES ('gps_enabled', 'true')",
+      "INSERT OR IGNORE INTO settings (key, value) VALUES ('gps_interval_ms', '60000')",
+      "INSERT OR IGNORE INTO settings (key, value) VALUES ('default_activity_type', 'work')",
+      "INSERT OR IGNORE INTO settings (key, value) VALUES ('default_project_id', '')",
+    ],
   },
   {
     version: 2,
-    up: `
-      INSERT OR IGNORE INTO settings (key, value) VALUES ('theme_mode', 'system');
-    `,
+    up: [
+      "INSERT OR IGNORE INTO settings (key, value) VALUES ('theme_mode', 'system')",
+    ],
   },
   {
     version: 3,
-    up: `
-      ALTER TABLE days ADD COLUMN started_at_2 TEXT;
-      ALTER TABLE days ADD COLUMN ended_at_2 TEXT;
-      INSERT OR IGNORE INTO settings (key, value) VALUES ('show_week_numbers', 'false');
-    `,
+    up: [
+      'ALTER TABLE days ADD COLUMN started_at_2 TEXT',
+      'ALTER TABLE days ADD COLUMN ended_at_2 TEXT',
+      "INSERT OR IGNORE INTO settings (key, value) VALUES ('show_week_numbers', 'false')",
+    ],
   },
 ];

@@ -17,6 +17,7 @@ import {exportToCsv} from '../utils/exportUtils';
 import {useTheme, typography, spacing, radius} from '../theme';
 import type {Colors} from '../theme';
 import type {ThemeMode} from '../theme';
+import type {ActivityType} from '../types';
 import type {TabScreenProps} from '../navigation/navigationTypes';
 
 type Props = TabScreenProps<'Settings'>;
@@ -133,6 +134,12 @@ const THEME_MODES: {mode: ThemeMode; label: string}[] = [
   {mode: 'dark', label: 'Dark'},
 ];
 
+const ACTIVITY_TYPES: {type: ActivityType; label: string}[] = [
+  {type: 'work', label: 'Work'},
+  {type: 'personal_work', label: 'P-work'},
+  {type: 'personal', label: 'Personal'},
+];
+
 export default function SettingsScreen({navigation}: Props) {
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -140,7 +147,7 @@ export default function SettingsScreen({navigation}: Props) {
     loaded, load,
     gps_enabled, setGpsEnabled,
     gps_interval_ms,
-    default_activity_type,
+    default_activity_type, setDefaultActivityType,
     theme_mode, setThemeMode,
     show_week_numbers, setShowWeekNumbers,
   } = useSettingsStore();
@@ -217,7 +224,21 @@ export default function SettingsScreen({navigation}: Props) {
 
         <View style={styles.row}>
           <Text style={styles.rowLabel}>Default activity</Text>
-          <Text style={styles.rowValue}>{default_activity_type}</Text>
+          <View style={styles.themeSegment}>
+            {ACTIVITY_TYPES.map(({type, label}) => (
+              <TouchableOpacity
+                key={type}
+                style={[styles.themeBtn, default_activity_type === type && styles.themeBtnActive]}
+                onPress={() => setDefaultActivityType(type)}>
+                <Text style={[
+                  styles.themeBtnText,
+                  default_activity_type === type && styles.themeBtnTextActive,
+                ]}>
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
 
         <Text style={styles.sectionHeader}>Data</Text>

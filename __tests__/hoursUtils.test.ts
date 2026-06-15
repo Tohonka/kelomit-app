@@ -84,15 +84,15 @@ describe('calcHourBreakdown', () => {
 
 describe('formatHours', () => {
   it('formats whole hours', () => {
-    expect(formatHours(3600)).toBe('1.0h');
-    expect(formatHours(7200)).toBe('2.0h');
+    expect(formatHours(3600)).toBe('1h');
+    expect(formatHours(7200)).toBe('2h');
   });
 
   it('formats fractional hours', () => {
-    expect(formatHours(5400)).toBe('1.5h');
+    expect(formatHours(5400)).toBe('1h 30m');
   });
 
   it('formats zero', () => {
-    expect(formatHours(0)).toBe('0.0h');
+    expect(formatHours(0)).toBe('0h');
   });
 });

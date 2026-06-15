@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useCallback, useMemo, useRef} from 'react';
+import React, {useState, useEffect, useCallback, useMemo} from 'react';
 import {
   View,
   Text,
@@ -194,7 +194,7 @@ export default function CalendarScreen({navigation}: Props) {
     }
   }, [viewMode]);
 
-  const panResponder = useRef(
+  const panResponder = useMemo(() =>
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, {dx, dy}) =>
         Math.abs(dx) > 20 && Math.abs(dx) > Math.abs(dy) * 1.5,
@@ -204,8 +204,7 @@ export default function CalendarScreen({navigation}: Props) {
         }
       },
     }),
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  ).current;
+  [goBack, goForward, viewMode]);
 
   const weekDays = getWeekDays(currentDate);
   const headerLabel =

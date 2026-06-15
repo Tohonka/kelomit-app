@@ -1,6 +1,6 @@
 import React, {useMemo, useState} from 'react';
 import {View, Text, TouchableOpacity, StyleSheet} from 'react-native';
-import {useTheme, typography, spacing, radius} from '../../theme';
+import {useTheme, typography, spacing} from '../../theme';
 import type {Colors} from '../../theme';
 import Card from '../ui/Card';
 import TimePicker from '../ui/TimePicker';
@@ -86,12 +86,14 @@ export default function DaySummaryCard({day, entries, onUpdateTimes}: Props) {
       <View style={styles.legRow}>
         <TimePicker
           value={day.started_at}
+          baseDate={day.date}
           placeholder="Start"
           onChange={iso => onUpdateTimes({started_at: iso})}
         />
         <Text style={styles.arrow}>→</Text>
         <TimePicker
           value={day.ended_at}
+          baseDate={day.date}
           placeholder="End"
           onChange={iso => onUpdateTimes({ended_at: iso})}
         />
@@ -108,12 +110,14 @@ export default function DaySummaryCard({day, entries, onUpdateTimes}: Props) {
         <View style={styles.legRow}>
           <TimePicker
             value={day.started_at_2}
+            baseDate={day.date}
             placeholder="Start"
             onChange={iso => onUpdateTimes({started_at_2: iso})}
           />
           <Text style={styles.arrow}>→</Text>
           <TimePicker
             value={day.ended_at_2}
+            baseDate={day.date}
             placeholder="End"
             onChange={iso => onUpdateTimes({ended_at_2: iso})}
           />

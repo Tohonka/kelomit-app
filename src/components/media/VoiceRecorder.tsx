@@ -1,4 +1,4 @@
-import React, {useMemo, useState, useEffect} from 'react';
+import React, {useMemo, useState, useEffect, useRef} from 'react';
 import {View, Text, TouchableOpacity, StyleSheet, Alert} from 'react-native';
 import audioRecorderPlayer from 'react-native-audio-recorder-player';
 import type {RecordBackType, PlayBackType} from 'react-native-audio-recorder-player';
@@ -10,6 +10,7 @@ import {makeMediaPath, ensureMediaDir} from '../../utils/mediaUtils';
 interface Props {
   filePath: string | null;
   onRecord: (filePath: string, durationSec: number) => void;
+  onDiscard: () => void;
 }
 
 type RecordState = 'idle' | 'recording' | 'done';
@@ -85,12 +86,13 @@ const makeStyles = (c: Colors) =>
     },
   });
 
-export default function VoiceRecorder({filePath, onRecord}: Props) {
+export default function VoiceRecorder({filePath, onRecord, onDiscard}: Props) {
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [state, setState] = useState<RecordState>(filePath ? 'done' : 'idle');
   const [elapsed, setElapsed] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const elapsedRef = useRef(0);
 
   useEffect(() => {
     return () => {
@@ -107,7 +109,9 @@ export default function VoiceRecorder({filePath, onRecord}: Props) {
       const path = makeMediaPath('voice', 'm4a');
       await audioRecorderPlayer.startRecorder(path);
       audioRecorderPlayer.addRecordBackListener((e: RecordBackType) => {
-        setElapsed(Math.floor(e.currentPosition / 1000));
+        const seconds = Math.floor(e.currentPosition / 1000);
+        elapsedRef.current = seconds;
+        setElapsed(seconds);
       });
       setState('recording');
     } catch (e) {
@@ -120,7 +124,7 @@ export default function VoiceRecorder({filePath, onRecord}: Props) {
       const result = await audioRecorderPlayer.stopRecorder();
       audioRecorderPlayer.removeRecordBackListener();
       setState('done');
-      onRecord(result, elapsed);
+      onRecord(result, elapsedRef.current);
     } catch (e) {
       Alert.alert('Stop recording error', String(e));
     }
@@ -147,6 +151,8 @@ export default function VoiceRecorder({filePath, onRecord}: Props) {
     await audioRecorderPlayer.stopPlayer().catch(() => {});
     setIsPlaying(false);
     setState('idle');
+    onDiscard();
+    elapsedRef.current = 0;
     setElapsed(0);
   };
 

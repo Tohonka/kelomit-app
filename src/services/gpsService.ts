@@ -15,7 +15,6 @@ export interface KnownPosition {
 
 let _lastPosition: KnownPosition | null = null;
 let _watchId: number | null = null;
-let _intervalMs = 60_000;
 
 export function getLastKnownPosition(): KnownPosition | null {
   return _lastPosition;
@@ -45,8 +44,6 @@ export async function startTracking(intervalMs = 60_000): Promise<void> {
   if (!ok) {
     return;
   }
-  _intervalMs = intervalMs;
-
   _watchId = Geolocation.watchPosition(
     pos => {
       handlePosition(pos);

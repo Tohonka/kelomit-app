@@ -22,7 +22,7 @@ interface EntryState {
   removeEntry: (id: number, dayId: number) => Promise<void>;
 }
 
-export const useEntryStore = create<EntryState>((set, get) => ({
+export const useEntryStore = create<EntryState>(set => ({
   entriesByDay: {},
   isLoading: false,
   error: null,

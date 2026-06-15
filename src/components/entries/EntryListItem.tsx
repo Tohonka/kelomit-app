@@ -1,6 +1,6 @@
 import React, {useMemo} from 'react';
 import {View, Text, TouchableOpacity, StyleSheet} from 'react-native';
-import {useTheme, typography, spacing, radius} from '../../theme';
+import {useTheme, typography, spacing} from '../../theme';
 import type {Colors} from '../../theme';
 import type {Entry} from '../../types';
 import EntryTypeIcon from './EntryTypeIcon';

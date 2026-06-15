@@ -3,6 +3,10 @@ import {migrations} from './migrations';
 
 let _db: ReturnType<typeof open> | null = null;
 
+function isDuplicateColumnError(error: unknown): boolean {
+  return String(error).toLowerCase().includes('duplicate column name');
+}
+
 export function getDB() {
   if (!_db) {
     throw new Error('Database not initialized. Call initDB() first.');
@@ -30,19 +34,22 @@ export async function initDB(): Promise<void> {
   // Run pending migrations in order
   for (const migration of migrations) {
     if (migration.version > currentVersion) {
-      const statements = migration.up
-        .split(';')
-        .map(s => s.trim())
-        .filter(s => s.length > 0);
+      await _db.transaction(async tx => {
+        for (const stmt of migration.up) {
+          try {
+            await tx.execute(stmt);
+          } catch (error) {
+            if (!isDuplicateColumnError(error)) {
+              throw error;
+            }
+          }
+        }
 
-      for (const stmt of statements) {
-        await _db.execute(stmt + ';');
-      }
-
-      await _db.execute(
-        'INSERT OR REPLACE INTO schema_version (version) VALUES (?);',
-        [migration.version],
-      );
+        await tx.execute(
+          'INSERT OR REPLACE INTO schema_version (version) VALUES (?);',
+          [migration.version],
+        );
+      });
     }
   }
 }
