@@ -1,4 +1,4 @@
-import React, {useEffect, useMemo} from 'react';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {View, Text, StyleSheet, ScrollView} from 'react-native';
 import {format} from 'date-fns';
@@ -9,12 +9,15 @@ import {useTheme, typography, spacing} from '../theme';
 import {getDateFnsLocale} from '../i18n';
 import type {Colors} from '../theme';
 import EntryList from '../components/entries/EntryList';
+import EntryListItem from '../components/entries/EntryListItem';
 import DaySummaryCard from '../components/day/DaySummaryCard';
 import DaySplitBar from '../components/day/DaySplitBar';
 import FAB from '../components/ui/FAB';
 import {buildQuickAddActions} from '../components/entries/quickAddActions';
 import type {TabScreenProps} from '../navigation/navigationTypes';
-import {formatDate, todayDate} from '../utils/dateUtils';
+import type {Entry} from '../types';
+import {getUpcomingTodos} from '../db/entries';
+import {formatDate, todayDate, nextDayDates} from '../utils/dateUtils';
 import {calcDayWorkSecs, formatHours} from '../utils/hoursUtils';
 
 type Props = TabScreenProps<'Home'>;
@@ -47,14 +50,33 @@ const makeStyles = (c: Colors) =>
     headerSub: {fontSize: typography.sizes.sm, color: c.textMuted, marginTop: 2},
     flex: {flex: 1},
     scrollContent: {paddingTop: spacing.md, paddingBottom: 100},
+    comingUp: {marginTop: spacing.lg},
+    comingUpHeader: {
+      fontSize: typography.sizes.xs,
+      fontWeight: typography.weights.semibold,
+      color: c.textMuted,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      paddingHorizontal: spacing.lg,
+      paddingBottom: spacing.sm,
+    },
+    comingUpDate: {
+      fontSize: typography.sizes.xs,
+      color: c.primary,
+      fontWeight: typography.weights.semibold,
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.sm,
+      paddingBottom: spacing.xs,
+    },
   });
 
 export default function HomeScreen({navigation}: Props) {
-  const {i18n} = useTranslation();
+  const {t, i18n} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const {today, loadToday, updateDayTimes} = useDayStore();
   const {entriesByDay, loadEntriesForDay} = useEntryStore();
+  const [upcoming, setUpcoming] = useState<Entry[]>([]);
 
   const date = todayDate();
   const entries = today ? (entriesByDay[today.id] ?? []) : [];
@@ -64,6 +86,26 @@ export default function HomeScreen({navigation}: Props) {
   useEffect(() => {
     if (today) { loadEntriesForDay(today.id); }
   }, [today, loadEntriesForDay]);
+
+  const loadUpcoming = useCallback(() => {
+    getUpcomingTodos(nextDayDates()).then(setUpcoming).catch(() => {});
+  }, []);
+  useEffect(() => {
+    loadUpcoming();
+    const unsub = navigation.addListener('focus', loadUpcoming);
+    return unsub;
+  }, [navigation, loadUpcoming]);
+
+  const upcomingGroups = useMemo(() => {
+    const out: {date: string; items: Entry[]}[] = [];
+    for (const e of upcoming) {
+      const key = e.scheduled_date ?? '';
+      const last = out[out.length - 1];
+      if (last && last.date === key) { last.items.push(e); }
+      else { out.push({date: key, items: [e]}); }
+    }
+    return out;
+  }, [upcoming]);
 
   const openAddEntry = () => {
     if (!today) { return; }
@@ -110,6 +152,25 @@ export default function HomeScreen({navigation}: Props) {
             })
           }
         />
+        {upcoming.length > 0 && (
+          <View style={styles.comingUp}>
+            <Text style={styles.comingUpHeader}>{t('todo.comingUp')}</Text>
+            {upcomingGroups.map(group => (
+              <View key={group.date}>
+                <Text style={styles.comingUpDate}>{formatDate(group.date)}</Text>
+                {group.items.map(e => (
+                  <EntryListItem
+                    key={e.id}
+                    entry={e}
+                    onPress={() =>
+                      navigation.navigate('EntryDetailScreen', {entryId: e.id, dayId: e.day_id})
+                    }
+                  />
+                ))}
+              </View>
+            ))}
+          </View>
+        )}
       </ScrollView>
       <FAB onPress={openAddEntry} actions={quickActions} />
     </SafeAreaView>

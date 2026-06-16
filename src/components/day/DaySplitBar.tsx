@@ -12,6 +12,7 @@ interface Props {
 }
 
 function entrySeconds(e: Entry): number {
+  if (e.is_todo && !e.completed_at) { return 0; }
   if (e.duration_sec != null) { return e.duration_sec; }
   if (e.time_from && e.time_to) {
     const s = (new Date(e.time_to).getTime() - new Date(e.time_from).getTime()) / 1000;

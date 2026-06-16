@@ -1,6 +1,7 @@
 import React, {useMemo} from 'react';
+import {useTranslation} from 'react-i18next';
 import {View, Text, TouchableOpacity, StyleSheet} from 'react-native';
-import {useTheme, typography, spacing} from '../../theme';
+import {useTheme, typography, spacing, radius} from '../../theme';
 import type {Colors} from '../../theme';
 import type {Entry} from '../../types';
 import EntryTypeIcon from './EntryTypeIcon';
@@ -71,9 +72,19 @@ const makeStyles = (c: Colors) =>
       marginTop: 2,
     },
     location: {fontSize: typography.sizes.xs, color: c.textMuted, marginTop: 2},
+    todoBadge: {
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 2,
+      borderRadius: radius.pill,
+      backgroundColor: c.primary + '15',
+    },
+    todoBadgeDone: {backgroundColor: c.bgMuted},
+    todoBadgeText: {fontSize: typography.sizes.xs, color: c.primary, fontWeight: typography.weights.semibold},
+    todoBadgeTextDone: {color: c.textMuted},
   });
 
 export default function EntryListItem({entry, onPress}: Props) {
+  const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const resolvedDurationSec =
@@ -115,6 +126,13 @@ export default function EntryListItem({entry, onPress}: Props) {
           <Text style={styles.body} numberOfLines={2}>{entry.body}</Text>
         ) : null}
         <View style={styles.chips}>
+          {entry.is_todo ? (
+            <View style={[styles.todoBadge, entry.completed_at != null && styles.todoBadgeDone]}>
+              <Text style={[styles.todoBadgeText, entry.completed_at != null && styles.todoBadgeTextDone]}>
+                {entry.completed_at ? `✓ ${t('todo.done')}` : t('todo.badge')}
+              </Text>
+            </View>
+          ) : null}
           <ActivityBadge type={entry.activity_type} />
           {entry.project ? <ProjectChip project={entry.project} /> : null}
           {(entry.tags ?? []).slice(0, 3).map(tag => (

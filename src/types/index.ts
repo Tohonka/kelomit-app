@@ -45,6 +45,10 @@ export interface Entry {
   latitude: number | null;
   longitude: number | null;
   location_label: string | null;
+  is_todo: boolean;
+  scheduled_date: string | null;
+  completed_at: string | null;
+  reminder_at: string | null;
   created_at: string;
   updated_at: string;
   tags?: Tag[];

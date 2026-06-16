@@ -21,8 +21,9 @@ import TagChip from '../components/entries/TagChip';
 import AudioPlayer from '../components/media/AudioPlayer';
 import type {RootStackScreenProps} from '../navigation/navigationTypes';
 import type {Entry} from '../types';
-import {formatTime, formatDate} from '../utils/dateUtils';
+import {formatTime, formatDate, todayDate} from '../utils/dateUtils';
 import {deleteMediaFile, fileUri} from '../utils/mediaUtils';
+import {scheduleTodoReminder, cancelTodoReminder} from '../services/notificationService';
 
 type Props = RootStackScreenProps<'EntryDetailScreen'>;
 
@@ -97,6 +98,29 @@ const makeStyles = (c: Colors) =>
       fontWeight: typography.weights.medium,
     },
     tags: {flexDirection: 'row', flexWrap: 'wrap', marginTop: spacing.lg, gap: spacing.xs},
+    todoCard: {
+      backgroundColor: c.primary + '10',
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: c.primary + '40',
+      padding: spacing.md,
+      marginBottom: spacing.md,
+      gap: spacing.sm,
+    },
+    todoTop: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'},
+    todoTitle: {fontSize: typography.sizes.sm, fontWeight: typography.weights.semibold, color: c.primary},
+    todoSchedule: {fontSize: typography.sizes.sm, color: c.textSecondary},
+    todoBtn: {
+      paddingVertical: spacing.sm,
+      borderRadius: radius.md,
+      alignItems: 'center',
+      backgroundColor: c.primary,
+    },
+    todoBtnReopen: {backgroundColor: c.bgMuted},
+    todoBtnDisabled: {opacity: 0.4},
+    todoBtnText: {color: c.white, fontSize: typography.sizes.sm, fontWeight: typography.weights.semibold},
+    todoBtnTextReopen: {color: c.textSecondary},
+    todoHint: {fontSize: typography.sizes.xs, color: c.textMuted},
     deleteBtn: {marginTop: spacing.xxl, alignItems: 'center', paddingVertical: spacing.md},
     deleteBtnText: {
       color: c.error,
@@ -108,7 +132,7 @@ const makeStyles = (c: Colors) =>
 export default function EntryDetailScreen({navigation, route}: Props) {
   const {t: translate} = useTranslation();
   const {entryId, dayId} = route.params;
-  const {removeEntry} = useEntryStore();
+  const {removeEntry, setTodoDone} = useEntryStore();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [entry, setEntry] = useState<Entry | null>(null);
@@ -137,6 +161,22 @@ export default function EntryDetailScreen({navigation, route}: Props) {
     navigation.navigate('AddEntryModal', {dayId, entryId: entry.id});
   };
 
+  const canComplete = !entry?.scheduled_date || todayDate() >= entry.scheduled_date;
+  const handleToggleDone = async () => {
+    if (!entry) { return; }
+    const markDone = entry.completed_at == null;
+    if (markDone && !canComplete) { return; }
+    Vibration.vibrate(40);
+    await setTodoDone(entry.id, dayId, markDone);
+    const fresh = await getEntry(entry.id);
+    if (fresh) {
+      setEntry(fresh);
+      // Completing cancels the reminder; reopening re-arms it if still in future.
+      if (markDone) { cancelTodoReminder(fresh.id).catch(() => {}); }
+      else { scheduleTodoReminder(fresh).catch(() => {}); }
+    }
+  };
+
   const handleDelete = () => {
     if (!entry) { return; }
     const entryToDelete = entry;
@@ -147,6 +187,7 @@ export default function EntryDetailScreen({navigation, route}: Props) {
         style: 'destructive',
         onPress: async () => {
           Vibration.vibrate([0, 40, 60, 40]);
+          cancelTodoReminder(entryId).catch(() => {});
           await removeEntry(entryId, dayId);
           await Promise.all([
             deleteMediaFile(entryToDelete.file_path),
@@ -172,6 +213,38 @@ export default function EntryDetailScreen({navigation, route}: Props) {
             <Text style={styles.editBtnText}>{translate('common.edit')}</Text>
           </TouchableOpacity>
         </View>
+
+        {entry.is_todo ? (
+          <View style={styles.todoCard}>
+            <View style={styles.todoTop}>
+              <Text style={styles.todoTitle}>
+                {entry.completed_at ? translate('todo.done') : translate('todo.badge')}
+              </Text>
+              {entry.scheduled_date ? (
+                <Text style={styles.todoSchedule}>
+                  {translate('todo.scheduledFor')}: {formatDate(entry.scheduled_date)}
+                </Text>
+              ) : null}
+            </View>
+            <TouchableOpacity
+              style={[
+                styles.todoBtn,
+                entry.completed_at != null && styles.todoBtnReopen,
+                entry.completed_at == null && !canComplete && styles.todoBtnDisabled,
+              ]}
+              onPress={handleToggleDone}
+              disabled={entry.completed_at == null && !canComplete}>
+              <Text style={[styles.todoBtnText, entry.completed_at != null && styles.todoBtnTextReopen]}>
+                {entry.completed_at ? translate('todo.reopen') : translate('todo.markDone')}
+              </Text>
+            </TouchableOpacity>
+            {entry.completed_at == null && !canComplete && entry.scheduled_date ? (
+              <Text style={styles.todoHint}>
+                {translate('todo.availableOn', {date: formatDate(entry.scheduled_date)})}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
 
         {entry.title ? <Text style={styles.title}>{entry.title}</Text> : null}
         {entry.body ? <Text style={styles.body}>{entry.body}</Text> : null}

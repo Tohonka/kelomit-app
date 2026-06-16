@@ -21,6 +21,10 @@ function rowToEntry(row: RawRow, tags: Tag[], project: Project | null): Entry {
     latitude: (row.latitude as number | null) ?? null,
     longitude: (row.longitude as number | null) ?? null,
     location_label: (row.location_label as string | null) ?? null,
+    is_todo: Boolean(row.is_todo),
+    scheduled_date: (row.scheduled_date as string | null) ?? null,
+    completed_at: (row.completed_at as string | null) ?? null,
+    reminder_at: (row.reminder_at as string | null) ?? null,
     created_at: row.created_at as string,
     updated_at: row.updated_at as string,
     tags,
@@ -156,6 +160,10 @@ export interface CreateEntryParams {
   latitude?: number | null;
   longitude?: number | null;
   location_label?: string | null;
+  is_todo?: boolean;
+  scheduled_date?: string | null;
+  completed_at?: string | null;
+  reminder_at?: string | null;
   tagIds?: number[];
 }
 
@@ -165,8 +173,8 @@ export async function createEntry(params: CreateEntryParams): Promise<Entry> {
     `INSERT INTO entries (
        day_id, entry_type, activity_type, project_id, title, body,
        file_path, thumbnail_path, duration_sec, time_from, time_to,
-       latitude, longitude, location_label
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       latitude, longitude, location_label, is_todo, scheduled_date, completed_at, reminder_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      RETURNING *;`,
     [
       params.day_id,
@@ -183,6 +191,10 @@ export async function createEntry(params: CreateEntryParams): Promise<Entry> {
       params.latitude ?? null,
       params.longitude ?? null,
       params.location_label ?? null,
+      params.is_todo ? 1 : 0,
+      params.scheduled_date ?? null,
+      params.completed_at ?? null,
+      params.reminder_at ?? null,
     ],
   );
 
@@ -297,6 +309,7 @@ export async function getWorkSecondsByDay(
          ) AS INTEGER) AS total
        FROM entries
        WHERE activity_type = 'work'
+         AND (is_todo = 0 OR completed_at IS NOT NULL)
        GROUP BY day_id
      ) es ON es.day_id = d.id
      WHERE d.date >= ? AND d.date <= ?;`,
@@ -414,6 +427,7 @@ export async function getInsightsBreakdown(
     `SELECT e.activity_type AS k, CAST(SUM(${ENTRY_SECS_SQL}) AS INTEGER) AS s
        FROM entries e JOIN days d ON d.id = e.day_id
       WHERE d.date >= ? AND d.date <= ?
+        AND (e.is_todo = 0 OR e.completed_at IS NOT NULL)
       GROUP BY e.activity_type;`,
     [startDate, endDate],
   );
@@ -422,6 +436,7 @@ export async function getInsightsBreakdown(
        FROM entries e JOIN days d ON d.id = e.day_id
        LEFT JOIN projects p ON p.id = e.project_id
       WHERE d.date >= ? AND d.date <= ?
+        AND (e.is_todo = 0 OR e.completed_at IS NOT NULL)
       GROUP BY e.project_id;`,
     [startDate, endDate],
   );
@@ -431,6 +446,7 @@ export async function getInsightsBreakdown(
        JOIN entry_tags et ON et.entry_id = e.id
        JOIN tags t ON t.id = et.tag_id
       WHERE d.date >= ? AND d.date <= ?
+        AND (e.is_todo = 0 OR e.completed_at IS NOT NULL)
       GROUP BY t.id;`,
     [startDate, endDate],
   );
@@ -450,4 +466,70 @@ export async function getInsightsBreakdown(
   const totalSeconds = byActivity.reduce((sum, s) => sum + s.seconds, 0);
 
   return {totalSeconds, byActivity, byProject, byTag};
+}
+
+// ─── To-do / future items ────────────────────────────────────────────────────
+
+/** Mark a to-do confirmed (completedAt = ISO) or back to pending (null). */
+export async function setTodoCompleted(
+  id: number,
+  completedAt: string | null,
+): Promise<void> {
+  const db = getDB();
+  await db.execute(
+    "UPDATE entries SET completed_at = ?, updated_at = datetime('now') WHERE id = ?;",
+    [completedAt, id],
+  );
+}
+
+/** Pending (uncompleted) to-do entries scheduled on any of the given dates. */
+export async function getUpcomingTodos(dates: string[]): Promise<Entry[]> {
+  if (dates.length === 0) {
+    return [];
+  }
+  const db = getDB();
+  const placeholders = dates.map(() => '?').join(',');
+  const result = await db.execute(
+    `SELECT * FROM entries
+      WHERE is_todo = 1 AND completed_at IS NULL
+        AND scheduled_date IN (${placeholders})
+      ORDER BY scheduled_date ASC, created_at ASC;`,
+    dates,
+  );
+  const rows = (result.rows ?? []) as RawRow[];
+  if (rows.length === 0) {
+    return [];
+  }
+
+  const entryIds = rows.map(r => r.id as number);
+  const tagsMap = await fetchTagsForEntries(entryIds);
+  const projectIds = [
+    ...new Set(rows.map(r => r.project_id as number | null).filter(Boolean)),
+  ] as number[];
+  const projectsMap = new Map<number, Project>();
+  if (projectIds.length > 0) {
+    const pr = await db.execute(
+      `SELECT * FROM projects WHERE id IN (${projectIds.map(() => '?').join(',')});`,
+      projectIds,
+    );
+    for (const row of pr.rows ?? []) {
+      const r = row as RawRow;
+      projectsMap.set(r.id as number, {
+        id: r.id as number,
+        name: r.name as string,
+        type: r.type as Project['type'],
+        archived: Boolean(r.archived),
+        created_at: r.created_at as string,
+        updated_at: r.updated_at as string,
+      });
+    }
+  }
+
+  return rows.map(r =>
+    rowToEntry(
+      r,
+      tagsMap.get(r.id as number) ?? [],
+      projectsMap.get(r.project_id as number) ?? null,
+    ),
+  );
 }

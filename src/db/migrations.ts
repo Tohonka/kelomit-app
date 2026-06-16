@@ -120,4 +120,18 @@ export const migrations: Migration[] = [
       "INSERT OR IGNORE INTO settings (key, value) VALUES ('language', '')",
     ],
   },
+  {
+    version: 7,
+    up: [
+      'ALTER TABLE entries ADD COLUMN is_todo INTEGER NOT NULL DEFAULT 0',
+      'ALTER TABLE entries ADD COLUMN scheduled_date TEXT',
+      'ALTER TABLE entries ADD COLUMN completed_at TEXT',
+    ],
+  },
+  {
+    version: 8,
+    up: [
+      'ALTER TABLE entries ADD COLUMN reminder_at TEXT',
+    ],
+  },
 ];

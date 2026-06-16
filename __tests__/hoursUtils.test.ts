@@ -18,6 +18,10 @@ function makeEntry(overrides: Partial<Entry>): Entry {
     latitude: null,
     longitude: null,
     location_label: null,
+    is_todo: false,
+    scheduled_date: null,
+    completed_at: null,
+    reminder_at: null,
     created_at: '2026-06-11T08:00:00.000Z',
     updated_at: '2026-06-11T08:00:00.000Z',
     tags: [],
@@ -40,6 +44,15 @@ describe('calcHourBreakdown', () => {
     const result = calcHourBreakdown(entries);
     expect(result.workSeconds).toBe(3600);
     expect(result.personalWorkSeconds).toBe(0);
+  });
+
+  it('excludes unconfirmed to-dos but counts completed ones', () => {
+    const entries = [
+      makeEntry({duration_sec: 3600, activity_type: 'work', is_todo: true, scheduled_date: '2026-06-20'}),
+      makeEntry({id: 2, duration_sec: 1800, activity_type: 'work', is_todo: true, completed_at: '2026-06-20T10:00:00.000Z'}),
+    ];
+    const result = calcHourBreakdown(entries);
+    expect(result.workSeconds).toBe(1800); // only the completed to-do counts
   });
 
   it('counts time_from/time_to interval correctly', () => {

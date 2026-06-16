@@ -27,11 +27,25 @@ import TimePicker from '../components/ui/TimePicker';
 import PhotoCapture from '../components/media/PhotoCapture';
 import VideoCapture from '../components/media/VideoCapture';
 import VoiceRecorder from '../components/media/VoiceRecorder';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import {deleteMediaFile, ensureMediaDir} from '../utils/mediaUtils';
 import {getLastKnownPosition} from '../services/gpsService';
+import {scheduleTodoReminder, requestNotificationPermission} from '../services/notificationService';
 import {getEntry} from '../db/entries';
+import {getOrCreateDay} from '../db/days';
+import {formatDate} from '../utils/dateUtils';
 import type {RootStackScreenProps} from '../navigation/navigationTypes';
 import type {EntryType, ActivityType, Tag} from '../types';
+
+function localDateStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** Combine a YYYY-MM-DD date with an hour/minute into a local-time ISO string. */
+function combineDateTime(dateStr: string, hours: number, minutes: number): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d, hours, minutes, 0, 0).toISOString();
+}
 
 type Props = RootStackScreenProps<'AddEntryModal'>;
 
@@ -176,6 +190,42 @@ const makeStyles = (c: Colors) =>
       letterSpacing: 0.4,
     },
     rangeSep: {fontSize: typography.sizes.md, color: c.textMuted, marginTop: spacing.lg},
+    todoRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginTop: spacing.lg,
+    },
+    todoLabel: {fontSize: typography.sizes.base, color: c.textPrimary, fontWeight: typography.weights.medium},
+    todoToggle: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.xs,
+      borderRadius: radius.pill,
+      borderWidth: 1.5,
+      borderColor: c.border,
+      backgroundColor: c.bgMuted,
+    },
+    todoToggleOn: {borderColor: c.primary, backgroundColor: c.primary + '15'},
+    todoToggleText: {fontSize: typography.sizes.sm, fontWeight: typography.weights.semibold, color: c.textMuted},
+    todoToggleTextOn: {color: c.primary},
+    scheduleBtn: {
+      marginTop: spacing.sm,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      backgroundColor: c.bgCard,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    scheduleLabel: {fontSize: typography.sizes.xs, color: c.textMuted, fontWeight: typography.weights.medium},
+    scheduleValue: {fontSize: typography.sizes.base, color: c.textPrimary, fontWeight: typography.weights.semibold, marginTop: 2},
+    todoHint: {fontSize: typography.sizes.xs, color: c.textMuted, marginTop: spacing.sm, lineHeight: 16},
+    reminderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginTop: spacing.sm,
+    },
   });
 
 export default function AddEntryModal({navigation, route}: Props) {
@@ -215,6 +265,33 @@ export default function AddEntryModal({navigation, route}: Props) {
   const [timeFrom, setTimeFrom] = useState<string | null>(null);
   const [timeTo, setTimeTo] = useState<string | null>(null);
   const defaultsApplied = useRef(false);
+
+  const [isTodo, setIsTodo] = useState(false);
+  const [scheduledDate, setScheduledDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return localDateStr(d);
+  });
+  const [showSchedulePicker, setShowSchedulePicker] = useState(false);
+  const [reminderEnabled, setReminderEnabled] = useState(false);
+  const [reminderAt, setReminderAt] = useState<string | null>(null);
+
+  // Keep the reminder on the scheduled day (preserving the chosen time of day).
+  useEffect(() => {
+    if (!reminderEnabled) { return; }
+    setReminderAt(prev => {
+      const base = prev ? new Date(prev) : null;
+      return combineDateTime(scheduledDate, base?.getHours() ?? 9, base?.getMinutes() ?? 0);
+    });
+  }, [scheduledDate, reminderEnabled]);
+
+  const toggleReminder = async () => {
+    const next = !reminderEnabled;
+    setReminderEnabled(next);
+    if (next) {
+      requestNotificationPermission().catch(() => {});
+    }
+  };
 
   // Keep the focused text field visible above the keyboard. Android adjustResize
   // shrinks the window but doesn't scroll RN's ScrollView, and bottom fields have
@@ -367,8 +444,11 @@ export default function AddEntryModal({navigation, route}: Props) {
         );
       } else {
         const gps = getLastKnownPosition();
-        await addEntry({
-          day_id: dayId,
+        // A to-do is attached to the day it's scheduled for, not today's day.
+        const targetDayId = isTodo ? (await getOrCreateDay(scheduledDate)).id : dayId;
+        const reminderIso = isTodo && reminderEnabled ? reminderAt : null;
+        const created = await addEntry({
+          day_id: targetDayId,
           entry_type: entryType,
           activity_type: activityType,
           title: title.trim() || null,
@@ -382,7 +462,13 @@ export default function AddEntryModal({navigation, route}: Props) {
           time_to: timeMode === 'range' ? timeTo : null,
           latitude: gps?.latitude ?? null,
           longitude: gps?.longitude ?? null,
+          is_todo: isTodo,
+          scheduled_date: isTodo ? scheduledDate : null,
+          reminder_at: reminderIso,
         });
+        if (reminderIso) {
+          scheduleTodoReminder(created).catch(() => {});
+        }
       }
       const pathsToDelete = [...new Set(
         pendingDeletePaths.filter(
@@ -617,6 +703,62 @@ export default function AddEntryModal({navigation, route}: Props) {
             <TimePicker value={timeTo} baseDate={entryDate} onChange={setTimeTo} />
           </View>
         </View>
+      )}
+
+      {!isEdit && (
+        <>
+          <TouchableOpacity
+            style={styles.todoRow}
+            onPress={() => setIsTodo(v => !v)}
+            activeOpacity={0.7}>
+            <Text style={styles.todoLabel}>{translate('todo.schedule')}</Text>
+            <View style={[styles.todoToggle, isTodo && styles.todoToggleOn]}>
+              <Text style={[styles.todoToggleText, isTodo && styles.todoToggleTextOn]}>
+                {isTodo ? translate('common.on') : translate('common.off')}
+              </Text>
+            </View>
+          </TouchableOpacity>
+          {isTodo && (
+            <>
+              <TouchableOpacity style={styles.scheduleBtn} onPress={() => setShowSchedulePicker(true)}>
+                <Text style={styles.scheduleLabel}>{translate('todo.scheduledFor')}</Text>
+                <Text style={styles.scheduleValue}>{formatDate(scheduledDate)}</Text>
+              </TouchableOpacity>
+              <Text style={styles.todoHint}>{translate('todo.scheduleHint')}</Text>
+              {showSchedulePicker && (
+                <DateTimePicker
+                  value={new Date(`${scheduledDate}T12:00:00`)}
+                  mode="date"
+                  display={Platform.OS === 'android' ? 'default' : 'spinner'}
+                  minimumDate={new Date()}
+                  onChange={(_e, d) => {
+                    setShowSchedulePicker(false);
+                    if (d) { setScheduledDate(localDateStr(d)); }
+                  }}
+                />
+              )}
+
+              <TouchableOpacity style={styles.todoRow} onPress={toggleReminder} activeOpacity={0.7}>
+                <Text style={styles.todoLabel}>{translate('todo.remindMe')}</Text>
+                <View style={[styles.todoToggle, reminderEnabled && styles.todoToggleOn]}>
+                  <Text style={[styles.todoToggleText, reminderEnabled && styles.todoToggleTextOn]}>
+                    {reminderEnabled ? translate('common.on') : translate('common.off')}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+              {reminderEnabled && (
+                <View style={styles.reminderRow}>
+                  <Text style={styles.rangeLabel}>{translate('todo.reminderTime')}</Text>
+                  <TimePicker
+                    value={reminderAt}
+                    baseDate={scheduledDate}
+                    onChange={setReminderAt}
+                  />
+                </View>
+              )}
+            </>
+          )}
+        </>
       )}
 
       <View style={styles.saveRow}>

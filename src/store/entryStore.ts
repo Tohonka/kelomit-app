@@ -4,6 +4,7 @@ import {
   createEntry,
   updateEntry,
   deleteEntry,
+  setTodoCompleted,
   type CreateEntryParams,
 } from '../db/entries';
 import type {Entry} from '../types';
@@ -20,6 +21,7 @@ interface EntryState {
     dayId: number,
   ) => Promise<void>;
   removeEntry: (id: number, dayId: number) => Promise<void>;
+  setTodoDone: (id: number, dayId: number, done: boolean) => Promise<void>;
 }
 
 export const useEntryStore = create<EntryState>(set => ({
@@ -69,6 +71,14 @@ export const useEntryStore = create<EntryState>(set => ({
         ...state.entriesByDay,
         [dayId]: (state.entriesByDay[dayId] ?? []).filter(e => e.id !== id),
       },
+    }));
+  },
+
+  setTodoDone: async (id, dayId, done) => {
+    await setTodoCompleted(id, done ? new Date().toISOString() : null);
+    const entries = await getEntriesForDay(dayId);
+    set(state => ({
+      entriesByDay: {...state.entriesByDay, [dayId]: entries},
     }));
   },
 }));

@@ -1,4 +1,4 @@
-import React, {useState, useCallback, useMemo} from 'react';
+import React, {useState, useEffect, useCallback, useMemo} from 'react';
 import {useTranslation} from 'react-i18next';
 import {
   View,
@@ -18,8 +18,11 @@ import {useTheme, typography, spacing, radius} from '../theme';
 import {getDateFnsLocale} from '../i18n';
 import type {Colors} from '../theme';
 import {useSettingsStore} from '../store/settingsStore';
-import {getWorkSecondsByDay} from '../db/entries';
+import {getWorkSecondsByDay, getUpcomingTodos} from '../db/entries';
 import {formatHours} from '../utils/hoursUtils';
+import {formatDate} from '../utils/dateUtils';
+import EntryListItem from '../components/entries/EntryListItem';
+import type {Entry} from '../types';
 import type {TabScreenProps} from '../navigation/navigationTypes';
 
 type CalendarView = 'month' | 'week' | 'range';
@@ -188,6 +191,10 @@ export default function CalendarScreen({navigation}: Props) {
     navigation.navigate('DayScreen', {date: localDateStr(date)});
   };
 
+  const openEntry = (entry: Entry) => {
+    navigation.navigate('EntryDetailScreen', {entryId: entry.id, dayId: entry.day_id});
+  };
+
   const goBack = useCallback(() => {
     if (viewMode === 'month') {
       setCurrentDate(d => new Date(d.getFullYear(), d.getMonth() - 1, 1));
@@ -332,6 +339,7 @@ export default function CalendarScreen({navigation}: Props) {
             showWeekNumbers={show_week_numbers}
             language={language}
             onDayPress={navigateToDay}
+            onOpenEntry={openEntry}
           />
         ) : (
           <RangeView
@@ -506,20 +514,56 @@ const makeWeekStyles = (c: Colors) =>
     dayNumToday: {color: c.primary},
     hours: {fontSize: typography.sizes.xs, color: c.badgeWork, fontWeight: typography.weights.bold},
     hoursEmpty: {fontSize: typography.sizes.xs, color: c.textMuted},
+    comingUpHeader: {
+      fontSize: typography.sizes.xs,
+      fontWeight: typography.weights.semibold,
+      color: c.textMuted,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      paddingHorizontal: spacing.sm,
+      paddingTop: spacing.lg,
+      paddingBottom: spacing.xs,
+    },
+    comingUpDate: {
+      fontSize: typography.sizes.xs,
+      color: c.primary,
+      fontWeight: typography.weights.semibold,
+      paddingHorizontal: spacing.sm,
+      paddingTop: spacing.sm,
+      paddingBottom: spacing.xs,
+    },
   });
 
-function WeekView({currentDate, hoursMap, showWeekNumbers, language, onDayPress}: {
+function WeekView({currentDate, hoursMap, showWeekNumbers, language, onDayPress, onOpenEntry}: {
   currentDate: Date;
   hoursMap: Record<string, number>;
   showWeekNumbers: boolean;
   language: 'en' | 'fi';
   onDayPress: (d: Date) => void;
+  onOpenEntry: (entry: Entry) => void;
 }) {
   const {t} = useTranslation();
   const {colors} = useTheme();
   const weekStyles = useMemo(() => makeWeekStyles(colors), [colors]);
   const days = getWeekDays(currentDate);
   const dateLocale = getDateFnsLocale(language);
+  const weekKey = localDateStr(days[0]);
+
+  const [upcoming, setUpcoming] = useState<Entry[]>([]);
+  useEffect(() => {
+    const dates = Array.from({length: 7}, (_, i) =>
+      localDateStr(addDaysToDate(new Date(`${weekKey}T12:00:00`), i)),
+    );
+    getUpcomingTodos(dates).then(setUpcoming).catch(() => {});
+  }, [weekKey]);
+
+  const upcomingGroups: {date: string; items: Entry[]}[] = [];
+  for (const e of upcoming) {
+    const key = e.scheduled_date ?? '';
+    const last = upcomingGroups[upcomingGroups.length - 1];
+    if (last && last.date === key) { last.items.push(e); }
+    else { upcomingGroups.push({date: key, items: [e]}); }
+  }
 
   return (
     <View style={weekStyles.container}>
@@ -549,6 +593,20 @@ function WeekView({currentDate, hoursMap, showWeekNumbers, language, onDayPress}
           );
         })}
       </View>
+
+      {upcoming.length > 0 && (
+        <View>
+          <Text style={weekStyles.comingUpHeader}>{t('todo.comingUp')}</Text>
+          {upcomingGroups.map(group => (
+            <View key={group.date}>
+              <Text style={weekStyles.comingUpDate}>{formatDate(group.date)}</Text>
+              {group.items.map(e => (
+                <EntryListItem key={e.id} entry={e} onPress={() => onOpenEntry(e)} />
+              ))}
+            </View>
+          ))}
+        </View>
+      )}
     </View>
   );
 }

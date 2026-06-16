@@ -39,3 +39,16 @@ export function durationBetween(
 export function nowIso(): string {
   return new Date().toISOString();
 }
+
+/**
+ * Dates considered "next day" for upcoming to-dos. On Fridays this is both
+ * Saturday and Monday (so weekend planning isn't lost); otherwise just tomorrow.
+ */
+export function nextDayDates(from: Date = new Date()): string[] {
+  const offsets = from.getDay() === 5 ? [1, 3] : [1];
+  return offsets.map(o => {
+    const d = new Date(from);
+    d.setDate(from.getDate() + o);
+    return format(d, 'yyyy-MM-dd');
+  });
+}

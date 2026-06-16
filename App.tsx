@@ -9,6 +9,7 @@ import {SafeAreaProvider} from 'react-native-safe-area-context';
 import {initDB} from './src/db/database';
 import {getAllSettings} from './src/db/settings';
 import {startTracking, stopTracking} from './src/services/gpsService';
+import {ensureNotificationChannel} from './src/services/notificationService';
 import {useSettingsStore} from './src/store/settingsStore';
 import {useTheme, lightColors, typography} from './src/theme';
 import RootNavigator from './src/navigation/RootNavigator';
@@ -26,6 +27,7 @@ function AppContent() {
       .then(() => {
         setDbReady(true);
         load();
+        ensureNotificationChannel().catch(() => {});
       })
       .catch(e => setError(String(e)));
   }, [load]);

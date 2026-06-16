@@ -9,6 +9,10 @@ export interface HourBreakdown {
 }
 
 function entrySeconds(entry: Entry): number {
+  // Unconfirmed to-dos don't count toward worked hours until completed.
+  if (entry.is_todo && !entry.completed_at) {
+    return 0;
+  }
   if (entry.duration_sec != null) {
     return entry.duration_sec;
   }
