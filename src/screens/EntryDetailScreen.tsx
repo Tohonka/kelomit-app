@@ -21,7 +21,7 @@ import TagChip from '../components/entries/TagChip';
 import AudioPlayer from '../components/media/AudioPlayer';
 import type {RootStackScreenProps} from '../navigation/navigationTypes';
 import type {Entry} from '../types';
-import {formatTime, formatDate, todayDate} from '../utils/dateUtils';
+import {formatTime, formatDate, todayDate, localDateOf} from '../utils/dateUtils';
 import {deleteMediaFile, fileUri} from '../utils/mediaUtils';
 import {scheduleTodoReminder, cancelTodoReminder} from '../services/notificationService';
 
@@ -276,7 +276,7 @@ export default function EntryDetailScreen({navigation, route}: Props) {
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>{translate('entries.created')}</Text>
             <Text style={styles.infoValue}>
-              {formatDate(entry.created_at.slice(0, 10))} {formatTime(entry.created_at)}
+              {formatDate(localDateOf(entry.created_at))} {formatTime(entry.created_at)}
             </Text>
           </View>
           {entry.time_from ? (

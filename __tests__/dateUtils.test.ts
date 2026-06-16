@@ -1,4 +1,18 @@
-import {formatDuration, durationBetween} from '../src/utils/dateUtils';
+import {formatDuration, durationBetween, parseTimestamp} from '../src/utils/dateUtils';
+
+describe('parseTimestamp', () => {
+  it('treats a SQLite datetime() string (no zone) as UTC', () => {
+    expect(parseTimestamp('2026-06-16 05:30:00').toISOString()).toBe(
+      '2026-06-16T05:30:00.000Z',
+    );
+  });
+
+  it('parses app-written ISO timestamps unchanged', () => {
+    expect(parseTimestamp('2026-06-16T05:30:00.000Z').toISOString()).toBe(
+      '2026-06-16T05:30:00.000Z',
+    );
+  });
+});
 
 describe('formatDuration', () => {
   it('formats minutes only', () => {
