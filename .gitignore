@@ -27,7 +27,8 @@ render.experimental.xml
 *.keystore
 
 # DS_Store files
-.DS_Store
+*.DS_Store
+**/.DS_Store
 
 # Google Services (e.g. APIs or Firebase)
 google-services.json
@@ -36,3 +37,6 @@ google-services.json
 *.hprof
 Kelomit-app-plan.txt
 node_modules
+.maps.env
+.code-workspace
+/plans_etc
