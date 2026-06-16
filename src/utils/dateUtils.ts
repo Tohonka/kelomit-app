@@ -40,6 +40,12 @@ export function nowIso(): string {
   return new Date().toISOString();
 }
 
+/** Shift a YYYY-MM-DD date string by N days (local time, no UTC drift). */
+export function shiftDate(dateStr: string, days: number): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return format(new Date(y, m - 1, d + days), 'yyyy-MM-dd');
+}
+
 /**
  * Dates considered "next day" for upcoming to-dos. On Fridays this is both
  * Saturday and Monday (so weekend planning isn't lost); otherwise just tomorrow.

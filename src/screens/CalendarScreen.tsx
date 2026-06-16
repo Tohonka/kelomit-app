@@ -221,6 +221,7 @@ export default function CalendarScreen({navigation}: Props) {
         .failOffsetY([-18, 18])
         .onEnd(e => {
           if (viewMode === 'range') { return; }
+          // Swipe left = next period, swipe right = previous period.
           if (e.translationX <= -50) { goForward(); }
           else if (e.translationX >= 50) { goBack(); }
         }),

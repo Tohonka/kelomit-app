@@ -134,4 +134,29 @@ export const migrations: Migration[] = [
       'ALTER TABLE entries ADD COLUMN reminder_at TEXT',
     ],
   },
+  {
+    version: 9,
+    up: [
+      `CREATE TABLE IF NOT EXISTS locations (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        name        TEXT NOT NULL,
+        kind        TEXT NOT NULL DEFAULT 'work'
+                      CHECK(kind IN ('work','home','other')),
+        latitude    REAL NOT NULL,
+        longitude   REAL NOT NULL,
+        radius_m    INTEGER NOT NULL DEFAULT 150,
+        created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+      )`,
+      `CREATE TABLE IF NOT EXISTS geofence_events (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        location_id INTEGER REFERENCES locations(id) ON DELETE SET NULL,
+        day_id      INTEGER REFERENCES days(id) ON DELETE CASCADE,
+        event_type  TEXT NOT NULL CHECK(event_type IN ('enter','exit')),
+        latitude    REAL,
+        longitude   REAL,
+        timestamp   TEXT NOT NULL
+      )`,
+    ],
+  },
 ];

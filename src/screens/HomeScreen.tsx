@@ -3,6 +3,7 @@ import {useTranslation} from 'react-i18next';
 import {View, Text, StyleSheet, ScrollView} from 'react-native';
 import {format} from 'date-fns';
 import {SafeAreaView} from 'react-native-safe-area-context';
+import {GestureDetector, Gesture} from 'react-native-gesture-handler';
 import {useDayStore} from '../store/dayStore';
 import {useEntryStore} from '../store/entryStore';
 import {useTheme, typography, spacing} from '../theme';
@@ -17,7 +18,7 @@ import {buildQuickAddActions} from '../components/entries/quickAddActions';
 import type {TabScreenProps} from '../navigation/navigationTypes';
 import type {Entry} from '../types';
 import {getUpcomingTodos} from '../db/entries';
-import {formatDate, todayDate, nextDayDates} from '../utils/dateUtils';
+import {formatDate, todayDate, nextDayDates, shiftDate} from '../utils/dateUtils';
 import {calcDayWorkSecs, formatHours} from '../utils/hoursUtils';
 
 type Props = TabScreenProps<'Home'>;
@@ -118,8 +119,25 @@ export default function HomeScreen({navigation}: Props) {
       )
     : undefined;
 
+  // Today is the end of the line: only swipe right → previous day's view.
+  const swipe = useMemo(
+    () =>
+      Gesture.Pan()
+        .runOnJS(true)
+        .activeOffsetX([-20, 20])
+        .failOffsetY([-18, 18])
+        .onEnd(e => {
+          if (e.translationX >= 50) {
+            navigation.navigate('DayScreen', {date: shiftDate(date, -1)});
+          }
+        }),
+    [navigation, date],
+  );
+
   return (
     <SafeAreaView style={styles.container}>
+      <GestureDetector gesture={swipe}>
+        <View style={styles.flex}>
       <View style={styles.header}>
         <View style={styles.headerRow}>
           <Text style={styles.headerDate}>{formatDate(date)}</Text>
@@ -172,6 +190,8 @@ export default function HomeScreen({navigation}: Props) {
           </View>
         )}
       </ScrollView>
+        </View>
+      </GestureDetector>
       <FAB onPress={openAddEntry} actions={quickActions} />
     </SafeAreaView>
   );

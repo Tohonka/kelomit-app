@@ -20,6 +20,7 @@ import {buildQuickAddActions} from '../components/entries/quickAddActions';
 import type {RootStackScreenProps} from '../navigation/navigationTypes';
 import type {Entry} from '../types';
 import {calcDayWorkSecs, formatHours} from '../utils/hoursUtils';
+import {shiftDate} from '../utils/dateUtils';
 
 type Props = RootStackScreenProps<'DayScreen'>;
 
@@ -35,12 +36,6 @@ const makeStyles = (c: Colors) =>
       marginRight: spacing.md,
     },
   });
-
-function shiftDate(dateStr: string, days: number): string {
-  const [y, m, d] = dateStr.split('-').map(Number);
-  const date = new Date(y, m - 1, d + days);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
 
 export default function DayScreen({navigation, route}: Props) {
   const {i18n} = useTranslation();
@@ -96,6 +91,7 @@ export default function DayScreen({navigation, route}: Props) {
         .activeOffsetX([-20, 20])
         .failOffsetY([-18, 18])
         .onEnd(e => {
+          // Swipe left = next day, swipe right = previous day.
           if (e.translationX <= -50) { goToDate(shiftDate(currentDate, 1)); }
           else if (e.translationX >= 50) { goToDate(shiftDate(currentDate, -1)); }
         }),

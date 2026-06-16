@@ -55,6 +55,29 @@ export interface Entry {
   project?: Project | null;
 }
 
+export type LocationKind = 'work' | 'home' | 'other';
+
+export interface SavedLocation {
+  id: number;
+  name: string;
+  kind: LocationKind;
+  latitude: number;
+  longitude: number;
+  radius_m: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GeofenceEvent {
+  id: number;
+  location_id: number | null;
+  day_id: number | null;
+  event_type: 'enter' | 'exit';
+  latitude: number | null;
+  longitude: number | null;
+  timestamp: string;
+}
+
 export interface GpsPoint {
   day_id: number;
   latitude: number;

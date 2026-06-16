@@ -1,6 +1,7 @@
 import React, {useMemo, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {View, Text, TouchableOpacity, StyleSheet} from 'react-native';
+import {GestureDetector, Gesture} from 'react-native-gesture-handler';
 import {BottomTabBar} from '@react-navigation/bottom-tabs';
 import type {BottomTabBarProps} from '@react-navigation/bottom-tabs';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -18,6 +19,7 @@ const makeStyles = (c: Colors) =>
   StyleSheet.create({
     wrap: {backgroundColor: c.bgCard},
     handleRow: {alignItems: 'center', paddingTop: 6},
+    grabber: {width: 36, height: 4, borderRadius: 2, backgroundColor: c.border, marginBottom: 3},
     handle: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -58,6 +60,22 @@ export default function CustomTabBar(props: BottomTabBarProps) {
     props.navigation.navigate(route);
   };
 
+  // Deliberate ~300ms hold + pull reveals the menu; a quick tap never opens it
+  // (so the bar isn't triggered by accident). Tapping while open collapses it.
+  const gesture = useMemo(() => {
+    const pull = Gesture.Pan()
+      .activateAfterLongPress(300)
+      .runOnJS(true)
+      .onUpdate(e => {
+        if (e.translationY <= -12) { setExpanded(true); }
+        else if (e.translationY >= 12) { setExpanded(false); }
+      });
+    const tap = Gesture.Tap()
+      .runOnJS(true)
+      .onEnd(() => { if (expanded) { setExpanded(false); } });
+    return Gesture.Race(tap, pull);
+  }, [expanded]);
+
   return (
     <View style={styles.wrap}>
       {expanded && (
@@ -71,16 +89,15 @@ export default function CustomTabBar(props: BottomTabBarProps) {
         </View>
       )}
 
-      <View style={styles.handleRow}>
-        <TouchableOpacity
-          style={styles.handle}
-          onPress={() => setExpanded(e => !e)}
-          hitSlop={{top: 8, bottom: 8, left: 24, right: 24}}
-          activeOpacity={0.7}>
-          <Icon name={expanded ? 'chevron-down' : 'chevron-up'} size={16} color={colors.textMuted} />
-          <Text style={styles.handleText}>{expanded ? t('fab.less') : t('fab.more')}</Text>
-        </TouchableOpacity>
-      </View>
+      <GestureDetector gesture={gesture}>
+        <View style={styles.handleRow}>
+          <View style={styles.grabber} />
+          <View style={styles.handle}>
+            <Icon name={expanded ? 'chevron-down' : 'chevron-up'} size={16} color={colors.textMuted} />
+            <Text style={styles.handleText}>{expanded ? t('fab.less') : t('fab.more')}</Text>
+          </View>
+        </View>
+      </GestureDetector>
 
       <View style={styles.divider} />
       <BottomTabBar {...props} />

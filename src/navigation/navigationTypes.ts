@@ -16,6 +16,7 @@ export type RootStackParamList = {
   TrackingSettings: undefined;
   DataSettings: undefined;
   QuickAddSettings: undefined;
+  LocationSettings: undefined;
 };
 
 export type TabParamList = {
