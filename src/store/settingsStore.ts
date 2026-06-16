@@ -4,10 +4,13 @@ import type {Settings, ActivityType} from '../types';
 import type {ThemeMode, TimeSelectorMode} from '../theme';
 import i18n, {resolveLanguageSetting, type Language} from '../i18n';
 
+export type NavVisibility = 'always' | 'home_only';
+
 interface SettingsState extends Settings {
   loaded: boolean;
   theme_mode: ThemeMode;
   show_week_numbers: boolean;
+  nav_visibility: NavVisibility;
   time_selector_mode: TimeSelectorMode;
   language: Language;
   quickadd_default_project_id: number | null;
@@ -20,6 +23,7 @@ interface SettingsState extends Settings {
   setDefaultProjectId: (id: number | null) => Promise<void>;
   setThemeMode: (mode: ThemeMode) => Promise<void>;
   setShowWeekNumbers: (show: boolean) => Promise<void>;
+  setNavVisibility: (mode: NavVisibility) => Promise<void>;
   setTimeSelectorMode: (mode: TimeSelectorMode) => Promise<void>;
   setLanguage: (language: Language) => Promise<void>;
   setQuickAddDefaultProjectId: (id: number | null) => Promise<void>;
@@ -36,6 +40,7 @@ export const useSettingsStore = create<SettingsState>(set => ({
   default_project_id: null,
   theme_mode: 'system',
   show_week_numbers: false,
+  nav_visibility: 'always',
   time_selector_mode: 'clock',
   language: 'en',
   quickadd_default_project_id: null,
@@ -51,6 +56,8 @@ export const useSettingsStore = create<SettingsState>(set => ({
         ? raw.theme_mode
         : 'system';
     const show_week_numbers = raw.show_week_numbers === 'true';
+    const nav_visibility: NavVisibility =
+      raw.nav_visibility === 'home_only' ? 'home_only' : 'always';
     const time_selector_mode: TimeSelectorMode =
       raw.time_selector_mode === 'keyboard' ? 'keyboard' : 'clock';
     const language = resolveLanguageSetting(raw.language);
@@ -68,6 +75,7 @@ export const useSettingsStore = create<SettingsState>(set => ({
       ...settings,
       theme_mode,
       show_week_numbers,
+      nav_visibility,
       time_selector_mode,
       language,
       quickadd_default_project_id,
@@ -105,6 +113,11 @@ export const useSettingsStore = create<SettingsState>(set => ({
   setShowWeekNumbers: async show => {
     await setSetting('show_week_numbers', String(show));
     set({show_week_numbers: show});
+  },
+
+  setNavVisibility: async mode => {
+    await setSetting('nav_visibility', mode);
+    set({nav_visibility: mode});
   },
 
   setTimeSelectorMode: async mode => {

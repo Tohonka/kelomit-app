@@ -6,6 +6,7 @@ import CustomTabBar from './CustomTabBar';
 import HomeScreen from '../screens/HomeScreen';
 import CalendarScreen from '../screens/CalendarScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import {useSettingsStore} from '../store/settingsStore';
 import {useTheme, typography} from '../theme';
 import type {TabParamList} from './navigationTypes';
 
@@ -14,9 +15,21 @@ const Tab = createBottomTabNavigator<TabParamList>();
 export default function MainTabs() {
   const {t} = useTranslation();
   const {colors} = useTheme();
+  const navVisibility = useSettingsStore(s => s.nav_visibility);
   return (
     <Tab.Navigator
-      tabBar={tabBarProps => <CustomTabBar {...tabBarProps} />}
+      tabBar={tabBarProps => {
+        // When "home only", hide the tab bar everywhere except Home. The
+        // Android hardware back button still returns to Home (firstRoute
+        // backBehavior), so non-Home tabs aren't a dead end.
+        if (navVisibility === 'home_only') {
+          const focused = tabBarProps.state.routes[tabBarProps.state.index].name;
+          if (focused !== 'Home') {
+            return null;
+          }
+        }
+        return <CustomTabBar {...tabBarProps} />;
+      }}
       screenOptions={({route}) => ({
         headerShown: false,
         tabBarStyle: {

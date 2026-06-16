@@ -3,6 +3,7 @@ import {useTranslation} from 'react-i18next';
 import {View, Text, ScrollView, TouchableOpacity} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useSettingsStore} from '../../store/settingsStore';
+import type {NavVisibility} from '../../store/settingsStore';
 import {useTheme} from '../../theme';
 import type {ThemeMode, TimeSelectorMode} from '../../theme';
 import type {Language} from '../../i18n';
@@ -12,6 +13,11 @@ const THEME_MODES: {mode: ThemeMode; labelKey: string}[] = [
   {mode: 'system', labelKey: 'settings.themeAuto'},
   {mode: 'light', labelKey: 'settings.themeLight'},
   {mode: 'dark', labelKey: 'settings.themeDark'},
+];
+
+const NAV_VISIBILITY_OPTIONS: {mode: NavVisibility; labelKey: string}[] = [
+  {mode: 'always', labelKey: 'settings.navVisibilityAlways'},
+  {mode: 'home_only', labelKey: 'settings.navVisibilityHomeOnly'},
 ];
 
 const TIME_MODES: {mode: TimeSelectorMode; labelKey: string}[] = [
@@ -32,6 +38,7 @@ export default function InterfaceSettings() {
     theme_mode, setThemeMode,
     language, setLanguage,
     show_week_numbers, setShowWeekNumbers,
+    nav_visibility, setNavVisibility,
     time_selector_mode, setTimeSelectorMode,
   } = useSettingsStore();
 
@@ -80,6 +87,25 @@ export default function InterfaceSettings() {
             </Text>
           </View>
         </TouchableOpacity>
+
+        <View style={styles.row}>
+          <View>
+            <Text style={styles.rowLabel}>{t('settings.navVisibility')}</Text>
+            <Text style={styles.rowSubLabel}>{t('settings.navVisibilityDescription')}</Text>
+          </View>
+          <View style={styles.segment}>
+            {NAV_VISIBILITY_OPTIONS.map(({mode, labelKey}) => (
+              <TouchableOpacity
+                key={mode}
+                style={[styles.segmentBtn, nav_visibility === mode && styles.segmentBtnActive]}
+                onPress={() => setNavVisibility(mode)}>
+                <Text style={[styles.segmentBtnText, nav_visibility === mode && styles.segmentBtnTextActive]}>
+                  {t(labelKey)}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
 
         <Text style={styles.sectionHeader}>{t('settings.timeEntry')}</Text>
 

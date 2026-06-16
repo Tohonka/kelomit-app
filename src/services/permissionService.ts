@@ -41,26 +41,8 @@ export async function ensureMicrophonePermission(): Promise<boolean> {
   );
 }
 
-export async function ensureMediaLibraryPermission(): Promise<boolean> {
-  if (Platform.OS === 'android') {
-    if (Platform.Version >= 33) {
-      // Android 13+: separate READ_MEDIA_* permissions
-      const imgOk = await ensurePermission(
-        PERMISSIONS.ANDROID.READ_MEDIA_IMAGES,
-      );
-      const vidOk = await ensurePermission(
-        PERMISSIONS.ANDROID.READ_MEDIA_VIDEO,
-      );
-      return imgOk && vidOk;
-    }
-    return ensurePermission(PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE);
-  }
-  return ensurePermission(PERMISSIONS.IOS.PHOTO_LIBRARY);
-}
-
-export async function ensureAudioLibraryPermission(): Promise<boolean> {
-  if (Platform.OS === 'android' && Platform.Version >= 33) {
-    return ensurePermission(PERMISSIONS.ANDROID.READ_MEDIA_AUDIO);
-  }
-  return true; // older Android or iOS handles this differently
-}
+// Gallery imports go through the Android system photo picker
+// (react-native-image-picker `launchImageLibrary`), which grants per-item
+// access and needs no READ_MEDIA_* / storage permission. Audio is only ever
+// recorded, never picked. So no media-library permission helper is required.
+// See Iteration 3 Phase 2.

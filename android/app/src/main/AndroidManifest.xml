@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.VIBRATE" />
@@ -7,13 +8,21 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
-    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+
+    <!-- Media-library / external-storage permissions intentionally trimmed
+         (Iteration 3 Phase 2): gallery imports use the Android system photo
+         picker (per-item access, no permission) and all app media is captured
+         to app-scoped storage.
+         READ_MEDIA_IMAGES/VIDEO/AUDIO are simply not declared.
+         READ/WRITE_EXTERNAL_STORAGE ARE injected by transitive deps
+         (react-native-audio-recorder-player + react-native-fs, uncapped), so
+         they must be force-removed from the merged manifest below. Re-add a
+         specific permission only if a feature genuinely needs shared storage,
+         with a comment explaining why. -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
-        android:maxSdkVersion="32" />
+        tools:node="remove" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="28" />
+        tools:node="remove" />
 
     <application
       android:name=".MainApplication"

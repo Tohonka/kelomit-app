@@ -1,6 +1,6 @@
-import React, {useMemo, useState} from 'react';
+import React, {useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import {View, Text, TouchableOpacity, StyleSheet} from 'react-native';
+import {Animated, View, Text, TouchableOpacity, StyleSheet} from 'react-native';
 import {GestureDetector, Gesture} from 'react-native-gesture-handler';
 import {BottomTabBar} from '@react-navigation/bottom-tabs';
 import type {BottomTabBarProps} from '@react-navigation/bottom-tabs';
@@ -18,7 +18,12 @@ const SECONDARY: {route: SecondaryRoute; labelKey: string; icon: string}[] = [
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
     wrap: {backgroundColor: c.bgCard},
-    handleRow: {alignItems: 'center', paddingTop: 6},
+    // Clips the panel so it reveals/hides as its height animates.
+    clip: {overflow: 'hidden'},
+    // Absolute so the panel measures its natural height regardless of the
+    // clip container's animated (sometimes 0) height.
+    panelMeasure: {position: 'absolute', left: 0, right: 0, top: 0},
+    handleRow: {alignItems: 'center', paddingTop: 6, paddingBottom: 4, minHeight: 44, justifyContent: 'center'},
     grabber: {width: 36, height: 4, borderRadius: 2, backgroundColor: c.border, marginBottom: 3},
     handle: {
       flexDirection: 'row',
@@ -54,43 +59,97 @@ export default function CustomTabBar(props: BottomTabBarProps) {
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [expanded, setExpanded] = useState(false);
+  const [panelH, setPanelH] = useState(0);
+
+  // 0 = closed, 1 = open. Drives the clip height. JS-driven because height
+  // can't use the native driver — fine for a single small panel.
+  const anim = useRef(new Animated.Value(0)).current;
+  const progressRef = useRef(0); // last known 0..1, readable synchronously
+  const startRef = useRef(0); // progress at gesture start
+  const panelHRef = useRef(0); // panel height, readable inside gesture closure
+
+  const settle = (to: number) => {
+    progressRef.current = to;
+    setExpanded(to === 1);
+    Animated.spring(anim, {toValue: to, useNativeDriver: false, bounciness: 0, speed: 18}).start();
+  };
 
   const go = (route: SecondaryRoute) => {
-    setExpanded(false);
+    settle(0);
     props.navigation.navigate(route);
   };
 
-  // Deliberate ~300ms hold + pull reveals the menu; a quick tap never opens it
-  // (so the bar isn't triggered by accident). Tapping while open collapses it.
+  // Tap = instant toggle. Pan = finger-following drag (notification-shade
+  // feel) that snaps open/closed on release by position or velocity. activeOffsetY
+  // means a still tap never starts a drag, so the two don't conflict.
   const gesture = useMemo(() => {
-    const pull = Gesture.Pan()
-      .activateAfterLongPress(300)
-      .runOnJS(true)
-      .onUpdate(e => {
-        if (e.translationY <= -12) { setExpanded(true); }
-        else if (e.translationY >= 12) { setExpanded(false); }
-      });
     const tap = Gesture.Tap()
       .runOnJS(true)
-      .onEnd(() => { if (expanded) { setExpanded(false); } });
-    return Gesture.Race(tap, pull);
-  }, [expanded]);
+      .onEnd(() => settle(progressRef.current > 0.5 ? 0 : 1));
+
+    const pan = Gesture.Pan()
+      .activeOffsetY([-10, 10])
+      .runOnJS(true)
+      .onBegin(() => {
+        startRef.current = progressRef.current;
+      })
+      .onUpdate(e => {
+        const h = panelHRef.current || 1;
+        let p = startRef.current - e.translationY / h; // drag up → open
+        p = Math.max(0, Math.min(1, p));
+        progressRef.current = p;
+        anim.setValue(p);
+      })
+      .onEnd(e => {
+        let open: boolean;
+        if (e.velocityY < -500) {
+          open = true; // fling up
+        } else if (e.velocityY > 500) {
+          open = false; // fling down
+        } else {
+          open = progressRef.current > 0.5; // snap to nearest
+        }
+        settle(open ? 1 : 0);
+      });
+
+    return Gesture.Race(tap, pan);
+    // refs keep this stable; no deps needed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const clipHeight = useMemo(
+    () => anim.interpolate({inputRange: [0, 1], outputRange: [0, Math.max(panelH, 1)]}),
+    [anim, panelH],
+  );
 
   return (
     <View style={styles.wrap}>
-      {expanded && (
-        <View style={styles.secondaryRow}>
-          {SECONDARY.map(s => (
-            <TouchableOpacity key={s.route} style={styles.secondaryBtn} onPress={() => go(s.route)} activeOpacity={0.7}>
-              <Icon name={s.icon} size={20} color={colors.primary} />
-              <Text style={styles.secondaryText}>{t(s.labelKey)}</Text>
-            </TouchableOpacity>
-          ))}
+      <Animated.View style={[styles.clip, {height: clipHeight, opacity: anim}]}>
+        <View
+          style={styles.panelMeasure}
+          onLayout={e => {
+            const h = e.nativeEvent.layout.height;
+            if (h > 0 && h !== panelHRef.current) {
+              panelHRef.current = h;
+              setPanelH(h);
+            }
+          }}>
+          <View style={styles.secondaryRow}>
+            {SECONDARY.map(s => (
+              <TouchableOpacity key={s.route} style={styles.secondaryBtn} onPress={() => go(s.route)} activeOpacity={0.7}>
+                <Icon name={s.icon} size={20} color={colors.primary} />
+                <Text style={styles.secondaryText}>{t(s.labelKey)}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
-      )}
+      </Animated.View>
 
       <GestureDetector gesture={gesture}>
-        <View style={styles.handleRow}>
+        <View
+          style={styles.handleRow}
+          accessibilityRole="button"
+          accessibilityLabel={expanded ? t('fab.less') : t('fab.more')}>
           <View style={styles.grabber} />
           <View style={styles.handle}>
             <Icon name={expanded ? 'chevron-down' : 'chevron-up'} size={16} color={colors.textMuted} />

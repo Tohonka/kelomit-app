@@ -5,7 +5,7 @@ import {launchCamera, launchImageLibrary} from 'react-native-image-picker';
 import RNFS from 'react-native-fs';
 import {useTheme, typography, spacing, radius} from '../../theme';
 import type {Colors} from '../../theme';
-import {ensureCameraPermission, ensureMediaLibraryPermission} from '../../services/permissionService';
+import {ensureCameraPermission} from '../../services/permissionService';
 import {makeMediaPath, fileUri} from '../../utils/mediaUtils';
 
 interface Props {
@@ -60,8 +60,8 @@ export default function PhotoCapture({filePath, onCapture}: Props) {
   };
 
   const handleGallery = async () => {
-    const ok = await ensureMediaLibraryPermission();
-    if (!ok) { return; }
+    // Uses the Android system photo picker (per-item access) — no media
+    // permission needed. See Iteration 3 Phase 2.
     const result = await launchImageLibrary({mediaType: 'photo', quality: 0.8});
     if (result.assets?.[0]?.uri) { await savePhoto(result.assets[0].uri); }
   };
