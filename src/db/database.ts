@@ -22,6 +22,14 @@ export async function ensureDBReady(): Promise<void> {
   }
 }
 
+/** Close the DB connection (used by restore before swapping the file). */
+export function closeDB(): void {
+  if (_db) {
+    _db.close();
+    _db = null;
+  }
+}
+
 export async function initDB(): Promise<void> {
   _db = open({name: 'kelomit.db'});
 

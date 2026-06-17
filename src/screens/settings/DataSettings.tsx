@@ -13,6 +13,7 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import {subDays, format} from 'date-fns';
 import {exportToCsv} from '../../utils/exportUtils';
+import {exportBackup, importBackup} from '../../services/backupService';
 import {useTheme, typography, spacing, radius} from '../../theme';
 import {getDateFnsLocale} from '../../i18n';
 import {useSettingsStore} from '../../store/settingsStore';
@@ -82,6 +83,41 @@ export default function DataSettings({navigation}: Props) {
   const [exportTo, setExportTo] = useState<Date>(new Date());
   const [exportState, setExportState] = useState<ExportState>('hidden');
   const [exporting, setExporting] = useState(false);
+  const [backupBusy, setBackupBusy] = useState(false);
+
+  const handleBackup = async () => {
+    setBackupBusy(true);
+    try {
+      await exportBackup();
+    } catch (e) {
+      Alert.alert(t('settings.backupFailed'), String(e));
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+
+  const handleRestore = () => {
+    Alert.alert(t('settings.restoreConfirmTitle'), t('settings.restoreConfirmMessage'), [
+      {text: t('common.cancel'), style: 'cancel'},
+      {
+        text: t('settings.restoreConfirmCta'),
+        style: 'destructive',
+        onPress: async () => {
+          setBackupBusy(true);
+          try {
+            const result = await importBackup();
+            if (result === 'done') {
+              Alert.alert(t('settings.restoreDoneTitle'), t('settings.restoreDoneMessage'));
+            }
+          } catch (e) {
+            Alert.alert(t('settings.restoreFailed'), String(e));
+          } finally {
+            setBackupBusy(false);
+          }
+        },
+      },
+    ]);
+  };
 
   const handleExport = async () => {
     setExporting(true);
@@ -164,6 +200,24 @@ export default function DataSettings({navigation}: Props) {
             }}
           />
         )}
+
+        <Text style={styles.sectionHeader}>{t('settings.backupSection')}</Text>
+
+        <TouchableOpacity style={styles.row} onPress={handleBackup} disabled={backupBusy}>
+          <View style={styles.rowTextWrap}>
+            <Text style={styles.rowLabel}>{t('settings.backup')}</Text>
+            <Text style={styles.rowSubLabel}>{t('settings.backupSubtitle')}</Text>
+          </View>
+          <Text style={styles.rowCaret}>{backupBusy ? '…' : '›'}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.row} onPress={handleRestore} disabled={backupBusy}>
+          <View style={styles.rowTextWrap}>
+            <Text style={styles.rowLabel}>{t('settings.restore')}</Text>
+            <Text style={styles.rowSubLabel}>{t('settings.restoreSubtitle')}</Text>
+          </View>
+          <Text style={styles.rowCaret}>›</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
