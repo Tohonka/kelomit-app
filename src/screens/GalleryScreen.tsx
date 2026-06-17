@@ -17,7 +17,10 @@ import {getMediaEntries, type MediaItem} from '../db/entries';
 import {periodKey, periodLabel, type PeriodMode} from '../utils/dateUtils';
 import {fileUri} from '../utils/mediaUtils';
 import GalleryDetailModal from '../components/media/GalleryDetailModal';
+import GalleryMap from '../components/map/GalleryMap';
 import type {Entry} from '../types';
+
+type ViewMode = 'grid' | 'map';
 
 const COLS = 3;
 const GAP = 2;
@@ -27,6 +30,11 @@ const MODES: {mode: PeriodMode; labelKey: string}[] = [
   {mode: 'day', labelKey: 'gallery.groupDay'},
   {mode: 'week', labelKey: 'gallery.groupWeek'},
   {mode: 'month', labelKey: 'gallery.groupMonth'},
+];
+
+const VIEW_MODES: {mode: ViewMode; labelKey: string}[] = [
+  {mode: 'grid', labelKey: 'gallery.viewGrid'},
+  {mode: 'map', labelKey: 'gallery.viewMap'},
 ];
 
 const makeStyles = (c: Colors) =>
@@ -39,6 +47,7 @@ const makeStyles = (c: Colors) =>
       padding: 3,
       margin: spacing.md,
     },
+    segmentTight: {marginTop: 0},
     segBtn: {flex: 1, paddingVertical: spacing.xs, borderRadius: 999, alignItems: 'center'},
     segBtnActive: {backgroundColor: c.bgCard},
     segText: {fontSize: typography.sizes.sm, color: c.textMuted, fontWeight: typography.weights.medium},
@@ -107,6 +116,7 @@ export default function GalleryScreen() {
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [mode, setMode] = useState<PeriodMode>('day');
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [items, setItems] = useState<MediaItem[]>([]);
   const [selected, setSelected] = useState<Entry | null>(null);
 
@@ -133,17 +143,32 @@ export default function GalleryScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <View style={styles.segment}>
-        {MODES.map(({mode: m, labelKey}) => (
+        {VIEW_MODES.map(({mode: vm, labelKey}) => (
           <TouchableOpacity
-            key={m}
-            style={[styles.segBtn, mode === m && styles.segBtnActive]}
-            onPress={() => setMode(m)}>
-            <Text style={[styles.segText, mode === m && styles.segTextActive]}>{t(labelKey)}</Text>
+            key={vm}
+            style={[styles.segBtn, viewMode === vm && styles.segBtnActive]}
+            onPress={() => setViewMode(vm)}>
+            <Text style={[styles.segText, viewMode === vm && styles.segTextActive]}>{t(labelKey)}</Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      {items.length === 0 ? (
+      {viewMode === 'grid' && (
+        <View style={[styles.segment, styles.segmentTight]}>
+          {MODES.map(({mode: m, labelKey}) => (
+            <TouchableOpacity
+              key={m}
+              style={[styles.segBtn, mode === m && styles.segBtnActive]}
+              onPress={() => setMode(m)}>
+              <Text style={[styles.segText, mode === m && styles.segTextActive]}>{t(labelKey)}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
+      {viewMode === 'map' ? (
+        <GalleryMap items={items} onSelect={setSelected} />
+      ) : items.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyIcon}>📷</Text>
           <Text style={styles.emptyText}>{t('gallery.empty')}</Text>

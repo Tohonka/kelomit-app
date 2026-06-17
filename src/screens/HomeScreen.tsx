@@ -13,6 +13,7 @@ import EntryList from '../components/entries/EntryList';
 import EntryListItem from '../components/entries/EntryListItem';
 import DaySummaryCard from '../components/day/DaySummaryCard';
 import DaySplitBar from '../components/day/DaySplitBar';
+import DayEndConfirmBanner from '../components/day/DayEndConfirmBanner';
 import FAB from '../components/ui/FAB';
 import {buildQuickAddActions} from '../components/entries/quickAddActions';
 import type {TabScreenProps} from '../navigation/navigationTypes';
@@ -152,6 +153,7 @@ export default function HomeScreen({navigation}: Props) {
         </Text>
       </View>
       <ScrollView style={styles.flex} contentContainerStyle={styles.scrollContent}>
+        <DayEndConfirmBanner />
         {today && (
           <DaySummaryCard
             day={today}

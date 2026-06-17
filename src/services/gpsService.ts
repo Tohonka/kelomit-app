@@ -1,10 +1,14 @@
-import Geolocation from 'react-native-geolocation-service';
+import Geolocation, {type GeolocationResponse} from '@react-native-community/geolocation';
 import {Platform} from 'react-native';
 import {check, request, PERMISSIONS, RESULTS} from 'react-native-permissions';
 import {isOutlier, distanceMeters} from './locationUtils';
 import {insertGpsPoint} from '../db/gps';
 import {getOrCreateDay, updateDay} from '../db/days';
 import {getLocations, insertGeofenceEvent} from '../db/locations';
+import {evaluateEndOfDay, initialEodState, type EodEvent, type EodState} from './endOfDay';
+import {createDayEndConfirmation} from '../db/dayConfirmations';
+import {displayDayEndConfirmation} from './notificationService';
+import {useSettingsStore} from '../store/settingsStore';
 import {format} from 'date-fns';
 import type {SavedLocation, Day} from '../types';
 
@@ -17,10 +21,57 @@ export interface KnownPosition {
 
 let _lastPosition: KnownPosition | null = null;
 let _watchId: number | null = null;
+let _configured = false;
+
+/** Configure the geolocation module once. We handle runtime permissions
+ *  ourselves via react-native-permissions, so skip the library's own prompt.
+ *  `locationProvider: 'auto'` uses the fused Play Services provider when
+ *  available (matching the previous behaviour). */
+function ensureConfigured(): void {
+  if (_configured) {
+    return;
+  }
+  Geolocation.setRNConfiguration({skipPermissionRequests: true, locationProvider: 'auto'});
+  _configured = true;
+}
 
 // Geofencing state
 let _geofences: SavedLocation[] = [];
 const _insideIds = new Set<number>();
+
+// End-of-day inference state (reset per day). See endOfDay.ts.
+let _eod: EodState = initialEodState();
+let _eodDay: string | null = null;
+
+/** Feed a geofence event to the end-of-day reducer and apply its decision.
+ *  Auto-fills the day's end only when empty (never overwrites a user value). */
+async function applyEndOfDay(event: EodEvent, iso: string, day: Day): Promise<void> {
+  const usualEnd = useSettingsStore.getState().usual_end;
+  const {state, action} = evaluateEndOfDay(_eod, {
+    event,
+    now: iso,
+    dayDate: day.date,
+    usualEnd,
+    endedAtSet: !!day.ended_at,
+    dayStarted: !!day.started_at,
+  });
+  _eod = state;
+  if (action.type === 'commit' && !day.ended_at) {
+    await updateDay(day.id, {ended_at: action.time});
+    day.ended_at = action.time;
+    // When the inferred end is > 1 h off the usual time, ask the user to
+    // confirm — log a pending row + post a Yes/No notification. The in-app
+    // banner mirrors the same row for when the notification is missed.
+    if (action.confirm) {
+      try {
+        const confirmationId = await createDayEndConfirmation(day.id, action.time);
+        await displayDayEndConfirmation(day.id, action.time, confirmationId);
+      } catch {
+        // Confirmation is best-effort; never break tracking over it.
+      }
+    }
+  }
+}
 
 export function getLastKnownPosition(): KnownPosition | null {
   return _lastPosition;
@@ -57,6 +108,7 @@ export async function getCurrentPositionOnce(): Promise<KnownPosition | null> {
   if (!ok) {
     return null;
   }
+  ensureConfigured();
   return new Promise(resolve => {
     Geolocation.getCurrentPosition(
       pos => resolve({
@@ -79,6 +131,7 @@ export async function startTracking(intervalMs = 60_000): Promise<void> {
   if (!ok) {
     return;
   }
+  ensureConfigured();
   await refreshGeofences();
   _watchId = Geolocation.watchPosition(
     pos => {
@@ -104,7 +157,7 @@ export function stopTracking(): void {
 }
 
 async function handlePosition(
-  pos: Geolocation.GeoPosition,
+  pos: GeolocationResponse,
 ): Promise<void> {
   const {latitude, longitude, accuracy} = pos.coords;
   const now = pos.timestamp;
@@ -153,6 +206,12 @@ async function processGeofences(
   day: Day,
   iso: string,
 ): Promise<void> {
+  // Reset end-of-day state when the day rolls over.
+  if (_eodDay !== day.date) {
+    _eod = initialEodState();
+    _eodDay = day.date;
+  }
+
   for (const loc of _geofences) {
     const dist = distanceMeters(lat, lon, loc.latitude, loc.longitude);
     const wasInside = _insideIds.has(loc.id);
@@ -176,9 +235,15 @@ async function processGeofences(
         longitude: lon,
         timestamp: iso,
       });
-      if (loc.kind === 'work' && !day.started_at) {
-        await updateDay(day.id, {started_at: iso});
-        day.started_at = iso;
+      if (loc.kind === 'work') {
+        // Arrival at work still auto-fills the day start (only when empty).
+        if (!day.started_at) {
+          await updateDay(day.id, {started_at: iso});
+          day.started_at = iso;
+        }
+        await applyEndOfDay('work_enter', iso, day);
+      } else if (loc.kind === 'home') {
+        await applyEndOfDay('home_enter', iso, day);
       }
     } else {
       _insideIds.delete(loc.id);
@@ -190,10 +255,14 @@ async function processGeofences(
         longitude: lon,
         timestamp: iso,
       });
-      if (loc.kind === 'work' && !day.ended_at) {
-        await updateDay(day.id, {ended_at: iso});
-        day.ended_at = iso;
+      if (loc.kind === 'work') {
+        // End-of-day is now inferred (usual-time / 1 h / home rules), not
+        // stamped blindly on every work exit. See endOfDay.ts.
+        await applyEndOfDay('work_exit', iso, day);
       }
     }
   }
+
+  // Resolve the "still away > 1 h" rule on every fix (timestamp-driven, no timer).
+  await applyEndOfDay('tick', iso, day);
 }

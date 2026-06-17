@@ -81,7 +81,7 @@ export default function SettingsScreen({navigation}: Props) {
         <Text style={styles.sectionHeader}>{t('settings.app')}</Text>
         <View style={styles.row}>
           <Text style={styles.rowTitle}>{t('common.version')}</Text>
-          <Text style={styles.rowValue}>0.2.5</Text>
+          <Text style={styles.rowValue}>0.3.82</Text>
         </View>
       </ScrollView>
     </SafeAreaView>

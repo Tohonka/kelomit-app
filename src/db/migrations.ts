@@ -159,4 +159,20 @@ export const migrations: Migration[] = [
       )`,
     ],
   },
+  {
+    version: 10,
+    up: [
+      // End-of-day confirmation log (Iteration 3 Phase 8.2). `confirmed` is NULL
+      // until the user answers the Yes/No prompt, then 1 (kept) or 0 (cleared).
+      `CREATE TABLE IF NOT EXISTS day_end_confirmations (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        day_id        INTEGER NOT NULL REFERENCES days(id) ON DELETE CASCADE,
+        proposed_end  TEXT NOT NULL,
+        confirmed     INTEGER,
+        responded_at  TEXT,
+        created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+      )`,
+    ],
+  },
 ];

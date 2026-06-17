@@ -78,6 +78,17 @@ export interface GeofenceEvent {
   timestamp: string;
 }
 
+export interface DayEndConfirmation {
+  id: number;
+  day_id: number;
+  proposed_end: string;
+  /** null = unanswered, 1 = kept (yes), 0 = cleared (no). */
+  confirmed: number | null;
+  responded_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface GpsPoint {
   day_id: number;
   latitude: number;

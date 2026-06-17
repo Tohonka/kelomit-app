@@ -14,6 +14,14 @@ export function getDB() {
   return _db;
 }
 
+/** Ensure the DB is open + migrated. Safe to call from a headless context
+ *  (e.g. a notifee background event after the app was killed). */
+export async function ensureDBReady(): Promise<void> {
+  if (!_db) {
+    await initDB();
+  }
+}
+
 export async function initDB(): Promise<void> {
   _db = open({name: 'kelomit.db'});
 

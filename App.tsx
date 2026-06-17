@@ -9,10 +9,15 @@ import {SafeAreaProvider} from 'react-native-safe-area-context';
 import {initDB} from './src/db/database';
 import {getAllSettings} from './src/db/settings';
 import {startTracking, stopTracking} from './src/services/gpsService';
-import {ensureNotificationChannel} from './src/services/notificationService';
+import {ensureNotificationChannel, registerForegroundNotifeeHandler} from './src/services/notificationService';
 import {useSettingsStore} from './src/store/settingsStore';
 import {useTheme, lightColors, typography} from './src/theme';
 import RootNavigator from './src/navigation/RootNavigator';
+
+// Defer GPS startup off the critical launch path so location init doesn't
+// compete with the first render / DB warm-up. Foreground-resume start stays
+// immediate (the app is already warm by then).
+const GPS_START_DELAY_MS = 3000;
 
 function AppContent() {
   const {colors, isDark} = useTheme();
@@ -32,6 +37,9 @@ function AppContent() {
       .catch(e => setError(String(e)));
   }, [load]);
 
+  // Handle day-end Yes/No notification actions while the app is in the foreground.
+  useEffect(() => registerForegroundNotifeeHandler(), []);
+
   useEffect(() => {
     if (!dbReady || !loaded) {
       return;
@@ -44,7 +52,8 @@ function AppContent() {
       }
     };
 
-    startGpsIfEnabled();
+    // Initial start is delayed; resume-from-background (below) starts immediately.
+    const startTimer = setTimeout(startGpsIfEnabled, GPS_START_DELAY_MS);
 
     const sub = AppState.addEventListener('change', (nextState: AppStateStatus) => {
       if (
@@ -62,6 +71,7 @@ function AppContent() {
     });
 
     return () => {
+      clearTimeout(startTimer);
       sub.remove();
       stopTracking();
     };
