@@ -30,6 +30,7 @@ export const makeSettingsStyles = (c: Colors) =>
     },
     rowLabel: {fontSize: typography.sizes.base, color: c.textPrimary},
     rowSubLabel: {fontSize: typography.sizes.xs, color: c.textMuted, marginTop: 2},
+    rowTextWrap: {flex: 1, paddingRight: spacing.md},
     rowValue: {fontSize: typography.sizes.base, color: c.textMuted},
     rowCaret: {fontSize: typography.sizes.lg, color: c.textMuted},
     toggle: {

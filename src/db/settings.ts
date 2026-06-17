@@ -43,5 +43,8 @@ export async function getAllSettings(): Promise<Settings> {
     default_project_id: map.default_project_id
       ? parseInt(map.default_project_id, 10)
       : null,
+    usual_start: map.usual_start || null,
+    usual_end: map.usual_end || null,
+    prefill_from_usual: map.prefill_from_usual === 'true',
   };
 }

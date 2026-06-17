@@ -3,6 +3,8 @@ import {
   getLocations,
   createLocation,
   deleteLocation,
+  updateLocationRadius,
+  clampRadius,
   type CreateLocationParams,
 } from '../db/locations';
 import {refreshGeofences} from '../services/gpsService';
@@ -14,6 +16,7 @@ interface LocationState {
   load: () => Promise<void>;
   add: (params: CreateLocationParams) => Promise<SavedLocation>;
   remove: (id: number) => Promise<void>;
+  setRadius: (id: number, radiusM: number) => Promise<void>;
 }
 
 export const useLocationStore = create<LocationState>(set => ({
@@ -35,6 +38,17 @@ export const useLocationStore = create<LocationState>(set => ({
   remove: async id => {
     await deleteLocation(id);
     set(state => ({locations: state.locations.filter(l => l.id !== id)}));
+    await refreshGeofences();
+  },
+
+  setRadius: async (id, radiusM) => {
+    const clamped = clampRadius(radiusM);
+    await updateLocationRadius(id, clamped);
+    set(state => ({
+      locations: state.locations.map(l =>
+        l.id === id ? {...l, radius_m: clamped} : l,
+      ),
+    }));
     await refreshGeofences();
   },
 }));

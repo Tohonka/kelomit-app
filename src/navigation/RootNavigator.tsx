@@ -9,6 +9,7 @@ import QuickAddModal from '../screens/QuickAddModal';
 import ProjectsScreen from '../screens/ProjectsScreen';
 import SearchScreen from '../screens/SearchScreen';
 import InsightsScreen from '../screens/InsightsScreen';
+import GalleryScreen from '../screens/GalleryScreen';
 import InterfaceSettings from '../screens/settings/InterfaceSettings';
 import TrackingSettings from '../screens/settings/TrackingSettings';
 import DataSettings from '../screens/settings/DataSettings';
@@ -77,6 +78,11 @@ export default function RootNavigator() {
         name="InsightsScreen"
         component={InsightsScreen}
         options={{title: t('navigation.insights')}}
+      />
+      <Stack.Screen
+        name="GalleryScreen"
+        component={GalleryScreen}
+        options={{title: t('navigation.gallery')}}
       />
       <Stack.Screen
         name="InterfaceSettings"

@@ -1,4 +1,12 @@
-import {format, parseISO, differenceInSeconds, isToday, isYesterday} from 'date-fns';
+import {
+  format,
+  parseISO,
+  differenceInSeconds,
+  isToday,
+  isYesterday,
+  getISOWeek,
+  getISOWeekYear,
+} from 'date-fns';
 import i18n, {getDateFnsLocale} from '../i18n';
 
 export function todayDate(): string {
@@ -56,6 +64,55 @@ export function durationBetween(
 
 export function nowIso(): string {
   return new Date().toISOString();
+}
+
+// ─── Period grouping (Gallery day/week/month buckets) ───────────────────────
+
+export type PeriodMode = 'day' | 'week' | 'month';
+
+function localDateFromStr(dateStr: string): Date {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+/** Stable bucket key for a YYYY-MM-DD date under the given grouping. ISO weeks
+ *  are Monday-based (matches the calendar). */
+export function periodKey(dateStr: string, mode: PeriodMode): string {
+  if (mode === 'day') {
+    return dateStr;
+  }
+  const d = localDateFromStr(dateStr);
+  if (mode === 'month') {
+    return format(d, 'yyyy-MM');
+  }
+  return `${getISOWeekYear(d)}-W${String(getISOWeek(d)).padStart(2, '0')}`;
+}
+
+/** Human label for a period bucket (localized). */
+export function periodLabel(dateStr: string, mode: PeriodMode): string {
+  if (mode === 'day') {
+    return formatDate(dateStr);
+  }
+  const d = localDateFromStr(dateStr);
+  const locale = getDateFnsLocale(i18n.resolvedLanguage === 'fi' ? 'fi' : 'en');
+  if (mode === 'month') {
+    return format(d, 'LLLL yyyy', {locale});
+  }
+  // Week: Monday–Sunday range.
+  const mondayIdx = (d.getDay() + 6) % 7;
+  const start = new Date(d);
+  start.setDate(d.getDate() - mondayIdx);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  return `${format(start, 'MMM d', {locale})} – ${format(end, 'MMM d', {locale})}`;
+}
+
+/** Combine a local day (YYYY-MM-DD) with a wall-clock "HH:mm" into an ISO
+ *  instant (UTC). Used to place "usual hours" onto a specific day. */
+export function hhmmToIsoOn(dateStr: string, hhmm: string): string {
+  const [y, mo, d] = dateStr.split('-').map(Number);
+  const [h, mi] = hhmm.split(':').map(Number);
+  return new Date(y, mo - 1, d, h, mi, 0, 0).toISOString();
 }
 
 /** Shift a YYYY-MM-DD date string by N days (local time, no UTC drift). */

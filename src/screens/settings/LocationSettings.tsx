@@ -3,7 +3,10 @@ import {View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert} from 'react
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useTranslation} from 'react-i18next';
 import {useLocationStore} from '../../store/locationStore';
+import {MIN_RADIUS_M} from '../../db/locations';
 import {getCurrentPositionOnce} from '../../services/gpsService';
+
+const RADIUS_STEP_M = 25;
 import {useTheme, typography, spacing, radius} from '../../theme';
 import type {Colors} from '../../theme';
 import type {LocationKind} from '../../types';
@@ -19,19 +22,35 @@ const makeLocalStyles = (c: Colors) =>
       paddingTop: spacing.sm,
       paddingBottom: spacing.md,
     },
-    locRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
+    locItem: {
       paddingHorizontal: spacing.lg,
       paddingVertical: spacing.md,
       backgroundColor: c.bgCard,
       borderBottomWidth: 1,
       borderBottomColor: c.border,
     },
+    locTopRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
     locName: {fontSize: typography.sizes.base, color: c.textPrimary, fontWeight: typography.weights.medium},
     locMeta: {fontSize: typography.sizes.xs, color: c.textMuted, marginTop: 2},
     deleteText: {color: c.error, fontSize: typography.sizes.sm, fontWeight: typography.weights.semibold},
+    radiusRow: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm},
+    stepBtn: {
+      width: 40,
+      height: 40,
+      borderRadius: radius.md,
+      borderWidth: 1.5,
+      borderColor: c.border,
+      backgroundColor: c.bgMuted,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    stepBtnDisabled: {opacity: 0.4},
+    stepBtnText: {fontSize: 22, lineHeight: 26, color: c.textPrimary, fontWeight: typography.weights.semibold},
+    radiusValue: {fontSize: typography.sizes.sm, color: c.textSecondary, minWidth: 88, textAlign: 'center'},
     addRow: {flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingTop: spacing.md},
     addBtn: {
       flex: 1,
@@ -52,7 +71,7 @@ export default function LocationSettings() {
   const {colors} = useTheme();
   const styles = useMemo(() => makeSettingsStyles(colors), [colors]);
   const local = useMemo(() => makeLocalStyles(colors), [colors]);
-  const {locations, loaded, load, add, remove} = useLocationStore();
+  const {locations, loaded, load, add, remove, setRadius} = useLocationStore();
   const [saving, setSaving] = useState(false);
 
   useEffect(() => { if (!loaded) { load(); } }, [loaded, load]);
@@ -91,21 +110,45 @@ export default function LocationSettings() {
         {locations.length === 0 ? (
           <Text style={local.empty}>{t('location.noLocations')}</Text>
         ) : (
-          locations.map(loc => (
-            <View key={loc.id} style={local.locRow}>
-              <View>
-                <Text style={local.locName}>
-                  {loc.name} · {loc.kind === 'work' ? t('location.work') : loc.kind === 'home' ? t('location.home') : loc.kind}
-                </Text>
+          locations.map(loc => {
+            const atFloor = loc.radius_m <= MIN_RADIUS_M;
+            return (
+              <View key={loc.id} style={local.locItem}>
+                <View style={local.locTopRow}>
+                  <Text style={local.locName}>
+                    {loc.name} · {loc.kind === 'work' ? t('location.work') : loc.kind === 'home' ? t('location.home') : loc.kind}
+                  </Text>
+                  <TouchableOpacity onPress={() => confirmDelete(loc.id, loc.name)}>
+                    <Text style={local.deleteText}>{t('common.delete')}</Text>
+                  </TouchableOpacity>
+                </View>
                 <Text style={local.locMeta}>
-                  {loc.latitude.toFixed(4)}, {loc.longitude.toFixed(4)} · {t('location.radius', {m: loc.radius_m})}
+                  {loc.latitude.toFixed(4)}, {loc.longitude.toFixed(4)}
                 </Text>
+                <View style={local.radiusRow}>
+                  <TouchableOpacity
+                    style={[local.stepBtn, atFloor && local.stepBtnDisabled]}
+                    disabled={atFloor}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('location.decreaseRadius')}
+                    onPress={() => setRadius(loc.id, loc.radius_m - RADIUS_STEP_M)}>
+                    <Text style={local.stepBtnText}>−</Text>
+                  </TouchableOpacity>
+                  <Text style={local.radiusValue}>{t('location.radius', {m: loc.radius_m})}</Text>
+                  <TouchableOpacity
+                    style={local.stepBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('location.increaseRadius')}
+                    onPress={() => setRadius(loc.id, loc.radius_m + RADIUS_STEP_M)}>
+                    <Text style={local.stepBtnText}>+</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
-              <TouchableOpacity onPress={() => confirmDelete(loc.id, loc.name)}>
-                <Text style={local.deleteText}>{t('common.delete')}</Text>
-              </TouchableOpacity>
-            </View>
-          ))
+            );
+          })
+        )}
+        {locations.length > 0 && (
+          <Text style={local.hint}>{t('location.radiusFloorHint')}</Text>
         )}
 
         <Text style={styles.sectionHeader}>{t('location.addCurrent')}</Text>

@@ -6,7 +6,7 @@ import type {Colors} from '../../theme';
 import Card from '../ui/Card';
 import TimePicker from '../ui/TimePicker';
 import HourBreakdown from './HourBreakdown';
-import {calcHourBreakdown, segmentWorkSecs, formatHours} from '../../utils/hoursUtils';
+import {calcHourBreakdown, calcDayWorkBreakdown, segmentWorkSecs, formatHours} from '../../utils/hoursUtils';
 import type {Entry, Day} from '../../types';
 
 interface Props {
@@ -72,6 +72,26 @@ const makeStyles = (c: Colors) =>
       height: 1,
       backgroundColor: c.border,
     },
+    workedRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    workedLabel: {
+      fontSize: typography.sizes.sm,
+      fontWeight: typography.weights.semibold,
+      color: c.textSecondary,
+    },
+    workedValue: {
+      fontSize: typography.sizes.md,
+      fontWeight: typography.weights.bold,
+      color: c.badgeWork,
+    },
+    adjLine: {
+      fontSize: typography.sizes.xs,
+      color: c.textMuted,
+      marginTop: -spacing.xs,
+    },
   });
 
 export default function DaySummaryCard({day, entries, onUpdateTimes}: Props) {
@@ -83,6 +103,15 @@ export default function DaySummaryCard({day, entries, onUpdateTimes}: Props) {
   );
 
   const breakdown = calcHourBreakdown(entries);
+  const dayWork = calcDayWorkBreakdown(day, entries);
+  const adjustments: string[] = [];
+  if (dayWork.addedWorkSeconds > 0) {
+    adjustments.push(`+${formatHours(dayWork.addedWorkSeconds)} ${t('time.adjAfterHours')}`);
+  }
+  if (dayWork.deductedPersonalSeconds > 0) {
+    adjustments.push(`−${formatHours(dayWork.deductedPersonalSeconds)} ${t('time.adjPersonal')}`);
+  }
+  const showWorkedTotal = dayWork.hasDayLegs && adjustments.length > 0;
 
   const seg1Secs = segmentWorkSecs(day.started_at, day.ended_at);
   const seg2Secs = segmentWorkSecs(day.started_at_2, day.ended_at_2);
@@ -153,6 +182,17 @@ export default function DaySummaryCard({day, entries, onUpdateTimes}: Props) {
             <Text style={styles.removeBtnText}>×</Text>
           </TouchableOpacity>
         </View>
+      )}
+
+      {showWorkedTotal && (
+        <>
+          <View style={styles.separator} />
+          <View style={styles.workedRow}>
+            <Text style={styles.workedLabel}>{t('time.worked')}</Text>
+            <Text style={styles.workedValue}>{formatHours(dayWork.workSeconds)}</Text>
+          </View>
+          <Text style={styles.adjLine}>{adjustments.join('  ·  ')}</Text>
+        </>
       )}
 
       {breakdown.totalTrackedSeconds > 0 && (

@@ -1,11 +1,27 @@
 import {create} from 'zustand';
 import {format} from 'date-fns';
-import {getOrCreateDay, getDayByDate, updateDay} from '../db/days';
+import {getOrCreateDay, getDayByDate, updateDay, type DayPrefill} from '../db/days';
+import {useSettingsStore} from './settingsStore';
+import {hhmmToIsoOn} from '../utils/dateUtils';
 import type {Day} from '../types';
 
 type DayTimeFields = Partial<Pick<Day,
   'started_at' | 'ended_at' | 'started_at_2' | 'ended_at_2'
 >>;
+
+/** Prefill params for a brand-new day, when the user has opted in and set both
+ *  usual times. Only used for *today* — seeding a past/future day just by
+ *  opening it in the calendar would fabricate hours. See Iteration 3 Phase 4.1. */
+function prefillFor(date: string): DayPrefill | undefined {
+  const s = useSettingsStore.getState();
+  if (!s.prefill_from_usual || !s.usual_start || !s.usual_end) {
+    return undefined;
+  }
+  return {
+    started_at: hhmmToIsoOn(date, s.usual_start),
+    ended_at: hhmmToIsoOn(date, s.usual_end),
+  };
+}
 
 interface DayState {
   today: Day | null;
@@ -29,7 +45,7 @@ export const useDayStore = create<DayState>((set, get) => ({
     const todayDate = format(new Date(), 'yyyy-MM-dd');
     set({isLoading: true, error: null});
     try {
-      const day = await getOrCreateDay(todayDate);
+      const day = await getOrCreateDay(todayDate, prefillFor(todayDate));
       set(state => ({
         today: day,
         daysCache: {...state.daysCache, [todayDate]: day},

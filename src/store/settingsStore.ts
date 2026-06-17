@@ -24,6 +24,9 @@ interface SettingsState extends Settings {
   setThemeMode: (mode: ThemeMode) => Promise<void>;
   setShowWeekNumbers: (show: boolean) => Promise<void>;
   setNavVisibility: (mode: NavVisibility) => Promise<void>;
+  setUsualStart: (hhmm: string | null) => Promise<void>;
+  setUsualEnd: (hhmm: string | null) => Promise<void>;
+  setPrefillFromUsual: (enabled: boolean) => Promise<void>;
   setTimeSelectorMode: (mode: TimeSelectorMode) => Promise<void>;
   setLanguage: (language: Language) => Promise<void>;
   setQuickAddDefaultProjectId: (id: number | null) => Promise<void>;
@@ -38,6 +41,9 @@ export const useSettingsStore = create<SettingsState>(set => ({
   gps_interval_ms: 60000,
   default_activity_type: 'work',
   default_project_id: null,
+  usual_start: null,
+  usual_end: null,
+  prefill_from_usual: false,
   theme_mode: 'system',
   show_week_numbers: false,
   nav_visibility: 'always',
@@ -118,6 +124,21 @@ export const useSettingsStore = create<SettingsState>(set => ({
   setNavVisibility: async mode => {
     await setSetting('nav_visibility', mode);
     set({nav_visibility: mode});
+  },
+
+  setUsualStart: async hhmm => {
+    await setSetting('usual_start', hhmm ?? '');
+    set({usual_start: hhmm});
+  },
+
+  setUsualEnd: async hhmm => {
+    await setSetting('usual_end', hhmm ?? '');
+    set({usual_end: hhmm});
+  },
+
+  setPrefillFromUsual: async enabled => {
+    await setSetting('prefill_from_usual', String(enabled));
+    set({prefill_from_usual: enabled});
   },
 
   setTimeSelectorMode: async mode => {

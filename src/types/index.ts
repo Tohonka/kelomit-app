@@ -93,4 +93,9 @@ export interface Settings {
   gps_interval_ms: number;
   default_activity_type: ActivityType;
   default_project_id: number | null;
+  /** Usual working hours as wall-clock "HH:mm", or null if unset. */
+  usual_start: string | null;
+  usual_end: string | null;
+  /** When true, a newly-created day is seeded with the usual hours. */
+  prefill_from_usual: boolean;
 }

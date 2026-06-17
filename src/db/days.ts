@@ -15,9 +15,24 @@ function rowToDay(row: Record<string, unknown>): Day {
   };
 }
 
-export async function getOrCreateDay(date: string): Promise<Day> {
+/** Optional ISO start/end to seed a day with the moment it is first created
+ *  (the "prefill from usual hours" feature). Applied only on actual creation,
+ *  never to an existing day, so it can't clobber user-entered times. */
+export interface DayPrefill {
+  started_at: string;
+  ended_at: string;
+}
+
+export async function getOrCreateDay(date: string, prefill?: DayPrefill): Promise<Day> {
   const db = getDB();
-  await db.execute(`INSERT OR IGNORE INTO days (date) VALUES (?);`, [date]);
+  const insert = await db.execute(`INSERT OR IGNORE INTO days (date) VALUES (?);`, [date]);
+  const created = (insert.rowsAffected ?? 0) > 0;
+  if (created && prefill) {
+    await db.execute(
+      "UPDATE days SET started_at = ?, ended_at = ?, updated_at = datetime('now') WHERE date = ?;",
+      [prefill.started_at, prefill.ended_at, date],
+    );
+  }
   const result = await db.execute('SELECT * FROM days WHERE date = ?;', [date]);
   return rowToDay(result.rows![0] as Record<string, unknown>);
 }

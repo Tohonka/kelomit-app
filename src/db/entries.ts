@@ -1,5 +1,7 @@
 import {getDB} from './database';
 import i18n from '../i18n';
+import {getDaysInRange} from './days';
+import {calcDayWorkSecs} from '../utils/hoursUtils';
 import type {Entry, Tag, Project} from '../types';
 
 type RawRow = Record<string, unknown>;
@@ -272,57 +274,39 @@ export async function deleteEntry(id: number): Promise<void> {
 }
 
 /**
- * Returns work seconds (activity_type='work') keyed by ISO date string,
- * for all days in the given range that have tracked entries.
- * Uses SQLite strftime('%s') for from/to interval math.
+ * Returns work seconds keyed by ISO date string, for all days in the range.
+ * Computed in JS via the shared {@link calcDayWorkSecs} work-day model (legs as
+ * baseline, work-outside added, personal-inside deducted) so Calendar matches
+ * Home/Day exactly. The interval math (overlaps, partial intersections) is not
+ * expressible in portable SQLite, so we load days + their entries and fold them
+ * through the same function instead of duplicating the logic in SQL.
  */
 export async function getWorkSecondsByDay(
   startDate: string,
   endDate: string,
 ): Promise<Record<string, number>> {
+  const days = await getDaysInRange(startDate, endDate);
+  if (days.length === 0) { return {}; }
+
   const db = getDB();
-  // Day-level started_at/ended_at is the source of truth (mirrors calcDayWorkSecs).
-  // Falls back to summing entry durations when day times are absent.
+  const dayIds = days.map(d => d.id);
+  const placeholders = dayIds.map(() => '?').join(',');
   const result = await db.execute(
-    `SELECT d.date,
-       CASE
-         WHEN d.started_at IS NOT NULL AND d.ended_at IS NOT NULL THEN
-           MAX(0, CAST(strftime('%s', d.ended_at) AS INTEGER)
-                  - CAST(strftime('%s', d.started_at) AS INTEGER))
-           + CASE WHEN d.started_at_2 IS NOT NULL AND d.ended_at_2 IS NOT NULL
-               THEN MAX(0, CAST(strftime('%s', d.ended_at_2) AS INTEGER)
-                           - CAST(strftime('%s', d.started_at_2) AS INTEGER))
-               ELSE 0 END
-         ELSE COALESCE(es.total, 0)
-       END AS work_seconds
-     FROM days d
-     LEFT JOIN (
-       SELECT day_id,
-         CAST(SUM(
-           CASE
-             WHEN duration_sec IS NOT NULL THEN duration_sec
-             WHEN time_from IS NOT NULL AND time_to IS NOT NULL
-               THEN MAX(0, CAST(strftime('%s', time_to) AS INTEGER)
-                          - CAST(strftime('%s', time_from) AS INTEGER))
-             ELSE 0
-           END
-         ) AS INTEGER) AS total
-       FROM entries
-       WHERE activity_type = 'work'
-         AND (is_todo = 0 OR completed_at IS NOT NULL)
-       GROUP BY day_id
-     ) es ON es.day_id = d.id
-     WHERE d.date >= ? AND d.date <= ?;`,
-    [startDate, endDate],
+    `SELECT * FROM entries WHERE day_id IN (${placeholders});`,
+    dayIds,
   );
+  // Tags/project aren't needed for the hours math, so skip those joins.
+  const entriesByDay = new Map<number, Entry[]>();
+  for (const row of result.rows ?? []) {
+    const e = rowToEntry(row as RawRow, [], null);
+    const list = entriesByDay.get(e.day_id);
+    if (list) { list.push(e); } else { entriesByDay.set(e.day_id, [e]); }
+  }
 
   const map: Record<string, number> = {};
-  for (const row of result.rows ?? []) {
-    const r = row as Record<string, unknown>;
-    const secs = (r.work_seconds as number | null) ?? 0;
-    if (secs > 0) {
-      map[r.date as string] = secs;
-    }
+  for (const day of days) {
+    const secs = calcDayWorkSecs(day, entriesByDay.get(day.id) ?? []);
+    if (secs > 0) { map[day.date] = secs; }
   }
   return map;
 }
@@ -353,6 +337,65 @@ export async function searchEntries(query: string, limit = 60): Promise<SearchRe
       ORDER BY d.date DESC, e.created_at DESC
       LIMIT ?;`,
     [like, like, like, like, limit],
+  );
+  const rows = (result.rows ?? []) as RawRow[];
+  if (rows.length === 0) {
+    return [];
+  }
+
+  const entryIds = rows.map(r => r.id as number);
+  const tagsMap = await fetchTagsForEntries(entryIds);
+  const projectIds = [
+    ...new Set(rows.map(r => r.project_id as number | null).filter(Boolean)),
+  ] as number[];
+  const projectsMap = new Map<number, Project>();
+  if (projectIds.length > 0) {
+    const pr = await db.execute(
+      `SELECT * FROM projects WHERE id IN (${projectIds.map(() => '?').join(',')});`,
+      projectIds,
+    );
+    for (const row of pr.rows ?? []) {
+      const r = row as RawRow;
+      projectsMap.set(r.id as number, {
+        id: r.id as number,
+        name: r.name as string,
+        type: r.type as Project['type'],
+        archived: Boolean(r.archived),
+        created_at: r.created_at as string,
+        updated_at: r.updated_at as string,
+      });
+    }
+  }
+
+  return rows.map(r => ({
+    entry: rowToEntry(
+      r,
+      tagsMap.get(r.id as number) ?? [],
+      projectsMap.get(r.project_id as number) ?? null,
+    ),
+    date: r.day_date as string,
+  }));
+}
+
+// ─── Gallery ────────────────────────────────────────────────────────────────
+
+export interface MediaItem {
+  entry: Entry;
+  /** The owning day's date (YYYY-MM-DD), used for period grouping. */
+  date: string;
+}
+
+/** Photo + video entries, newest first, with tags/projects batched in — for the
+ *  Gallery grid and its detail modal. */
+export async function getMediaEntries(limit = 1000): Promise<MediaItem[]> {
+  const db = getDB();
+  const result = await db.execute(
+    `SELECT e.*, d.date AS day_date
+       FROM entries e JOIN days d ON d.id = e.day_id
+      WHERE e.entry_type IN ('photo', 'video')
+      ORDER BY e.created_at DESC
+      LIMIT ?;`,
+    [limit],
   );
   const rows = (result.rows ?? []) as RawRow[];
   if (rows.length === 0) {

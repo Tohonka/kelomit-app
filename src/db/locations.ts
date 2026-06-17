@@ -1,5 +1,9 @@
 import {getDB} from './database';
 import type {SavedLocation, LocationKind, GeofenceEvent} from '../types';
+import {clampRadius, DEFAULT_RADIUS_M} from '../utils/geofence';
+
+// Re-export so existing call sites can keep importing from db/locations.
+export {clampRadius, MIN_RADIUS_M, DEFAULT_RADIUS_M} from '../utils/geofence';
 
 type RawRow = Record<string, unknown>;
 
@@ -35,7 +39,7 @@ export async function createLocation(params: CreateLocationParams): Promise<Save
   const result = await db.execute(
     `INSERT INTO locations (name, kind, latitude, longitude, radius_m)
      VALUES (?, ?, ?, ?, ?) RETURNING *;`,
-    [params.name, params.kind, params.latitude, params.longitude, params.radius_m ?? 150],
+    [params.name, params.kind, params.latitude, params.longitude, clampRadius(params.radius_m ?? DEFAULT_RADIUS_M)],
   );
   return rowToLocation(result.rows![0] as RawRow);
 }
@@ -44,7 +48,7 @@ export async function updateLocationRadius(id: number, radiusM: number): Promise
   const db = getDB();
   await db.execute(
     "UPDATE locations SET radius_m = ?, updated_at = datetime('now') WHERE id = ?;",
-    [radiusM, id],
+    [clampRadius(radiusM), id],
   );
 }
 

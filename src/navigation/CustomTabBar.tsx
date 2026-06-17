@@ -8,11 +8,12 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import {useTheme, typography, spacing, radius} from '../theme';
 import type {Colors} from '../theme';
 
-type SecondaryRoute = 'SearchScreen' | 'InsightsScreen';
+type SecondaryRoute = 'SearchScreen' | 'InsightsScreen' | 'GalleryScreen';
 
 const SECONDARY: {route: SecondaryRoute; labelKey: string; icon: string}[] = [
   {route: 'SearchScreen', labelKey: 'navigation.search', icon: 'magnify'},
   {route: 'InsightsScreen', labelKey: 'navigation.insights', icon: 'chart-box-outline'},
+  {route: 'GalleryScreen', labelKey: 'navigation.gallery', icon: 'image-multiple-outline'},
 ];
 
 const makeStyles = (c: Colors) =>
