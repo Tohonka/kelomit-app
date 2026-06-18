@@ -461,29 +461,27 @@ export async function searchEntries(query: string, limit = 60): Promise<SearchRe
 
 export interface MediaItem {
   entry: Entry;
+  /** The specific attachment shown by this gallery tile. */
+  media: EntryMedia;
   /** The owning day's date (YYYY-MM-DD), used for period grouping. */
   date: string;
 }
 
-/** Photo + video entries, newest first, with tags/projects batched in — for the
- *  Gallery grid and its detail modal. */
-export async function getMediaEntries(limit = 1000): Promise<MediaItem[]> {
+/** Load full entries (tags + project + media) for a set of ids, keyed by id. */
+async function loadEntriesByIds(ids: number[]): Promise<Map<number, Entry>> {
+  const map = new Map<number, Entry>();
+  if (ids.length === 0) {
+    return map;
+  }
   const db = getDB();
-  const result = await db.execute(
-    `SELECT e.*, d.date AS day_date
-       FROM entries e JOIN days d ON d.id = e.day_id
-      WHERE e.entry_type IN ('photo', 'video')
-      ORDER BY e.created_at DESC
-      LIMIT ?;`,
-    [limit],
-  );
+  const placeholders = ids.map(() => '?').join(',');
+  const result = await db.execute(`SELECT * FROM entries WHERE id IN (${placeholders});`, ids);
   const rows = (result.rows ?? []) as RawRow[];
   if (rows.length === 0) {
-    return [];
+    return map;
   }
-
-  const entryIds = rows.map(r => r.id as number);
-  const tagsMap = await fetchTagsForEntries(entryIds);
+  const tagsMap = await fetchTagsForEntries(ids);
+  const mediaMap = await fetchMediaForEntries(ids);
   const projectIds = [
     ...new Set(rows.map(r => r.project_id as number | null).filter(Boolean)),
   ] as number[];
@@ -505,15 +503,41 @@ export async function getMediaEntries(limit = 1000): Promise<MediaItem[]> {
       });
     }
   }
+  for (const r of rows) {
+    const id = r.id as number;
+    map.set(id, rowToEntry(r, tagsMap.get(id) ?? [], projectsMap.get(r.project_id as number) ?? null, mediaMap.get(id) ?? []));
+  }
+  return map;
+}
 
-  return rows.map(r => ({
-    entry: rowToEntry(
-      r,
-      tagsMap.get(r.id as number) ?? [],
-      projectsMap.get(r.project_id as number) ?? null,
-    ),
-    date: r.day_date as string,
-  }));
+/** Photo + video attachments across all notes, newest first — one MediaItem per
+ *  attachment, for the Gallery grid and its detail modal. */
+export async function getMediaEntries(limit = 1000): Promise<MediaItem[]> {
+  const db = getDB();
+  const result = await db.execute(
+    `SELECT em.*, d.date AS day_date
+       FROM entry_media em
+       JOIN entries e ON e.id = em.entry_id
+       JOIN days d ON d.id = e.day_id
+      WHERE em.media_type IN ('photo', 'video')
+      ORDER BY e.created_at DESC, em.position ASC
+      LIMIT ?;`,
+    [limit],
+  );
+  const rows = (result.rows ?? []) as RawRow[];
+  if (rows.length === 0) {
+    return [];
+  }
+  const entryIds = [...new Set(rows.map(r => r.entry_id as number))];
+  const entriesById = await loadEntriesByIds(entryIds);
+  const items: MediaItem[] = [];
+  for (const r of rows) {
+    const entry = entriesById.get(r.entry_id as number);
+    if (entry) {
+      items.push({entry, media: rowToMedia(r), date: r.day_date as string});
+    }
+  }
+  return items;
 }
 
 // ─── Insights ───────────────────────────────────────────────────────────────

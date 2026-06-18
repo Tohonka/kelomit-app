@@ -11,7 +11,7 @@ import {
   Vibration,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {getEntry} from '../db/entries';
+import {getEntry, deleteEntryMedia} from '../db/entries';
 import {useEntryStore} from '../store/entryStore';
 import {useTheme, typography, spacing, radius} from '../theme';
 import type {Colors} from '../theme';
@@ -19,8 +19,9 @@ import ActivityBadge from '../components/entries/ActivityBadge';
 import ProjectChip from '../components/entries/ProjectChip';
 import TagChip from '../components/entries/TagChip';
 import AudioPlayer from '../components/media/AudioPlayer';
+import ZoomableImageModal from '../components/media/ZoomableImageModal';
 import type {RootStackScreenProps} from '../navigation/navigationTypes';
-import type {Entry} from '../types';
+import type {Entry, EntryMedia} from '../types';
 import {formatTime, formatDate, todayDate, localDateOf} from '../utils/dateUtils';
 import {deleteMediaFile, fileUri} from '../utils/mediaUtils';
 import {scheduleTodoReminder, cancelTodoReminder} from '../services/notificationService';
@@ -80,6 +81,19 @@ const makeStyles = (c: Colors) =>
     },
     videoIcon: {fontSize: 40},
     videoHint: {fontSize: typography.sizes.sm, color: c.textMuted},
+    attachWrap: {position: 'relative', marginBottom: spacing.md},
+    attachRemove: {
+      position: 'absolute',
+      top: spacing.sm,
+      right: spacing.sm,
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: '#000a',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    attachRemoveText: {color: '#fff', fontSize: 18, lineHeight: 20},
     infoSection: {
       borderTopWidth: 1,
       borderTopColor: c.border,
@@ -136,6 +150,7 @@ export default function EntryDetailScreen({navigation, route}: Props) {
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [entry, setEntry] = useState<Entry | null>(null);
+  const [zoomUri, setZoomUri] = useState<string | null>(null);
 
   useEffect(() => {
     getEntry(entryId).then(e => {
@@ -177,6 +192,25 @@ export default function EntryDetailScreen({navigation, route}: Props) {
     }
   };
 
+  const handleDeleteAttachment = (m: EntryMedia) => {
+    Alert.alert(translate('entries.removeAttachmentTitle'), translate('entries.removeAttachmentMessage'), [
+      {text: translate('common.cancel'), style: 'cancel'},
+      {
+        text: translate('common.delete'),
+        style: 'destructive',
+        onPress: async () => {
+          await deleteEntryMedia(m.id);
+          await deleteMediaFile(m.file_path);
+          if (m.thumbnail_path && m.thumbnail_path !== m.file_path) {
+            await deleteMediaFile(m.thumbnail_path);
+          }
+          const fresh = await getEntry(entryId);
+          if (fresh) { setEntry(fresh); }
+        },
+      },
+    ]);
+  };
+
   const handleDelete = () => {
     if (!entry) { return; }
     const entryToDelete = entry;
@@ -189,16 +223,57 @@ export default function EntryDetailScreen({navigation, route}: Props) {
           Vibration.vibrate([0, 40, 60, 40]);
           cancelTodoReminder(entryId).catch(() => {});
           await removeEntry(entryId, dayId);
-          await Promise.all([
-            deleteMediaFile(entryToDelete.file_path),
-            entryToDelete.thumbnail_path !== entryToDelete.file_path
-              ? deleteMediaFile(entryToDelete.thumbnail_path)
-              : Promise.resolve(),
-          ]);
+          // Delete every attachment's files plus any legacy inline file.
+          const files = new Set<string>();
+          for (const m of entryToDelete.media ?? []) {
+            files.add(m.file_path);
+            if (m.thumbnail_path) { files.add(m.thumbnail_path); }
+          }
+          if (entryToDelete.file_path) { files.add(entryToDelete.file_path); }
+          if (entryToDelete.thumbnail_path) { files.add(entryToDelete.thumbnail_path); }
+          await Promise.all([...files].map(deleteMediaFile));
           navigation.goBack();
         },
       },
     ]);
+  };
+
+  const renderMedia = (m: EntryMedia) => {
+    const removeBtn = (
+      <TouchableOpacity
+        style={styles.attachRemove}
+        onPress={() => handleDeleteAttachment(m)}
+        accessibilityLabel={translate('common.delete')}>
+        <Text style={styles.attachRemoveText}>×</Text>
+      </TouchableOpacity>
+    );
+    if (m.media_type === 'photo') {
+      return (
+        <View key={m.id} style={styles.attachWrap}>
+          <TouchableOpacity activeOpacity={0.9} onPress={() => setZoomUri(m.file_path)}>
+            <Image source={{uri: fileUri(m.thumbnail_path || m.file_path)}} style={styles.mediaImage} resizeMode="cover" />
+          </TouchableOpacity>
+          {removeBtn}
+        </View>
+      );
+    }
+    if (m.media_type === 'voice') {
+      return (
+        <View key={m.id} style={styles.attachWrap}>
+          <AudioPlayer filePath={m.file_path} durationSec={m.duration_sec} />
+          {removeBtn}
+        </View>
+      );
+    }
+    return (
+      <View key={m.id} style={styles.attachWrap}>
+        <View style={styles.videoPlaceholder}>
+          <Text style={styles.videoIcon}>🎥</Text>
+          <Text style={styles.videoHint}>{translate('entries.videoFileSaved')}</Text>
+        </View>
+        {removeBtn}
+      </View>
+    );
   };
 
   if (!entry) { return null; }
@@ -249,30 +324,9 @@ export default function EntryDetailScreen({navigation, route}: Props) {
         {entry.title ? <Text style={styles.title}>{entry.title}</Text> : null}
         {entry.body ? <Text style={styles.body}>{entry.body}</Text> : null}
 
-        {entry.entry_type === 'photo' && entry.file_path ? (
-          <Image
-            source={{uri: fileUri(entry.file_path)}}
-            style={styles.mediaImage}
-            resizeMode="cover"
-          />
-        ) : null}
-
-        {entry.entry_type === 'voice' && entry.file_path ? (
-          <AudioPlayer filePath={entry.file_path} durationSec={entry.duration_sec} />
-        ) : null}
-
-        {entry.entry_type === 'video' && entry.file_path ? (
-          <View style={styles.videoPlaceholder}>
-            <Text style={styles.videoIcon}>🎥</Text>
-            <Text style={styles.videoHint}>{translate('entries.videoFileSaved')}</Text>
-          </View>
-        ) : null}
+        {(entry.media ?? []).map(renderMedia)}
 
         <View style={styles.infoSection}>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>{translate('entries.type')}</Text>
-            <Text style={styles.infoValue}>{translate(`entryType.${entry.entry_type}`)}</Text>
-          </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>{translate('entries.created')}</Text>
             <Text style={styles.infoValue}>
@@ -317,6 +371,7 @@ export default function EntryDetailScreen({navigation, route}: Props) {
           <Text style={styles.deleteBtnText}>{translate('entries.deleteEntry')}</Text>
         </TouchableOpacity>
       </ScrollView>
+      <ZoomableImageModal uri={zoomUri} onClose={() => setZoomUri(null)} />
     </SafeAreaView>
   );
 }

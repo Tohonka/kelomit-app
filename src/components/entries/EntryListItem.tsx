@@ -81,6 +81,20 @@ const makeStyles = (c: Colors) =>
     todoBadgeDone: {backgroundColor: c.bgMuted},
     todoBadgeText: {fontSize: typography.sizes.xs, color: c.primary, fontWeight: typography.weights.semibold},
     todoBadgeTextDone: {color: c.textMuted},
+    leadWrap: {width: 44, height: 44},
+    countBadge: {
+      position: 'absolute',
+      right: -2,
+      bottom: -2,
+      minWidth: 18,
+      height: 18,
+      paddingHorizontal: 4,
+      borderRadius: 9,
+      backgroundColor: c.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    countText: {color: c.white, fontSize: 11, fontWeight: typography.weights.bold},
   });
 
 export default function EntryListItem({entry, onPress}: Props) {
@@ -101,20 +115,32 @@ export default function EntryListItem({entry, onPress}: Props) {
     ? `${formatTime(entry.time_from)}${entry.time_to ? ` - ${formatTime(entry.time_to)}` : ''}`
     : formatTime(entry.created_at);
 
+  const mediaList = entry.media ?? [];
+  const photo = mediaList.find(m => m.media_type === 'photo');
+  const leadType = photo ? 'photo' : mediaList[0]?.media_type ?? 'note';
+  const leadThumb = photo ? photo.thumbnail_path || photo.file_path : null;
+
   return (
     <TouchableOpacity style={styles.item} onPress={onPress} activeOpacity={0.7}>
-      {entry.thumbnail_path || entry.entry_type !== 'note' ? (
-        <MediaThumbnail entryType={entry.entry_type} thumbnailPath={entry.thumbnail_path} size={44} />
-      ) : (
-        <EntryTypeIcon type={entry.entry_type} size={44} />
-      )}
+      <View style={styles.leadWrap}>
+        {mediaList.length > 0 ? (
+          <MediaThumbnail entryType={leadType} thumbnailPath={leadThumb} size={44} />
+        ) : (
+          <EntryTypeIcon type="note" size={44} />
+        )}
+        {mediaList.length > 1 && (
+          <View style={styles.countBadge}>
+            <Text style={styles.countText}>{mediaList.length}</Text>
+          </View>
+        )}
+      </View>
       <View style={styles.content}>
         <View style={styles.row}>
           {entry.title ? (
             <Text style={styles.title} numberOfLines={1}>{entry.title}</Text>
           ) : (
             <Text style={styles.titlePlaceholder} numberOfLines={1}>
-              {entry.body ?? entry.entry_type}
+              {entry.body ?? t('entryType.note')}
             </Text>
           )}
           <View style={styles.timeGroup}>

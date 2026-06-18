@@ -15,10 +15,9 @@ import {useTagStore} from '../store/tagStore';
 import {useTheme, typography, spacing, radius} from '../theme';
 import type {Colors} from '../theme';
 import Button from '../components/ui/Button';
-import PhotoCapture from '../components/media/PhotoCapture';
-import VideoCapture from '../components/media/VideoCapture';
-import VoiceRecorder from '../components/media/VoiceRecorder';
+import AttachmentsSection, {type EditorMedia} from '../components/media/AttachmentsSection';
 import {ensureMediaDir} from '../utils/mediaUtils';
+import {addEntryMedia} from '../db/entries';
 import {getLastKnownPosition} from '../services/gpsService';
 import type {RootStackScreenProps} from '../navigation/navigationTypes';
 
@@ -73,7 +72,7 @@ export default function QuickAddModal({navigation, route}: Props) {
   const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const {addEntry} = useEntryStore();
+  const {addEntry, loadEntriesForDay} = useEntryStore();
   const {getOrCreate} = useTagStore();
   const {
     loaded: settingsLoaded,
@@ -85,8 +84,7 @@ export default function QuickAddModal({navigation, route}: Props) {
 
   const [title, setTitle] = useState('');
   const [durationMinutes, setDurationMinutes] = useState('');
-  const [filePath, setFilePath] = useState<string | null>(null);
-  const [thumbnailPath, setThumbnailPath] = useState<string | null>(null);
+  const [media, setMedia] = useState<EditorMedia[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -109,22 +107,29 @@ export default function QuickAddModal({navigation, route}: Props) {
       }
 
       const gps = getLastKnownPosition();
-      await addEntry({
+      const created = await addEntry({
         day_id: dayId,
-        entry_type: entryType,
+        entry_type: 'note',
         activity_type: quickadd_default_activity,
         title: title.trim() || null,
         body: null,
         project_id: quickadd_default_project_id,
         tagIds,
-        file_path: filePath,
-        thumbnail_path: thumbnailPath,
         duration_sec: durationSec,
         time_from: null,
         time_to: null,
         latitude: gps?.latitude ?? null,
         longitude: gps?.longitude ?? null,
       });
+      for (const m of media) {
+        await addEntryMedia(created.id, {
+          media_type: m.media_type,
+          file_path: m.file_path,
+          thumbnail_path: m.thumbnail_path,
+          duration_sec: m.duration_sec,
+        });
+      }
+      await loadEntriesForDay(dayId);
       Vibration.vibrate(40);
       navigation.goBack();
     } catch (e) {
@@ -147,23 +152,11 @@ export default function QuickAddModal({navigation, route}: Props) {
         })}
       </Text>
 
-      {entryType === 'photo' && (
-        <PhotoCapture filePath={filePath} onCapture={(fp, tp) => { setFilePath(fp); setThumbnailPath(tp); }} />
-      )}
-      {entryType === 'video' && (
-        <VideoCapture filePath={filePath} onCapture={(fp, tp) => { setFilePath(fp); setThumbnailPath(tp); }} />
-      )}
-      {entryType === 'voice' && (
-        <VoiceRecorder
-          filePath={filePath}
-          onRecord={(fp, durSec) => {
-            setFilePath(fp);
-            setThumbnailPath(null);
-            setDurationMinutes(String(Math.round(durSec / 60)));
-          }}
-          onDiscard={() => { setFilePath(null); setThumbnailPath(null); setDurationMinutes(''); }}
-        />
-      )}
+      <AttachmentsSection
+        media={media}
+        onAdd={m => setMedia(prev => [...prev, m])}
+        onRemove={i => setMedia(prev => prev.filter((_, idx) => idx !== i))}
+      />
 
       <Text style={styles.sectionLabel}>{t('entries.title')}</Text>
       <TextInput

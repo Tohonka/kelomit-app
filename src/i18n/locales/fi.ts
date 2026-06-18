@@ -181,6 +181,8 @@ const fi: typeof en = {
     title: 'Otsikko',
     titleOptional: 'Otsikko (valinnainen)',
     attachments: 'Liitteet',
+    removeAttachmentTitle: 'Poista liite',
+    removeAttachmentMessage: 'Poistetaanko tämä liite muistiinpanosta?',
     titlePlaceholder: 'Lyhyt otsikko…',
     note: 'Muistiinpano',
     notePlaceholder: 'Kirjoita jotain…',

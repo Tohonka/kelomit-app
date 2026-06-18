@@ -45,13 +45,21 @@ export default function GalleryMap({items, onSelect}: Props) {
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
-  const located = useMemo(
-    () => items.filter(i => i.entry.latitude != null && i.entry.longitude != null),
-    [items],
-  );
+  // One marker per geotagged entry (an entry can own several media items).
+  const located = useMemo(() => {
+    const seen = new Set<number>();
+    const out = [];
+    for (const {entry} of items) {
+      if (entry.latitude != null && entry.longitude != null && !seen.has(entry.id)) {
+        seen.add(entry.id);
+        out.push(entry);
+      }
+    }
+    return out;
+  }, [items]);
 
   const region = useMemo(
-    () => regionFor(located.map(i => ({latitude: i.entry.latitude!, longitude: i.entry.longitude!}))),
+    () => regionFor(located.map(e => ({latitude: e.latitude!, longitude: e.longitude!}))),
     [located],
   );
 
@@ -67,7 +75,7 @@ export default function GalleryMap({items, onSelect}: Props) {
   return (
     <View style={styles.container}>
       <MapView provider={PROVIDER_GOOGLE} style={styles.map} initialRegion={region}>
-        {located.map(({entry}) => (
+        {located.map(entry => (
           <Marker
             key={entry.id}
             coordinate={{latitude: entry.latitude!, longitude: entry.longitude!}}

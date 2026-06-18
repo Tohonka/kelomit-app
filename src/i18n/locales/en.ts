@@ -179,6 +179,8 @@ const en = {
     title: 'Title',
     titleOptional: 'Title (optional)',
     attachments: 'Attachments',
+    removeAttachmentTitle: 'Remove attachment',
+    removeAttachmentMessage: 'Delete this attachment from the note?',
     titlePlaceholder: 'Short title…',
     note: 'Note',
     notePlaceholder: 'Write something…',

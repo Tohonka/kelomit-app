@@ -91,8 +91,8 @@ function chunk<T>(arr: T[], n: number): T[][] {
 
 function Tile({item, styles, onPress}: {item: MediaItem; styles: ReturnType<typeof makeStyles>; onPress: () => void}) {
   const [failed, setFailed] = useState(false);
-  const uri = item.entry.thumbnail_path || item.entry.file_path;
-  const isVideo = item.entry.entry_type === 'video';
+  const uri = item.media.thumbnail_path || item.media.file_path;
+  const isVideo = item.media.media_type === 'video';
   return (
     <TouchableOpacity style={styles.tile} activeOpacity={0.8} onPress={onPress}>
       {uri && !failed ? (
@@ -118,7 +118,7 @@ export default function GalleryScreen() {
   const [mode, setMode] = useState<PeriodMode>('day');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [items, setItems] = useState<MediaItem[]>([]);
-  const [selected, setSelected] = useState<Entry | null>(null);
+  const [selected, setSelected] = useState<{entry: Entry; uri: string | null} | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -167,7 +167,15 @@ export default function GalleryScreen() {
       )}
 
       {viewMode === 'map' ? (
-        <GalleryMap items={items} onSelect={setSelected} />
+        <GalleryMap
+          items={items}
+          onSelect={entry =>
+            setSelected({
+              entry,
+              uri: entry.media?.find(m => m.media_type === 'photo')?.file_path ?? null,
+            })
+          }
+        />
       ) : items.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyIcon}>📷</Text>
@@ -176,12 +184,17 @@ export default function GalleryScreen() {
       ) : (
         <SectionList
           sections={sections}
-          keyExtractor={(row, i) => `${row[0]?.entry.id ?? 'r'}-${i}`}
+          keyExtractor={(row, i) => `${row[0]?.media.id ?? 'r'}-${i}`}
           renderSectionHeader={({section}) => <Text style={styles.sectionHeader}>{section.title}</Text>}
           renderItem={({item: row}) => (
             <View style={styles.row}>
-              {row.map(media => (
-                <Tile key={media.entry.id} item={media} styles={styles} onPress={() => setSelected(media.entry)} />
+              {row.map(item => (
+                <Tile
+                  key={item.media.id}
+                  item={item}
+                  styles={styles}
+                  onPress={() => setSelected({entry: item.entry, uri: item.media.file_path})}
+                />
               ))}
             </View>
           )}
@@ -191,7 +204,11 @@ export default function GalleryScreen() {
         />
       )}
 
-      <GalleryDetailModal entry={selected} onClose={() => setSelected(null)} />
+      <GalleryDetailModal
+        entry={selected?.entry ?? null}
+        uri={selected?.uri ?? null}
+        onClose={() => setSelected(null)}
+      />
     </SafeAreaView>
   );
 }
