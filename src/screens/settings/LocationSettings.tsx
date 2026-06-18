@@ -4,7 +4,7 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import {useTranslation} from 'react-i18next';
 import {useLocationStore} from '../../store/locationStore';
 import {MIN_RADIUS_M} from '../../db/locations';
-import {getCurrentPositionOnce} from '../../services/gpsService';
+import {getCurrentPositionOnce, getLastPositionError} from '../../services/gpsService';
 
 const RADIUS_STEP_M = 25;
 import {useTheme, typography, spacing, radius} from '../../theme';
@@ -81,7 +81,11 @@ export default function LocationSettings() {
     try {
       const pos = await getCurrentPositionOnce();
       if (!pos) {
-        Alert.alert(t('location.title'), t('location.noPosition'));
+        const detail = getLastPositionError();
+        Alert.alert(
+          t('location.title'),
+          detail ? `${t('location.noPosition')}\n\n${detail}` : t('location.noPosition'),
+        );
         return;
       }
       await add({

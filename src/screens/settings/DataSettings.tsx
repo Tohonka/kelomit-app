@@ -88,7 +88,10 @@ export default function DataSettings({navigation}: Props) {
   const handleBackup = async () => {
     setBackupBusy(true);
     try {
-      await exportBackup();
+      const result = await exportBackup();
+      if (result === 'done') {
+        Alert.alert(t('settings.backupSavedTitle'), t('settings.backupSavedMessage'));
+      }
     } catch (e) {
       Alert.alert(t('settings.backupFailed'), String(e));
     } finally {

@@ -24,18 +24,16 @@ import Button from '../components/ui/Button';
 import TagChip from '../components/entries/TagChip';
 import ProjectPicker from '../components/entries/ProjectPicker';
 import TimePicker from '../components/ui/TimePicker';
-import PhotoCapture from '../components/media/PhotoCapture';
-import VideoCapture from '../components/media/VideoCapture';
-import VoiceRecorder from '../components/media/VoiceRecorder';
+import AttachmentsSection, {type EditorMedia} from '../components/media/AttachmentsSection';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import {deleteMediaFile, ensureMediaDir} from '../utils/mediaUtils';
 import {getLastKnownPosition} from '../services/gpsService';
 import {scheduleTodoReminder, requestNotificationPermission} from '../services/notificationService';
-import {getEntry} from '../db/entries';
+import {getEntry, addEntryMedia, deleteEntryMedia} from '../db/entries';
 import {getOrCreateDay} from '../db/days';
 import {formatDate} from '../utils/dateUtils';
 import type {RootStackScreenProps} from '../navigation/navigationTypes';
-import type {EntryType, ActivityType, Tag} from '../types';
+import type {ActivityType, Tag} from '../types';
 
 function localDateStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -48,13 +46,6 @@ function combineDateTime(dateStr: string, hours: number, minutes: number): strin
 }
 
 type Props = RootStackScreenProps<'AddEntryModal'>;
-
-const ENTRY_TYPES: {type: EntryType; labelKey: string; emoji: string}[] = [
-  {type: 'note', labelKey: 'entryType.note', emoji: '✏️'},
-  {type: 'photo', labelKey: 'entryType.photo', emoji: '📷'},
-  {type: 'video', labelKey: 'entryType.video', emoji: '🎥'},
-  {type: 'voice', labelKey: 'entryType.voice', emoji: '🎙️'},
-];
 
 const ACTIVITY_TYPES: {type: ActivityType; labelKey: string}[] = [
   {type: 'work', labelKey: 'activity.work'},
@@ -233,7 +224,7 @@ export default function AddEntryModal({navigation, route}: Props) {
   const {dayId, entryId} = route.params;
   const entryDate = route.params.date;
   const isEdit = entryId != null;
-  const {addEntry, editEntry} = useEntryStore();
+  const {addEntry, editEntry, loadEntriesForDay} = useEntryStore();
   const {projects, loaded: projectsLoaded, load: loadProjects, add: addProject} = useProjectStore();
   const {tags, loaded: tagsLoaded, load: loadTags, getOrCreate} = useTagStore();
   const {
@@ -245,7 +236,6 @@ export default function AddEntryModal({navigation, route}: Props) {
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
-  const [entryType, setEntryType] = useState<EntryType>('note');
   const [activityType, setActivityType] = useState<ActivityType>('work');
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
@@ -255,9 +245,9 @@ export default function AddEntryModal({navigation, route}: Props) {
   const [isSaving, setIsSaving] = useState(false);
   const [loadingEntry, setLoadingEntry] = useState(isEdit);
 
-  const [filePath, setFilePath] = useState<string | null>(null);
-  const [thumbnailPath, setThumbnailPath] = useState<string | null>(null);
-  const [pendingDeletePaths, setPendingDeletePaths] = useState<string[]>([]);
+  // A note's media attachments (Iteration 4). Existing ones carry an `id`.
+  const [media, setMediaList] = useState<EditorMedia[]>([]);
+  const [removedMedia, setRemovedMedia] = useState<EditorMedia[]>([]);
 
   type TimeMode = 'none' | 'duration' | 'range';
   const [timeMode, setTimeMode] = useState<TimeMode>('none');
@@ -352,14 +342,20 @@ export default function AddEntryModal({navigation, route}: Props) {
     }
     getEntry(entryId).then(e => {
       if (!e) { return; }
-      setEntryType(e.entry_type);
       setActivityType(e.activity_type);
       setTitle(e.title ?? '');
       setBody(e.body ?? '');
       setSelectedProjectId(e.project_id);
       setSelectedTags(e.tags ?? []);
-      setFilePath(e.file_path);
-      setThumbnailPath(e.thumbnail_path);
+      setMediaList(
+        (e.media ?? []).map(m => ({
+          id: m.id,
+          media_type: m.media_type,
+          file_path: m.file_path,
+          thumbnail_path: m.thumbnail_path,
+          duration_sec: m.duration_sec,
+        })),
+      );
       if (e.duration_sec != null) {
         setTimeMode('duration');
         setDurationMinutes(String(Math.round(e.duration_sec / 60)));
@@ -386,35 +382,26 @@ export default function AddEntryModal({navigation, route}: Props) {
     setSelectedTags(prev => prev.filter(t => t.id !== id));
   };
 
-  const rememberMediaForDeletion = (...paths: Array<string | null>) => {
-    setPendingDeletePaths(prev => [
-      ...prev,
-      ...paths.filter((path): path is string => path != null),
-    ]);
+  const addMedia = (m: EditorMedia) => setMediaList(prev => [...prev, m]);
+
+  const removeMedia = (index: number) => {
+    setMediaList(prev => {
+      const removed = prev[index];
+      if (removed) { setRemovedMedia(r => [...r, removed]); }
+      return prev.filter((_, i) => i !== index);
+    });
   };
 
-  const setMedia = (nextFilePath: string | null, nextThumbnailPath: string | null) => {
-    if (filePath && filePath !== nextFilePath) {
-      rememberMediaForDeletion(filePath);
+  /** Delete the underlying files of removed attachments (file + distinct thumb). */
+  const cleanupRemovedFiles = async () => {
+    const paths = new Set<string>();
+    for (const m of removedMedia) {
+      paths.add(m.file_path);
+      if (m.thumbnail_path && m.thumbnail_path !== m.file_path) {
+        paths.add(m.thumbnail_path);
+      }
     }
-    if (
-      thumbnailPath &&
-      thumbnailPath !== filePath &&
-      thumbnailPath !== nextFilePath &&
-      thumbnailPath !== nextThumbnailPath
-    ) {
-      rememberMediaForDeletion(thumbnailPath);
-    }
-    setFilePath(nextFilePath);
-    setThumbnailPath(nextThumbnailPath);
-  };
-
-  const handleEntryTypeChange = (type: EntryType) => {
-    if (isEdit || type === entryType) {
-      return;
-    }
-    setMedia(null, null);
-    setEntryType(type);
+    await Promise.all([...paths].map(deleteMediaFile));
   };
 
   const handleSave = async () => {
@@ -425,6 +412,22 @@ export default function AddEntryModal({navigation, route}: Props) {
           ? Math.round(parseFloat(durationMinutes) * 60)
           : null;
 
+      // Persist new attachments (those without an id) onto an entry.
+      const saveNewMedia = async (targetEntryId: number) => {
+        for (const m of media) {
+          if (m.id == null) {
+            await addEntryMedia(targetEntryId, {
+              media_type: m.media_type,
+              file_path: m.file_path,
+              thumbnail_path: m.thumbnail_path,
+              duration_sec: m.duration_sec,
+            });
+          }
+        }
+      };
+
+      let refreshDayId = dayId;
+
       if (isEdit && entryId != null) {
         await editEntry(
           entryId,
@@ -433,8 +436,6 @@ export default function AddEntryModal({navigation, route}: Props) {
             title: title.trim() || null,
             body: body.trim() || null,
             project_id: selectedProjectId,
-            file_path: filePath,
-            thumbnail_path: thumbnailPath,
             duration_sec: durationSec,
             time_from: timeMode === 'range' ? timeFrom : null,
             time_to: timeMode === 'range' ? timeTo : null,
@@ -442,21 +443,25 @@ export default function AddEntryModal({navigation, route}: Props) {
           },
           dayId,
         );
+        // Detach removed existing attachments, then add new ones.
+        for (const m of removedMedia) {
+          if (m.id != null) { await deleteEntryMedia(m.id); }
+        }
+        await saveNewMedia(entryId);
       } else {
         const gps = getLastKnownPosition();
         // A to-do is attached to the day it's scheduled for, not today's day.
         const targetDayId = isTodo ? (await getOrCreateDay(scheduledDate)).id : dayId;
+        refreshDayId = targetDayId;
         const reminderIso = isTodo && reminderEnabled ? reminderAt : null;
         const created = await addEntry({
           day_id: targetDayId,
-          entry_type: entryType,
+          entry_type: 'note',
           activity_type: activityType,
           title: title.trim() || null,
           body: body.trim() || null,
           project_id: selectedProjectId,
           tagIds: selectedTags.map(t => t.id),
-          file_path: filePath,
-          thumbnail_path: thumbnailPath,
           duration_sec: durationSec,
           time_from: timeMode === 'range' ? timeFrom : null,
           time_to: timeMode === 'range' ? timeTo : null,
@@ -466,16 +471,15 @@ export default function AddEntryModal({navigation, route}: Props) {
           scheduled_date: isTodo ? scheduledDate : null,
           reminder_at: reminderIso,
         });
+        await saveNewMedia(created.id);
         if (reminderIso) {
           scheduleTodoReminder(created).catch(() => {});
         }
       }
-      const pathsToDelete = [...new Set(
-        pendingDeletePaths.filter(
-          path => path !== filePath && path !== thumbnailPath,
-        ),
-      )];
-      await Promise.all(pathsToDelete.map(deleteMediaFile));
+
+      await cleanupRemovedFiles();
+      // Reload so the day reflects the freshly attached/removed media.
+      await loadEntriesForDay(refreshDayId);
       Vibration.vibrate(40);
       navigation.goBack();
     } catch (e) {
@@ -509,26 +513,6 @@ export default function AddEntryModal({navigation, route}: Props) {
         contentContainerStyle={[styles.content, {paddingBottom: spacing.xxl + kbHeight}]}
         keyboardShouldPersistTaps="handled">
 
-      <Text style={styles.sectionLabel}>{translate('entries.type')}</Text>
-      <View style={styles.typeRow}>
-        {ENTRY_TYPES.map(({type, labelKey, emoji}) => (
-          <TouchableOpacity
-            key={type}
-            style={[
-              styles.typeBtn,
-              entryType === type && styles.typeBtnActive,
-              isEdit && styles.typeBtnDisabled,
-            ]}
-            onPress={() => handleEntryTypeChange(type)}
-            activeOpacity={isEdit ? 1 : 0.7}>
-            <Text style={styles.typeEmoji}>{emoji}</Text>
-            <Text style={[styles.typeLabel, entryType === type && styles.typeLabelActive]}>
-              {translate(labelKey)}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
       <Text style={styles.sectionLabel}>{translate('entries.activity')}</Text>
       <View style={styles.activityRow}>
         {ACTIVITY_TYPES.map(({type, labelKey}) => (
@@ -544,42 +528,8 @@ export default function AddEntryModal({navigation, route}: Props) {
         ))}
       </View>
 
-      {entryType === 'photo' && (
-        <>
-          <Text style={styles.sectionLabel}>{translate('entries.photo')}</Text>
-          <PhotoCapture
-            filePath={filePath}
-            onCapture={(fp, tp) => setMedia(fp, tp)}
-          />
-        </>
-      )}
-      {entryType === 'video' && (
-        <>
-          <Text style={styles.sectionLabel}>{translate('entries.video')}</Text>
-          <VideoCapture
-            filePath={filePath}
-            onCapture={(fp, tp) => setMedia(fp, tp)}
-          />
-        </>
-      )}
-      {entryType === 'voice' && (
-        <>
-          <Text style={styles.sectionLabel}>{translate('entries.voiceRecording')}</Text>
-          <VoiceRecorder
-            filePath={filePath}
-            onRecord={(fp, durSec) => {
-              setMedia(fp, null);
-              setDurationMinutes(String(Math.round(durSec / 60)));
-              setTimeMode('duration');
-            }}
-            onDiscard={() => {
-              setMedia(null, null);
-              setDurationMinutes('');
-              setTimeMode('none');
-            }}
-          />
-        </>
-      )}
+      <Text style={styles.sectionLabel}>{translate('entries.attachments')}</Text>
+      <AttachmentsSection media={media} onAdd={addMedia} onRemove={removeMedia} />
 
       <Text style={styles.sectionLabel}>{translate('entries.titleOptional')}</Text>
       <TextInput

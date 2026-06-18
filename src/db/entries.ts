@@ -2,11 +2,25 @@ import {getDB} from './database';
 import i18n from '../i18n';
 import {getDaysInRange} from './days';
 import {calcDayWorkSecs} from '../utils/hoursUtils';
-import type {Entry, Tag, Project} from '../types';
+import type {Entry, Tag, Project, EntryMedia, MediaType} from '../types';
 
 type RawRow = Record<string, unknown>;
 
-function rowToEntry(row: RawRow, tags: Tag[], project: Project | null): Entry {
+function rowToMedia(row: RawRow): EntryMedia {
+  return {
+    id: row.id as number,
+    entry_id: row.entry_id as number,
+    media_type: row.media_type as MediaType,
+    file_path: row.file_path as string,
+    thumbnail_path: (row.thumbnail_path as string | null) ?? null,
+    duration_sec: (row.duration_sec as number | null) ?? null,
+    position: row.position as number,
+    created_at: row.created_at as string,
+    updated_at: row.updated_at as string,
+  };
+}
+
+function rowToEntry(row: RawRow, tags: Tag[], project: Project | null, media: EntryMedia[] = []): Entry {
   return {
     id: row.id as number,
     day_id: row.day_id as number,
@@ -31,7 +45,28 @@ function rowToEntry(row: RawRow, tags: Tag[], project: Project | null): Entry {
     updated_at: row.updated_at as string,
     tags,
     project,
+    media,
   };
+}
+
+/** Load media attachments for a set of entries, grouped by entry id (ordered). */
+async function fetchMediaForEntries(entryIds: number[]): Promise<Map<number, EntryMedia[]>> {
+  const map = new Map<number, EntryMedia[]>();
+  if (entryIds.length === 0) {
+    return map;
+  }
+  const db = getDB();
+  const placeholders = entryIds.map(() => '?').join(',');
+  const result = await db.execute(
+    `SELECT * FROM entry_media WHERE entry_id IN (${placeholders}) ORDER BY position ASC, id ASC;`,
+    entryIds,
+  );
+  for (const row of result.rows ?? []) {
+    const m = rowToMedia(row as RawRow);
+    const list = map.get(m.entry_id);
+    if (list) { list.push(m); } else { map.set(m.entry_id, [m]); }
+  }
+  return map;
 }
 
 async function fetchTagsForEntries(
@@ -102,6 +137,7 @@ export async function getEntriesForDay(dayId: number): Promise<Entry[]> {
 
   const entryIds = rows.map(r => r.id as number);
   const tagsMap = await fetchTagsForEntries(entryIds);
+  const mediaMap = await fetchMediaForEntries(entryIds);
 
   const projectIds = [
     ...new Set(rows.map(r => r.project_id as number | null).filter(Boolean)),
@@ -131,6 +167,7 @@ export async function getEntriesForDay(dayId: number): Promise<Entry[]> {
       r,
       tagsMap.get(r.id as number) ?? [],
       projectsMap.get(r.project_id as number) ?? null,
+      mediaMap.get(r.id as number) ?? [],
     ),
   );
 }
@@ -142,9 +179,52 @@ export async function getEntry(id: number): Promise<Entry | null> {
     return null;
   }
   const r = result.rows[0] as RawRow;
-  const tagsMap = await fetchTagsForEntries([r.id as number]);
+  const entryId = r.id as number;
+  const tagsMap = await fetchTagsForEntries([entryId]);
+  const mediaMap = await fetchMediaForEntries([entryId]);
   const project = await fetchProjectById(r.project_id as number | null);
-  return rowToEntry(r, tagsMap.get(r.id as number) ?? [], project);
+  return rowToEntry(r, tagsMap.get(entryId) ?? [], project, mediaMap.get(entryId) ?? []);
+}
+
+// ─── Entry media (attachments) ───────────────────────────────────────────────
+
+export interface AddEntryMediaParams {
+  media_type: MediaType;
+  file_path: string;
+  thumbnail_path?: string | null;
+  duration_sec?: number | null;
+  position?: number;
+}
+
+/** Attach a media file to an entry. Position defaults to the next free slot. */
+export async function addEntryMedia(entryId: number, params: AddEntryMediaParams): Promise<EntryMedia> {
+  const db = getDB();
+  let position = params.position;
+  if (position == null) {
+    const res = await db.execute(
+      'SELECT COALESCE(MAX(position) + 1, 0) AS p FROM entry_media WHERE entry_id = ?;',
+      [entryId],
+    );
+    position = ((res.rows?.[0] as {p: number} | undefined)?.p) ?? 0;
+  }
+  const result = await db.execute(
+    `INSERT INTO entry_media (entry_id, media_type, file_path, thumbnail_path, duration_sec, position)
+     VALUES (?, ?, ?, ?, ?, ?) RETURNING *;`,
+    [entryId, params.media_type, params.file_path, params.thumbnail_path ?? null, params.duration_sec ?? null, position],
+  );
+  return rowToMedia(result.rows![0] as RawRow);
+}
+
+/** A single entry's media attachments, ordered. */
+export async function getEntryMedia(entryId: number): Promise<EntryMedia[]> {
+  return (await fetchMediaForEntries([entryId])).get(entryId) ?? [];
+}
+
+/** Delete one media attachment row. The caller is responsible for deleting the
+ *  underlying file (see `deleteMediaFile`). */
+export async function deleteEntryMedia(mediaId: number): Promise<void> {
+  const db = getDB();
+  await db.execute('DELETE FROM entry_media WHERE id = ?;', [mediaId]);
 }
 
 export interface CreateEntryParams {

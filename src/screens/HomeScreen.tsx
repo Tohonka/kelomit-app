@@ -1,6 +1,6 @@
 import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import {View, Text, StyleSheet, ScrollView} from 'react-native';
+import {View, Text, StyleSheet, ScrollView, AppState} from 'react-native';
 import {format} from 'date-fns';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {GestureDetector, Gesture} from 'react-native-gesture-handler';
@@ -85,6 +85,17 @@ export default function HomeScreen({navigation}: Props) {
   const totalSecs = today ? calcDayWorkSecs(today, entries) : 0;
 
   useEffect(() => { loadToday(); }, [loadToday]);
+
+  // Roll over to the new day if the app was left open / backgrounded past
+  // midnight — otherwise Home keeps showing yesterday's day on resume.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', state => {
+      if (state === 'active' && useDayStore.getState().today?.date !== todayDate()) {
+        loadToday();
+      }
+    });
+    return () => sub.remove();
+  }, [loadToday]);
   useEffect(() => {
     if (today) { loadEntriesForDay(today.id); }
   }, [today, loadEntriesForDay]);

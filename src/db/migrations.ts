@@ -175,4 +175,30 @@ export const migrations: Migration[] = [
       )`,
     ],
   },
+  {
+    version: 11,
+    up: [
+      // Iteration 4 — "Everything is a Note". Media moves from inline entry
+      // columns to a separate table so a note can hold 0..N attachments,
+      // addable any time. Legacy entries.* media columns are kept (additive,
+      // no data loss) and become unused for new media.
+      `CREATE TABLE IF NOT EXISTS entry_media (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        entry_id       INTEGER NOT NULL REFERENCES entries(id) ON DELETE CASCADE,
+        media_type     TEXT NOT NULL CHECK(media_type IN ('photo','video','voice')),
+        file_path      TEXT NOT NULL,
+        thumbnail_path TEXT,
+        duration_sec   INTEGER,
+        position       INTEGER NOT NULL DEFAULT 0,
+        created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
+      )`,
+      // Backfill: turn every existing photo/video/voice entry's inline file
+      // into one attachment row. Lossless.
+      `INSERT INTO entry_media (entry_id, media_type, file_path, thumbnail_path, duration_sec, position)
+       SELECT id, entry_type, file_path, thumbnail_path, duration_sec, 0
+       FROM entries
+       WHERE entry_type IN ('photo','video','voice') AND file_path IS NOT NULL`,
+    ],
+  },
 ];

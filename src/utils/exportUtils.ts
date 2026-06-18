@@ -1,5 +1,5 @@
-import {Share} from 'react-native';
 import RNFS from 'react-native-fs';
+import {saveDocuments, errorCodes, isErrorWithCode} from '@react-native-documents/picker';
 import {getDB} from '../db/database';
 import i18n from '../i18n';
 
@@ -121,16 +121,19 @@ export async function exportToCsv(
   const filePath = `${RNFS.CachesDirectoryPath}/${filename}`;
   await RNFS.writeFile(filePath, csv, 'utf8');
 
-  await Share.share(
-    {
-      title: filename,
-      url: `file://${filePath}`,
-      message: i18n.t('settings.exportShareMessage', {
-        startDate,
-        endDate,
-        count: rows.length,
-      }),
-    },
-    {dialogTitle: i18n.t('settings.exportDialogTitle')},
-  );
+  // Use the system "save to…" dialog (saveDocuments) — NOT RN's Share, whose
+  // `url` is iOS-only and on Android shares only the message text, never the file.
+  try {
+    await saveDocuments({
+      sourceUris: [`file://${filePath}`],
+      mimeType: 'text/csv',
+      fileName: filename,
+      copy: true,
+    });
+  } catch (e) {
+    if (isErrorWithCode(e) && e.code === errorCodes.OPERATION_CANCELED) {
+      return; // user dismissed the save dialog — not an error
+    }
+    throw e;
+  }
 }

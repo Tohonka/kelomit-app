@@ -1,13 +1,21 @@
-import {Share} from 'react-native';
 import RNFS from 'react-native-fs';
 import {zip, unzip} from 'react-native-zip-archive';
-import {pick, keepLocalCopy, types, errorCodes, isErrorWithCode} from '@react-native-documents/picker';
+import {
+  pick,
+  keepLocalCopy,
+  saveDocuments,
+  types,
+  errorCodes,
+  isErrorWithCode,
+} from '@react-native-documents/picker';
 import {getDB, closeDB, initDB} from '../db/database';
 import {stopTracking} from './gpsService';
 import i18n from '../i18n';
 
 const BACKUP_VERSION = 1;
 const MEDIA_DIR = `${RNFS.DocumentDirectoryPath}/kelomit/media`;
+
+export type BackupResult = 'done' | 'cancelled';
 
 interface Manifest {
   app: 'kelomit';
@@ -20,6 +28,18 @@ function stamp(): string {
   const d = new Date();
   const p = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
+}
+
+/** Turn a (possibly percent-encoded) file:// URI into a plain filesystem path
+ *  that RNFS / zip-archive can open. */
+function uriToPath(uri: string): string {
+  let path = uri.startsWith('file://') ? uri.slice('file://'.length) : uri;
+  try {
+    path = decodeURIComponent(path);
+  } catch {
+    // leave as-is if it wasn't encoded
+  }
+  return path;
 }
 
 /** Recursively copy a directory (RNFS has no built-in recursive copy). */
@@ -78,21 +98,31 @@ async function writeBackupZip(targetZip: string): Promise<void> {
   }
 }
 
-/** Export a full backup and hand it to the system share sheet. */
-export async function exportBackup(): Promise<void> {
-  const target = `${RNFS.CachesDirectoryPath}/kelomit-backup-${stamp()}.zip`;
+/**
+ * Export a full backup and let the user save it to a location they choose.
+ * Uses the document picker's `saveDocuments` (system "save to" dialog) — NOT
+ * RN's `Share`, whose `url` is iOS-only and on Android shares only text, which
+ * silently produced a bogus non-zip "backup" file.
+ */
+export async function exportBackup(): Promise<BackupResult> {
+  const fileName = `kelomit-backup-${stamp()}.zip`;
+  const target = `${RNFS.CachesDirectoryPath}/${fileName}`;
   await writeBackupZip(target);
-  await Share.share(
-    {
-      title: i18n.t('settings.backupFileName'),
-      url: `file://${target}`,
-      message: i18n.t('settings.backupShareMessage'),
-    },
-    {dialogTitle: i18n.t('settings.backupDialogTitle')},
-  );
+  try {
+    await saveDocuments({
+      sourceUris: [`file://${target}`],
+      mimeType: 'application/zip',
+      fileName,
+      copy: true,
+    });
+  } catch (e) {
+    if (isErrorWithCode(e) && e.code === errorCodes.OPERATION_CANCELED) {
+      return 'cancelled';
+    }
+    throw e;
+  }
+  return 'done';
 }
-
-export type RestoreResult = 'done' | 'cancelled';
 
 /**
  * Restore from a user-picked backup .zip. Full replace: a pre-restore safety
@@ -100,7 +130,7 @@ export type RestoreResult = 'done' | 'cancelled';
  * re-initialised (migrations run on the restored data). The app should be
  * restarted afterwards so all in-memory state is rebuilt from the new data.
  */
-export async function importBackup(): Promise<RestoreResult> {
+export async function importBackup(): Promise<BackupResult> {
   let picked;
   try {
     [picked] = await pick({type: [types.zip, types.allFiles]});
@@ -119,12 +149,16 @@ export async function importBackup(): Promise<RestoreResult> {
   if (copy.status !== 'success') {
     throw new Error(i18n.t('settings.restoreInvalid'));
   }
-  const localZip = copy.localUri.replace('file://', '');
+  const localZip = uriToPath(copy.localUri);
+  if (!(await RNFS.exists(localZip))) {
+    throw new Error(`${i18n.t('settings.restoreInvalid')} (${localZip})`);
+  }
 
   const tmp = `${RNFS.CachesDirectoryPath}/kelomit-restore-${Date.now()}`;
   if (await RNFS.exists(tmp)) {
     await RNFS.unlink(tmp);
   }
+  await RNFS.mkdir(tmp); // zip-archive needs the destination to exist
   await unzip(localZip, tmp);
 
   // Validate before touching live data.

@@ -22,16 +22,27 @@ export interface KnownPosition {
 let _lastPosition: KnownPosition | null = null;
 let _watchId: number | null = null;
 let _configured = false;
+let _lastError: string | null = null;
+
+/** Human-readable detail of the most recent one-shot location failure, for
+ *  surfacing in the UI while diagnosing device issues. */
+export function getLastPositionError(): string | null {
+  return _lastError;
+}
 
 /** Configure the geolocation module once. We handle runtime permissions
  *  ourselves via react-native-permissions, so skip the library's own prompt.
- *  `locationProvider: 'auto'` uses the fused Play Services provider when
- *  available (matching the previous behaviour). */
+ *  Request the **fused Play Services** provider explicitly: the library's
+ *  `'auto'` value is a no-op (it never auto-detects Play Services — it just
+ *  leaves the default plain-Android GPS-only manager, which can't get a fix
+ *  indoors). With `'playServices'` the lib checks availability and uses fused
+ *  location when present (instant indoor fixes, like Google Maps), and falls
+ *  back to the Android provider on devices without Play Services. */
 function ensureConfigured(): void {
   if (_configured) {
     return;
   }
-  Geolocation.setRNConfiguration({skipPermissionRequests: true, locationProvider: 'auto'});
+  Geolocation.setRNConfiguration({skipPermissionRequests: true, locationProvider: 'playServices'});
   _configured = true;
 }
 
@@ -102,25 +113,74 @@ export async function requestLocationPermission(): Promise<boolean> {
   return false;
 }
 
-/** One-shot current position (works even when continuous tracking is off). */
+function toKnown(pos: GeolocationResponse): KnownPosition {
+  return {
+    latitude: pos.coords.latitude,
+    longitude: pos.coords.longitude,
+    accuracy: pos.coords.accuracy ?? null,
+    timestamp: pos.timestamp,
+  };
+}
+
+/** A single getCurrentPosition attempt, wrapped with a JS-side timeout so it can
+ *  never hang (the library's fused path doesn't always honour its own timeout).
+ *  `getCurrentPosition` uses one-shot mechanisms that don't clash with the
+ *  continuous tracking watch, so this is safe to call while tracking. */
+function tryGet(highAccuracy: boolean, timeoutMs: number, maximumAge: number): Promise<KnownPosition | null> {
+  return new Promise(resolve => {
+    let settled = false;
+    const finish = (val: KnownPosition | null) => {
+      if (!settled) { settled = true; resolve(val); }
+    };
+    const timer = setTimeout(() => {
+      if (!_lastError) { _lastError = `${highAccuracy ? 'high' : 'low'}-accuracy request timed out`; }
+      finish(null);
+    }, timeoutMs + 2_000);
+    Geolocation.getCurrentPosition(
+      pos => { clearTimeout(timer); finish(toKnown(pos)); },
+      err => {
+        _lastError = `getCurrentPosition code=${err?.code} ${err?.message ?? ''}`.trim();
+        clearTimeout(timer);
+        finish(null);
+      },
+      {enableHighAccuracy: highAccuracy, timeout: timeoutMs, maximumAge},
+    );
+  });
+}
+
+/**
+ * One-shot current position (works even when continuous tracking is off).
+ * Real devices often can't get a high-accuracy GPS fix indoors, so we:
+ *  1. Try high accuracy (GPS) briefly — accurate outdoors.
+ *  2. Fall back to low accuracy (network/wifi/cell) — works indoors, fast, and
+ *     plenty precise for a geofence centre.
+ *  3. Fall back to the last fix continuous tracking has seen.
+ */
 export async function getCurrentPositionOnce(): Promise<KnownPosition | null> {
+  _lastError = null;
   const ok = await requestLocationPermission();
   if (!ok) {
+    _lastError = 'location permission not granted';
     return null;
   }
   ensureConfigured();
-  return new Promise(resolve => {
-    Geolocation.getCurrentPosition(
-      pos => resolve({
-        latitude: pos.coords.latitude,
-        longitude: pos.coords.longitude,
-        accuracy: pos.coords.accuracy ?? null,
-        timestamp: pos.timestamp,
-      }),
-      () => resolve(_lastPosition),
-      {enableHighAccuracy: true, timeout: 15_000, maximumAge: 10_000},
-    );
-  });
+
+  let pos = await tryGet(true, 15_000, 300_000); // GPS — outdoors
+  if (pos) {
+    return pos;
+  }
+  pos = await tryGet(false, 15_000, 600_000); // network — indoors
+  if (pos) {
+    return pos;
+  }
+
+  if (_lastPosition) {
+    return _lastPosition;
+  }
+  if (!_lastError) {
+    _lastError = 'no location available';
+  }
+  return null;
 }
 
 export async function startTracking(intervalMs = 60_000): Promise<void> {

@@ -1,5 +1,7 @@
 export type ActivityType = 'work' | 'personal_work' | 'personal';
 export type EntryType = 'note' | 'photo' | 'video' | 'voice';
+/** Kinds of media that can be attached to a note (Iteration 4). */
+export type MediaType = 'photo' | 'video' | 'voice';
 export type ProjectType = 'work' | 'personal' | 'other';
 
 export interface Project {
@@ -53,6 +55,22 @@ export interface Entry {
   updated_at: string;
   tags?: Tag[];
   project?: Project | null;
+  /** Media attachments (Iteration 4). A note can carry 0..N. */
+  media?: EntryMedia[];
+}
+
+/** A single media attachment on an entry (Iteration 4 — `entry_media` table). */
+export interface EntryMedia {
+  id: number;
+  entry_id: number;
+  media_type: MediaType;
+  file_path: string;
+  thumbnail_path: string | null;
+  duration_sec: number | null;
+  /** Ordering within the note (0-based). */
+  position: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export type LocationKind = 'work' | 'home' | 'other';
