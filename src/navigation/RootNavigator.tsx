@@ -15,6 +15,7 @@ import TrackingSettings from '../screens/settings/TrackingSettings';
 import DataSettings from '../screens/settings/DataSettings';
 import QuickAddSettings from '../screens/settings/QuickAddSettings';
 import LocationSettings from '../screens/settings/LocationSettings';
+import WidgetSettings from '../screens/settings/WidgetSettings';
 import {useTheme} from '../theme';
 import type {RootStackParamList} from './navigationTypes';
 
@@ -108,6 +109,11 @@ export default function RootNavigator() {
         name="LocationSettings"
         component={LocationSettings}
         options={{title: t('location.title')}}
+      />
+      <Stack.Screen
+        name="WidgetSettings"
+        component={WidgetSettings}
+        options={{title: t('widgets.title')}}
       />
     </Stack.Navigator>
   );

@@ -1,0 +1,10 @@
+<resources>
+    <!-- Warm Kelomit palette, mirrored from src/theme/colors.ts (light) for the
+         home-screen widgets, which can't read the JS theme. -->
+    <color name="widget_bg">#FFF8F0</color>
+    <color name="widget_bg_active">#FBE3D4</color>
+    <color name="widget_primary">#C85C2D</color>
+    <color name="widget_text_primary">#3D2B1F</color>
+    <color name="widget_text_muted">#A08070</color>
+    <color name="widget_on_primary">#FFFFFF</color>
+</resources>

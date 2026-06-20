@@ -18,6 +18,7 @@ export type RootStackParamList = {
   DataSettings: undefined;
   QuickAddSettings: undefined;
   LocationSettings: undefined;
+  WidgetSettings: undefined;
 };
 
 export type TabParamList = {

@@ -50,5 +50,31 @@
             <category android:name="android.intent.category.LAUNCHER" />
         </intent-filter>
       </activity>
+
+      <!-- Home-screen session widgets (Iteration 3 Phase 9.2). ACTION_TOGGLE is
+           our own start/stop broadcast; APPWIDGET_UPDATE is the system's. -->
+      <receiver
+        android:name=".widget.SessionWidgetProvider"
+        android:exported="false">
+        <intent-filter>
+          <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+          <action android:name="com.kelomitapp.widget.ACTION_TOGGLE" />
+        </intent-filter>
+        <meta-data
+          android:name="android.appwidget.provider"
+          android:resource="@xml/widget_session_info" />
+      </receiver>
+
+      <receiver
+        android:name=".widget.SessionToggleWidgetProvider"
+        android:exported="false">
+        <intent-filter>
+          <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+          <action android:name="com.kelomitapp.widget.ACTION_TOGGLE" />
+        </intent-filter>
+        <meta-data
+          android:name="android.appwidget.provider"
+          android:resource="@xml/widget_session_toggle_info" />
+      </receiver>
     </application>
 </manifest>

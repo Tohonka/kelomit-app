@@ -73,6 +73,24 @@ export interface EntryMedia {
   updated_at: string;
 }
 
+/**
+ * A running time-tracking session (Iteration 3 Phase 9). At most one is active
+ * at a time. It is the shared model behind the in-app quick timer and — later —
+ * the home-screen widgets. Persisted so it survives the app being killed; on
+ * stop it becomes a normal `entry_type:'note'` entry with `duration_sec`.
+ */
+export interface ActiveSession {
+  /** When tracking began — ISO 8601 (`toISOString()`, ends in `Z`). */
+  started_at: string;
+  project_id: number | null;
+  activity_type: ActivityType;
+  /** Tag names to apply to the logged note (resolved to ids on stop). */
+  tags: string[];
+  title: string | null;
+  /** Where the session was started from. */
+  source: 'timer' | 'widget';
+}
+
 export type LocationKind = 'work' | 'home' | 'other';
 
 export interface SavedLocation {

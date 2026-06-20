@@ -11,6 +11,7 @@ import {getAllSettings} from './src/db/settings';
 import {startTracking, stopTracking} from './src/services/gpsService';
 import {ensureNotificationChannel, registerForegroundNotifeeHandler} from './src/services/notificationService';
 import {useSettingsStore} from './src/store/settingsStore';
+import {useSessionStore} from './src/store/sessionStore';
 import {useTheme, lightColors, typography} from './src/theme';
 import RootNavigator from './src/navigation/RootNavigator';
 
@@ -33,6 +34,8 @@ function AppContent() {
         setDbReady(true);
         load();
         ensureNotificationChannel().catch(() => {});
+        // Log any sessions a home-screen widget finished while we were closed.
+        useSessionStore.getState().reconcile().catch(() => {});
       })
       .catch(e => setError(String(e)));
   }, [load]);
@@ -61,6 +64,8 @@ function AppContent() {
         nextState === 'active'
       ) {
         startGpsIfEnabled();
+        // A widget may have started/stopped a session while we were backgrounded.
+        useSessionStore.getState().reconcile().catch(() => {});
       } else if (
         appState.current === 'active' &&
         nextState.match(/inactive|background/)

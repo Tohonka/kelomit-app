@@ -1,3 +1,12 @@
 <resources>
     <string name="app_name">KelomitApp</string>
+    <!-- Home-screen session widgets (Phase 9.2) -->
+    <string name="widget_title">Quick timer</string>
+    <string name="widget_start">Start</string>
+    <string name="widget_stop">Stop</string>
+    <string name="widget_tracking">Tracking…</string>
+    <string name="widget_full_label">Kelomit timer</string>
+    <string name="widget_full_description">Start/stop a work session with a live timer.</string>
+    <string name="widget_toggle_label">Kelomit toggle</string>
+    <string name="widget_toggle_description">One-tap start/stop for a configured project.</string>
 </resources>
