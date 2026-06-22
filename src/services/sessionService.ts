@@ -6,14 +6,30 @@ import {
 import {getOrCreateDay} from '../db/days';
 import {createEntry} from '../db/entries';
 import {getOrCreateTag} from '../db/tags';
-import {localDateOf} from '../utils/dateUtils';
+import {localDateOf, formatTime} from '../utils/dateUtils';
 import {getLastKnownPosition} from './gpsService';
 import {elapsedSeconds, sessionToEntryParams} from './sessionLogic';
 import {
   nativeGetPendingSessions,
   nativeClearPendingSessions,
 } from '../native/widgetSession';
+import i18n from '../i18n';
 import type {ActiveSession, ActivityType, Entry} from '../types';
+
+/**
+ * Give an untitled session a friendly, editable headline (e.g. "Timer note
+ * 14:30") so a widget-logged note isn't blank in the list. The user can rename
+ * it like any other note. A title set in-app is kept as-is.
+ */
+function withFallbackTitle(session: ActiveSession): ActiveSession {
+  if (session.title && session.title.trim()) {
+    return session;
+  }
+  return {
+    ...session,
+    title: i18n.t('timer.noteTitle', {time: formatTime(session.started_at)}),
+  };
+}
 
 /**
  * Start/stop orchestration for the active time-tracking session (Phase 9).
@@ -83,7 +99,7 @@ export async function stopSession(): Promise<StopResult> {
   const gps = getLastKnownPosition();
   const entry = await createEntry(
     sessionToEntryParams({
-      session,
+      session: withFallbackTitle(session),
       dayId: day.id,
       endedAt,
       tagIds,
@@ -123,14 +139,14 @@ export async function drainPendingSessions(): Promise<number[]> {
     // drain time (possibly a different place) would be misleading.
     await createEntry(
       sessionToEntryParams({
-        session: {
+        session: withFallbackTitle({
           started_at: p.started_at,
           project_id: p.project_id,
           activity_type: p.activity_type,
           tags: p.tags,
           title: p.title,
           source: 'widget',
-        },
+        }),
         dayId: day.id,
         endedAt: new Date(p.ended_at),
         tagIds,

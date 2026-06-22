@@ -239,6 +239,7 @@ const en = {
     cancelTimer: 'Discard',
     tracking: 'Tracking…',
     started: 'Started {{time}}',
+    noteTitle: 'Timer note {{time}}',
     options: 'Options',
     titlePlaceholder: 'What are you working on?',
     cancelConfirmTitle: 'Discard timer?',

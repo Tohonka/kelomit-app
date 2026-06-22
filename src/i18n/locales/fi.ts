@@ -241,6 +241,7 @@ const fi: typeof en = {
     cancelTimer: 'Hylkää',
     tracking: 'Seurataan…',
     started: 'Aloitettu {{time}}',
+    noteTitle: 'Ajastinmuistiinpano {{time}}',
     options: 'Asetukset',
     titlePlaceholder: 'Mitä teet?',
     cancelConfirmTitle: 'Hylätäänkö ajastin?',

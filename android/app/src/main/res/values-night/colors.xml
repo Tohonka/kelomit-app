@@ -1,0 +1,12 @@
+<resources>
+    <!-- Dark Kelomit palette, mirrored from src/theme/colors.ts (darkColors).
+         Applied automatically when the system is in dark mode, so the widgets
+         match the app's warm theme in both light and dark. -->
+    <color name="widget_bg">#221A14</color>
+    <color name="widget_bg_active">#3D2A1E</color>
+    <color name="widget_primary">#E07845</color>
+    <color name="widget_text_primary">#F2E8DC</color>
+    <color name="widget_text_muted">#8A6C5C</color>
+    <color name="widget_border">#3A2820</color>
+    <color name="widget_on_primary">#FFFFFF</color>
+</resources>
