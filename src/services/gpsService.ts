@@ -88,6 +88,31 @@ export function getLastKnownPosition(): KnownPosition | null {
   return _lastPosition;
 }
 
+export type GeofenceDetection = 'work' | 'home' | 'other' | 'unknown';
+
+/**
+ * Which kind of saved place we're currently inside, for the Home-screen
+ * "Where am I?" diagnostic. Reads the live geofence membership (updated on each
+ * position fix while the app is foreground). Prefers work > home > other; falls
+ * back to 'unknown' when not inside any saved place. Note tracking is
+ * foreground-only, so this is 'unknown' right after launch until the first fix.
+ */
+export function getCurrentGeofenceDetection(): GeofenceDetection {
+  const insideKinds = _geofences
+    .filter(loc => _insideIds.has(loc.id))
+    .map(loc => loc.kind);
+  if (insideKinds.includes('work')) {
+    return 'work';
+  }
+  if (insideKinds.includes('home')) {
+    return 'home';
+  }
+  if (insideKinds.includes('other')) {
+    return 'other';
+  }
+  return 'unknown';
+}
+
 /** Reload saved geofence locations into memory. Call after editing locations. */
 export async function refreshGeofences(): Promise<void> {
   try {

@@ -22,6 +22,7 @@ import type {Entry} from '../types';
 import {getUpcomingTodos} from '../db/entries';
 import {formatDate, todayDate, nextDayDates, shiftDate} from '../utils/dateUtils';
 import {calcDayWorkSecs, formatHours} from '../utils/hoursUtils';
+import {getCurrentGeofenceDetection, type GeofenceDetection} from '../services/gpsService';
 
 type Props = TabScreenProps<'Home'>;
 
@@ -71,6 +72,13 @@ const makeStyles = (c: Colors) =>
       paddingTop: spacing.sm,
       paddingBottom: spacing.xs,
     },
+    whereAmI: {
+      textAlign: 'center',
+      fontSize: typography.sizes.xs,
+      color: c.textMuted,
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.xl,
+    },
   });
 
 export default function HomeScreen({navigation}: Props) {
@@ -80,6 +88,8 @@ export default function HomeScreen({navigation}: Props) {
   const {today, loadToday, updateDayTimes} = useDayStore();
   const {entriesByDay, loadEntriesForDay} = useEntryStore();
   const [upcoming, setUpcoming] = useState<Entry[]>([]);
+  // Lightweight geofence diagnostic — passively shows where we think we are.
+  const [detected, setDetected] = useState<GeofenceDetection>('unknown');
 
   const date = todayDate();
   const entries = today ? (entriesByDay[today.id] ?? []) : [];
@@ -109,6 +119,23 @@ export default function HomeScreen({navigation}: Props) {
     const unsub = navigation.addListener('focus', loadUpcoming);
     return unsub;
   }, [navigation, loadUpcoming]);
+
+  // Poll the live geofence membership for the "Where am I?" line.
+  useEffect(() => {
+    const tick = () => setDetected(getCurrentGeofenceDetection());
+    tick();
+    const id = setInterval(tick, 4000);
+    return () => clearInterval(id);
+  }, []);
+
+  const placeLabel = (d: GeofenceDetection) =>
+    d === 'work'
+      ? t('location.work')
+      : d === 'home'
+        ? t('location.home')
+        : d === 'other'
+          ? t('location.placeOther')
+          : t('location.placeUnknown');
 
   const upcomingGroups = useMemo(() => {
     const out: {date: string; items: Entry[]}[] = [];
@@ -204,6 +231,9 @@ export default function HomeScreen({navigation}: Props) {
             ))}
           </View>
         )}
+        <Text style={styles.whereAmI}>
+          {t('location.detected', {place: placeLabel(detected)})}
+        </Text>
       </ScrollView>
         </View>
       </GestureDetector>
