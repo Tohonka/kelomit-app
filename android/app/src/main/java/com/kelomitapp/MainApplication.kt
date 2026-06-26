@@ -6,6 +6,7 @@ import com.facebook.react.ReactApplication
 import com.facebook.react.ReactHost
 import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
+import com.kelomitapp.location.BackgroundLocationPackage
 import com.kelomitapp.widget.WidgetSessionPackage
 
 class MainApplication : Application(), ReactApplication {
@@ -17,6 +18,8 @@ class MainApplication : Application(), ReactApplication {
         PackageList(this).packages.apply {
           // Native session/widget bridge (Iteration 3 Phase 9.2) — not autolinked.
           add(WidgetSessionPackage())
+          // Background-location foreground service bridge — not autolinked.
+          add(BackgroundLocationPackage())
         },
     )
   }

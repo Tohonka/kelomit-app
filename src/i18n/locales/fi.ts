@@ -131,6 +131,8 @@ const fi: typeof en = {
     noTag: 'Ei tunnistetta',
     location: 'Sijainti',
     gpsTracking: 'GPS-seuranta',
+    backgroundTracking: 'Seuraa taustalla',
+    backgroundTrackingDescription: 'Jatka sijainnin kirjaamista, kun sovellus on suljettu, jotta töihin saapuminen ja lähteminen tunnistetaan oikeaan aikaan. Näyttää hillityn pysyvän ilmoituksen.',
     defaults: 'Oletukset',
     defaultActivity: 'Oletusaktiviteetti',
     exportCsv: 'Vie CSV',
@@ -327,6 +329,8 @@ const fi: typeof en = {
   permissions: {
     requiredTitle: 'Lupa tarvitaan',
     requiredMessage: 'Ota lupa käyttöön laitteen asetuksista, jotta voit käyttää tätä toimintoa.',
+    backgroundLocationTitle: 'Salli aina',
+    backgroundLocationMessage: 'Taustaseurantaa varten aseta Kelomitin sijaintiluvaksi "Salli aina" laitteen asetuksista.',
   },
   fab: {
     more: 'Lisää',

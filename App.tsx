@@ -12,6 +12,7 @@ import {startTracking, stopTracking} from './src/services/gpsService';
 import {ensureNotificationChannel, registerForegroundNotifeeHandler} from './src/services/notificationService';
 import {useSettingsStore} from './src/store/settingsStore';
 import {useSessionStore} from './src/store/sessionStore';
+import {startBackgroundLocationService} from './src/native/backgroundLocation';
 import {useTheme, lightColors, typography} from './src/theme';
 import RootNavigator from './src/navigation/RootNavigator';
 
@@ -52,6 +53,13 @@ function AppContent() {
       const settings = await getAllSettings().catch(() => null);
       if (settings?.gps_enabled) {
         startTracking(settings.gps_interval_ms);
+        // The keep-alive foreground service is tied to the *setting*, not the
+        // background transition: Android 12+ forbids starting a foreground
+        // service once already backgrounded, so it must be started while we're
+        // still in the foreground and left running the whole time tracking is on.
+        if (useSettingsStore.getState().background_tracking) {
+          startBackgroundLocationService();
+        }
       }
     };
 
@@ -70,7 +78,12 @@ function AppContent() {
         appState.current === 'active' &&
         nextState.match(/inactive|background/)
       ) {
-        stopTracking();
+        const {gps_enabled, background_tracking} = useSettingsStore.getState();
+        // With background tracking on, keep the watch alive (the foreground
+        // service is already running). Otherwise stop tracking as before.
+        if (!(gps_enabled && background_tracking)) {
+          stopTracking();
+        }
       }
       appState.current = nextState;
     });

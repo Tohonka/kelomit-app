@@ -8,6 +8,13 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Opt-in background GPS: keep logging location while the app is closed so
+         work enter/exit are detected at the real time. Runs only behind the
+         user's "Track in background" setting + the "Allow all the time" grant,
+         via a location-typed foreground service (LocationService). -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
 
     <!-- Media-library / external-storage permissions intentionally trimmed
          (Iteration 3 Phase 2): gallery imports use the Android system photo
@@ -76,5 +83,11 @@
           android:name="android.appwidget.provider"
           android:resource="@xml/widget_session_toggle_info" />
       </receiver>
+
+      <!-- Opt-in background GPS keep-alive service (location-typed). -->
+      <service
+        android:name=".location.LocationService"
+        android:exported="false"
+        android:foregroundServiceType="location" />
     </application>
 </manifest>

@@ -25,9 +25,11 @@ export interface SessionEntryInput {
 }
 
 /**
- * Turn a finished session into the params for a normal note entry. Records both
- * `duration_sec` and the `time_from`/`time_to` span so the work-day hours model
- * can place it precisely (work outside legs is added, etc.).
+ * Turn a finished session into the params for a normal note entry. Records the
+ * `time_from`/`time_to` span as the source of truth (not `duration_sec`): the
+ * hours model can place it precisely AND the elapsed time is derivable from the
+ * span, whereas a bare duration can't be turned back into a from–to. The entry's
+ * own `created_at` (set on insert ≈ stop time) is the end-time stamp.
  */
 export function sessionToEntryParams(input: SessionEntryInput): CreateEntryParams {
   const {session, dayId, endedAt, tagIds, latitude, longitude} = input;
@@ -38,7 +40,7 @@ export function sessionToEntryParams(input: SessionEntryInput): CreateEntryParam
     project_id: session.project_id,
     title: session.title,
     body: null,
-    duration_sec: elapsedSeconds(session.started_at, endedAt),
+    duration_sec: null,
     time_from: session.started_at,
     time_to: endedAt.toISOString(),
     latitude: latitude ?? null,

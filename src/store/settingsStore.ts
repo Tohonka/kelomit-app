@@ -11,6 +11,8 @@ interface SettingsState extends Settings {
   theme_mode: ThemeMode;
   show_week_numbers: boolean;
   nav_visibility: NavVisibility;
+  /** Opt-in: keep logging GPS via a foreground service while the app is closed. */
+  background_tracking: boolean;
   time_selector_mode: TimeSelectorMode;
   language: Language;
   quickadd_default_project_id: number | null;
@@ -24,6 +26,7 @@ interface SettingsState extends Settings {
   setThemeMode: (mode: ThemeMode) => Promise<void>;
   setShowWeekNumbers: (show: boolean) => Promise<void>;
   setNavVisibility: (mode: NavVisibility) => Promise<void>;
+  setBackgroundTracking: (enabled: boolean) => Promise<void>;
   setUsualStart: (hhmm: string | null) => Promise<void>;
   setUsualEnd: (hhmm: string | null) => Promise<void>;
   setPrefillFromUsual: (enabled: boolean) => Promise<void>;
@@ -47,6 +50,7 @@ export const useSettingsStore = create<SettingsState>(set => ({
   theme_mode: 'system',
   show_week_numbers: false,
   nav_visibility: 'always',
+  background_tracking: false,
   time_selector_mode: 'clock',
   language: 'en',
   quickadd_default_project_id: null,
@@ -64,6 +68,7 @@ export const useSettingsStore = create<SettingsState>(set => ({
     const show_week_numbers = raw.show_week_numbers === 'true';
     const nav_visibility: NavVisibility =
       raw.nav_visibility === 'home_only' ? 'home_only' : 'always';
+    const background_tracking = raw.background_tracking === 'true';
     const time_selector_mode: TimeSelectorMode =
       raw.time_selector_mode === 'keyboard' ? 'keyboard' : 'clock';
     const language = resolveLanguageSetting(raw.language);
@@ -82,6 +87,7 @@ export const useSettingsStore = create<SettingsState>(set => ({
       theme_mode,
       show_week_numbers,
       nav_visibility,
+      background_tracking,
       time_selector_mode,
       language,
       quickadd_default_project_id,
@@ -124,6 +130,11 @@ export const useSettingsStore = create<SettingsState>(set => ({
   setNavVisibility: async mode => {
     await setSetting('nav_visibility', mode);
     set({nav_visibility: mode});
+  },
+
+  setBackgroundTracking: async enabled => {
+    await setSetting('background_tracking', String(enabled));
+    set({background_tracking: enabled});
   },
 
   setUsualStart: async hhmm => {

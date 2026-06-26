@@ -129,6 +129,8 @@ const en = {
     noTag: 'No tag',
     location: 'Location',
     gpsTracking: 'GPS tracking',
+    backgroundTracking: 'Track in background',
+    backgroundTrackingDescription: 'Keep logging location when the app is closed, so arriving and leaving work are detected at the right time. Shows a quiet ongoing notification.',
     defaults: 'Defaults',
     defaultActivity: 'Default activity',
     exportCsv: 'Export CSV',
@@ -325,6 +327,8 @@ const en = {
   permissions: {
     requiredTitle: 'Permission required',
     requiredMessage: 'Please enable this permission in your device Settings to use this feature.',
+    backgroundLocationTitle: 'Allow all the time',
+    backgroundLocationMessage: 'To track in the background, set Location access to "Allow all the time" for Kelomit in your device Settings.',
   },
   fab: {
     more: 'More',

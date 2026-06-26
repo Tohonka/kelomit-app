@@ -28,7 +28,7 @@ describe('elapsedSeconds', () => {
 });
 
 describe('sessionToEntryParams', () => {
-  it('produces a note entry with duration and the timed span', () => {
+  it('produces a note entry with the from–to span and no bare duration', () => {
     const endedAt = new Date('2026-06-21T09:30:00.000Z'); // +1h30m
     const params = sessionToEntryParams({
       session: baseSession,
@@ -45,7 +45,8 @@ describe('sessionToEntryParams', () => {
       activity_type: 'work',
       project_id: 7,
       title: 'Roof repair',
-      duration_sec: 5400,
+      // from–to is the source of truth; duration is derivable from it.
+      duration_sec: null,
       time_from: baseSession.started_at,
       time_to: endedAt.toISOString(),
       latitude: 60.1,
@@ -65,6 +66,8 @@ describe('sessionToEntryParams', () => {
     expect(params.longitude).toBeNull();
     expect(params.project_id).toBeNull();
     expect(params.title).toBeNull();
-    expect(params.duration_sec).toBe(300);
+    expect(params.duration_sec).toBeNull();
+    expect(params.time_from).toBe(baseSession.started_at);
+    expect(params.time_to).toBe('2026-06-21T08:05:00.000Z');
   });
 });

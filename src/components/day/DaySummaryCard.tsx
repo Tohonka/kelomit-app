@@ -1,4 +1,4 @@
-import React, {useMemo, useState} from 'react';
+import React, {useEffect, useMemo, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {View, Text, TouchableOpacity, StyleSheet} from 'react-native';
 import {useTheme, typography, spacing} from '../../theme';
@@ -101,6 +101,12 @@ export default function DaySummaryCard({day, entries, onUpdateTimes}: Props) {
   const [showLeg2, setShowLeg2] = useState(
     !!(day.started_at_2 || day.ended_at_2),
   );
+
+  // Re-sync when the day itself changes (e.g. midnight rollover swaps in a fresh
+  // day): otherwise the leg-2 row stays visible from yesterday on the new day.
+  useEffect(() => {
+    setShowLeg2(!!(day.started_at_2 || day.ended_at_2));
+  }, [day.id, day.started_at_2, day.ended_at_2]);
 
   const breakdown = calcHourBreakdown(entries);
   const dayWork = calcDayWorkBreakdown(day, entries);

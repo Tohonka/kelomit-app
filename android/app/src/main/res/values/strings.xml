@@ -9,4 +9,8 @@
     <string name="widget_full_description">Start/stop a work session with a live timer.</string>
     <string name="widget_toggle_label">Kelomit toggle</string>
     <string name="widget_toggle_description">One-tap start/stop for a configured project.</string>
+    <!-- Background-location foreground service -->
+    <string name="location_channel_name">Location tracking</string>
+    <string name="location_service_title">Kelomit is tracking location</string>
+    <string name="location_service_text">Logging your location in the background.</string>
 </resources>
