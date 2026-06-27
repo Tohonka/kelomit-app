@@ -32,7 +32,7 @@ const makeStyles = (c: Colors) =>
     label: {
       color: '#fff',
       fontSize: typography.sizes.xs,
-      fontWeight: typography.weights.semibold,
+      fontWeight: typography.weights.bold,
     },
   });
 
