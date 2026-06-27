@@ -8,6 +8,14 @@ import {
   StyleSheet,
   Alert,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  withSpring,
+  Easing,
+} from 'react-native-reanimated';
 import {useSessionStore} from '../../store/sessionStore';
 import {useSettingsStore} from '../../store/settingsStore';
 import {useProjectStore} from '../../store/projectStore';
@@ -48,6 +56,24 @@ const makeStyles = (c: Colors) =>
       borderColor: c.border,
     },
     cardRunning: {borderColor: c.primary, backgroundColor: c.primary + '0D'},
+    cardRunningSolid: {backgroundColor: c.primary, borderColor: c.primary},
+    titleInverted: {color: c.white},
+    clockInverted: {color: c.white},
+    runningTargetInverted: {color: c.white},
+    runningStartedInverted: {color: c.white},
+    glow: {
+      position: 'absolute',
+      top: -3, left: -3, right: -3, bottom: -3,
+      borderRadius: radius.lg + 3,
+      borderWidth: 3,
+      borderColor: c.primary,
+    },
+    glowWrap: {
+      position: 'relative',
+      marginHorizontal: spacing.lg,
+      marginBottom: spacing.md,
+    },
+    cardRunningInner: {marginHorizontal: 0, marginBottom: 0},
     headerRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -118,8 +144,8 @@ const makeStyles = (c: Colors) =>
     },
     // Running state
     clock: {
-      fontSize: 44,
-      fontWeight: typography.weights.bold,
+      fontSize: 72,
+      fontWeight: typography.weights.black,
       color: c.primary,
       fontVariant: ['tabular-nums'],
       marginTop: spacing.sm,
@@ -194,6 +220,12 @@ export default function QuickTimerCard() {
   // Re-render once a second while running to advance the live clock.
   const [, setTick] = useState(0);
 
+  // Breathing glow + idle→running scale
+  const glowOpacity = useSharedValue(0.3);
+  const cardScale = useSharedValue(1);
+  const glowStyle = useAnimatedStyle(() => ({opacity: glowOpacity.value}));
+  const cardScaleStyle = useAnimatedStyle(() => ({transform: [{scale: cardScale.value}]}));
+
   useEffect(() => {
     if (!loaded) { load(); }
     if (!projectsLoaded) { loadProjects(); }
@@ -212,6 +244,20 @@ export default function QuickTimerCard() {
     const id = setInterval(() => setTick(n => n + 1), 1000);
     return () => clearInterval(id);
   }, [active]);
+
+  useEffect(() => {
+    if (active) {
+      glowOpacity.value = withRepeat(
+        withTiming(0.6, {duration: 1000, easing: Easing.inOut(Easing.quad)}),
+        -1,
+        true,
+      );
+      cardScale.value = 0.96;
+      cardScale.value = withSpring(1, {damping: 11, stiffness: 200});
+    } else {
+      glowOpacity.value = 0.3;
+    }
+  }, [active, glowOpacity, cardScale]);
 
   const projectName = (id: number | null) =>
     id == null ? null : projects.find(p => p.id === id)?.name ?? null;
@@ -274,25 +320,31 @@ export default function QuickTimerCard() {
   if (active) {
     const seconds = elapsedSeconds(active.started_at);
     return (
-      <View style={[styles.card, styles.cardRunning]}>
-        <Text style={styles.title}>{t('timer.tracking')}</Text>
-        <Text style={styles.clock}>{formatClock(seconds)}</Text>
-        <Text style={styles.runningTarget}>
-          {active.title
-            ? active.title
-            : targetSummary(active.project_id, active.activity_type)}
-        </Text>
-        <Text style={styles.runningStarted}>
-          {t('timer.started', {time: formatTime(active.started_at)})}
-        </Text>
-        <View style={styles.actionRow}>
-          <TouchableOpacity style={styles.stopBtn} onPress={handleStop} disabled={busy}>
-            <Text style={styles.stopBtnText}>{t('timer.stop')}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.cancelBtn} onPress={handleCancel} disabled={busy}>
-            <Text style={styles.cancelBtnText}>{t('timer.cancelTimer')}</Text>
-          </TouchableOpacity>
-        </View>
+      <View style={styles.glowWrap}>
+        <Animated.View style={[styles.glow, glowStyle]} pointerEvents="none" />
+        <Animated.View style={[styles.card, styles.cardRunningSolid, styles.cardRunningInner, cardScaleStyle]}>
+          <Text style={[styles.title, styles.titleInverted]}>{t('timer.tracking')}</Text>
+          <Text style={[styles.clock, styles.clockInverted]}>{formatClock(seconds)}</Text>
+          <Text style={[styles.runningTarget, styles.runningTargetInverted]}>
+            {active.title
+              ? active.title
+              : targetSummary(active.project_id, active.activity_type)}
+          </Text>
+          <Text style={[styles.runningStarted, styles.runningStartedInverted]}>
+            {t('timer.started', {time: formatTime(active.started_at)})}
+          </Text>
+          <View style={styles.actionRow}>
+            <TouchableOpacity
+              style={[styles.stopBtn, {backgroundColor: colors.white}]}
+              onPress={handleStop}
+              disabled={busy}>
+              <Text style={[styles.stopBtnText, {color: colors.primary}]}>{t('timer.stop')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.cancelBtn} onPress={handleCancel} disabled={busy}>
+              <Text style={styles.cancelBtnText}>{t('timer.cancelTimer')}</Text>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
       </View>
     );
   }
