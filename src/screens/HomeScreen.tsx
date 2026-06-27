@@ -7,6 +7,7 @@ import {GestureDetector, Gesture} from 'react-native-gesture-handler';
 import {useDayStore} from '../store/dayStore';
 import {useEntryStore} from '../store/entryStore';
 import {useTheme, typography, spacing} from '../theme';
+import CountUp from '../components/ui/CountUp';
 import {getDateFnsLocale} from '../i18n';
 import type {Colors} from '../theme';
 import EntryList from '../components/entries/EntryList';
@@ -43,7 +44,7 @@ const makeStyles = (c: Colors) =>
     },
     headerDate: {
       fontSize: typography.sizes.xxl,
-      fontWeight: typography.weights.bold,
+      fontWeight: typography.weights.black,
       color: c.textPrimary,
     },
     headerTotal: {
@@ -182,7 +183,11 @@ export default function HomeScreen({navigation}: Props) {
         <View style={styles.headerRow}>
           <Text style={styles.headerDate}>{formatDate(date)}</Text>
           {totalSecs > 0 && (
-            <Text style={styles.headerTotal}>{formatHours(totalSecs)}</Text>
+            <CountUp
+              value={totalSecs}
+              style={styles.headerTotal}
+              format={formatHours}
+            />
           )}
         </View>
         <Text style={styles.headerSub}>
