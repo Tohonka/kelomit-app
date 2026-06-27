@@ -1,13 +1,15 @@
 import React, {useMemo} from 'react';
 import {
-  TouchableOpacity,
+  Pressable,
   Text,
   StyleSheet,
   ActivityIndicator,
   type ViewStyle,
 } from 'react-native';
+import Animated from 'react-native-reanimated';
 import {useTheme, typography, spacing, radius} from '../../theme';
 import type {Colors} from '../../theme';
+import {usePressAnimation} from './usePressAnimation';
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
 
@@ -41,7 +43,7 @@ const makeStyles = (c: Colors) =>
     disabled: {opacity: 0.45},
     text: {
       fontSize: typography.sizes.base,
-      fontWeight: typography.weights.semibold,
+      fontWeight: typography.weights.bold,
     },
     primaryText: {color: c.white},
     secondaryText: {color: c.primary},
@@ -59,28 +61,28 @@ export default function Button({
 }: Props) {
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const {animatedStyle, onPressIn, onPressOut} = usePressAnimation();
+  const isOff = disabled || loading;
 
   return (
-    <TouchableOpacity
-      style={[
-        styles.base,
-        styles[variant],
-        (disabled || loading) && styles.disabled,
-        style,
-      ]}
-      onPress={onPress}
-      disabled={disabled || loading}
-      activeOpacity={0.75}>
-      {loading ? (
-        <ActivityIndicator
-          color={variant === 'primary' ? colors.white : colors.primary}
-          size="small"
-        />
-      ) : (
-        <Text style={[styles.text, styles[`${variant}Text` as keyof typeof styles] as any]}>
-          {label}
-        </Text>
-      )}
-    </TouchableOpacity>
+    <Animated.View style={animatedStyle}>
+      <Pressable
+        style={[styles.base, styles[variant], isOff && styles.disabled, style]}
+        onPress={onPress}
+        onPressIn={onPressIn}
+        onPressOut={onPressOut}
+        disabled={isOff}>
+        {loading ? (
+          <ActivityIndicator
+            color={variant === 'primary' ? colors.white : colors.primary}
+            size="small"
+          />
+        ) : (
+          <Text style={[styles.text, styles[`${variant}Text` as keyof typeof styles] as any]}>
+            {label}
+          </Text>
+        )}
+      </Pressable>
+    </Animated.View>
   );
 }
