@@ -7,7 +7,6 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
-  Vibration,
 } from 'react-native';
 import {useEntryStore} from '../store/entryStore';
 import {useSettingsStore} from '../store/settingsStore';
@@ -17,6 +16,7 @@ import type {Colors} from '../theme';
 import Button from '../components/ui/Button';
 import AttachmentsSection, {type EditorMedia} from '../components/media/AttachmentsSection';
 import {ensureMediaDir} from '../utils/mediaUtils';
+import {haptic, HAPTIC_SAVE} from '../utils/haptics';
 import {addEntryMedia} from '../db/entries';
 import {getLastKnownPosition} from '../services/gpsService';
 import type {RootStackScreenProps} from '../navigation/navigationTypes';
@@ -130,7 +130,7 @@ export default function QuickAddModal({navigation, route}: Props) {
         });
       }
       await loadEntriesForDay(dayId);
-      Vibration.vibrate(40);
+      haptic(HAPTIC_SAVE);
       navigation.goBack();
     } catch (e) {
       Alert.alert(t('common.error'), String(e));

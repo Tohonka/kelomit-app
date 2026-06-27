@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
-  Vibration,
 } from 'react-native';
 import {useSessionStore} from '../../store/sessionStore';
 import {useSettingsStore} from '../../store/settingsStore';
@@ -17,6 +16,7 @@ import {useTheme, typography, spacing, radius} from '../../theme';
 import type {Colors} from '../../theme';
 import {elapsedSeconds} from '../../services/sessionLogic';
 import {formatTime} from '../../utils/dateUtils';
+import {haptic, HAPTIC_START, HAPTIC_SAVE} from '../../utils/haptics';
 import ProjectPicker from '../entries/ProjectPicker';
 import type {ActivityType} from '../../types';
 
@@ -233,7 +233,7 @@ export default function QuickTimerCard() {
         title,
         source: 'timer',
       });
-      Vibration.vibrate(40);
+      haptic(HAPTIC_START);
       setTitle('');
       setExpanded(false);
     } catch (e) {
@@ -251,7 +251,7 @@ export default function QuickTimerCard() {
       if (result.dayId != null) {
         await loadEntriesForDay(result.dayId);
       }
-      Vibration.vibrate(40);
+      haptic(HAPTIC_SAVE);
     } catch (e) {
       Alert.alert(t('common.error'), String(e));
     } finally {
