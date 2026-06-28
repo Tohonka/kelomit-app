@@ -8,17 +8,14 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
-import {useEntryStore} from '../store/entryStore';
 import {useSettingsStore} from '../store/settingsStore';
-import {useTagStore} from '../store/tagStore';
 import {useTheme, typography, spacing, radius} from '../theme';
 import type {Colors} from '../theme';
 import Button from '../components/ui/Button';
 import AttachmentsSection, {type EditorMedia} from '../components/media/AttachmentsSection';
 import {ensureMediaDir} from '../utils/mediaUtils';
 import {haptic, HAPTIC_SAVE} from '../utils/haptics';
-import {addEntryMedia} from '../db/entries';
-import {getLastKnownPosition} from '../services/gpsService';
+import {useSaveQuickNote} from '../components/quickadd/useSaveQuickNote';
 import type {RootStackScreenProps} from '../navigation/navigationTypes';
 
 type Props = RootStackScreenProps<'QuickAddModal'>;
@@ -72,13 +69,11 @@ export default function QuickAddModal({navigation, route}: Props) {
   const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const {addEntry, loadEntriesForDay} = useEntryStore();
-  const {getOrCreate} = useTagStore();
+  const saveQuickNote = useSaveQuickNote();
   const {
     loaded: settingsLoaded,
     load: loadSettings,
     quickadd_default_activity,
-    quickadd_default_project_id,
     quickadd_default_tag,
   } = useSettingsStore();
 
@@ -95,41 +90,7 @@ export default function QuickAddModal({navigation, route}: Props) {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      const durationSec = durationMinutes.trim()
-        ? Math.round(parseFloat(durationMinutes) * 60)
-        : null;
-
-      const tagName = quickadd_default_tag.trim();
-      const tagIds: number[] = [];
-      if (tagName) {
-        const tag = await getOrCreate(tagName);
-        tagIds.push(tag.id);
-      }
-
-      const gps = getLastKnownPosition();
-      const created = await addEntry({
-        day_id: dayId,
-        entry_type: 'note',
-        activity_type: quickadd_default_activity,
-        title: title.trim() || null,
-        body: null,
-        project_id: quickadd_default_project_id,
-        tagIds,
-        duration_sec: durationSec,
-        time_from: null,
-        time_to: null,
-        latitude: gps?.latitude ?? null,
-        longitude: gps?.longitude ?? null,
-      });
-      for (const m of media) {
-        await addEntryMedia(created.id, {
-          media_type: m.media_type,
-          file_path: m.file_path,
-          thumbnail_path: m.thumbnail_path,
-          duration_sec: m.duration_sec,
-        });
-      }
-      await loadEntriesForDay(dayId);
+      await saveQuickNote({dayId, title, durationMinutes, media});
       haptic(HAPTIC_SAVE);
       navigation.goBack();
     } catch (e) {
