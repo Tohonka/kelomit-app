@@ -2,7 +2,7 @@ import React, {useEffect, useMemo, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {getInsightsBreakdown, type InsightsData, type InsightSlice} from '../db/entries';
+import {getInsightsBreakdown, getWorkSecondsByDay, type InsightsData, type InsightSlice, type InsightsScope} from '../db/entries';
 import {useTheme, typography, spacing, radius} from '../theme';
 import type {Colors} from '../theme';
 import {formatHours} from '../utils/hoursUtils';
@@ -14,6 +14,12 @@ const PERIODS: {key: Period; labelKey: string}[] = [
   {key: 'week', labelKey: 'insights.thisWeek'},
   {key: 'month', labelKey: 'insights.thisMonth'},
   {key: 'last30', labelKey: 'insights.last30'},
+];
+
+const SCOPES: {key: InsightsScope; labelKey: string}[] = [
+  {key: 'all', labelKey: 'insights.scopeAll'},
+  {key: 'work', labelKey: 'insights.scopeWork'},
+  {key: 'personal', labelKey: 'insights.scopePersonal'},
 ];
 
 // Warm, slightly retro palette for the breakdown bars.
@@ -50,6 +56,7 @@ const makeStyles = (c: Colors) =>
       gap: spacing.sm,
       padding: spacing.lg,
     },
+    scopeRow: {paddingTop: 0},
     periodChip: {
       flex: 1,
       paddingVertical: spacing.sm,
@@ -73,6 +80,7 @@ const makeStyles = (c: Colors) =>
     },
     totalLabel: {fontSize: typography.sizes.sm, color: c.textMuted},
     totalValue: {fontSize: typography.sizes.xxl, fontWeight: typography.weights.bold, color: c.primary},
+    totalSub: {fontSize: typography.sizes.sm, color: c.textMuted, marginTop: 2},
     sectionHeader: {
       fontSize: typography.sizes.xs,
       fontWeight: typography.weights.semibold,
@@ -127,20 +135,30 @@ export default function InsightsScreen() {
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [period, setPeriod] = useState<Period>('week');
+  const [scope, setScope] = useState<InsightsScope>('all');
   const [data, setData] = useState<InsightsData | null>(null);
+  const [workedSecs, setWorkedSecs] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     const {start, end} = rangeFor(period);
-    getInsightsBreakdown(start, end)
-      .then(d => { if (!cancelled) { setData(d); } })
+    Promise.all([
+      getInsightsBreakdown(start, end, scope),
+      getWorkSecondsByDay(start, end),
+    ])
+      .then(([d, byDay]) => {
+        if (cancelled) { return; }
+        setData(d);
+        setWorkedSecs(Object.values(byDay).reduce((sum, s) => sum + s, 0));
+      })
       .finally(() => { if (!cancelled) { setLoading(false); } });
     return () => { cancelled = true; };
-  }, [period]);
+  }, [period, scope]);
 
-  const hasData = data && data.totalSeconds > 0;
+  const showWorked = scope !== 'personal' && workedSecs > 0;
+  const hasData = data && (data.totalSeconds > 0 || showWorked);
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -153,6 +171,19 @@ export default function InsightsScreen() {
               onPress={() => setPeriod(p.key)}>
               <Text style={[styles.periodChipText, period === p.key && styles.periodChipTextActive]}>
                 {t(p.labelKey)}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <View style={[styles.periodRow, styles.scopeRow]}>
+          {SCOPES.map(s => (
+            <TouchableOpacity
+              key={s.key}
+              style={[styles.periodChip, scope === s.key && styles.periodChipActive]}
+              onPress={() => setScope(s.key)}>
+              <Text style={[styles.periodChipText, scope === s.key && styles.periodChipTextActive]}>
+                {t(s.labelKey)}
               </Text>
             </TouchableOpacity>
           ))}
@@ -171,6 +202,11 @@ export default function InsightsScreen() {
             <View style={styles.totalCard}>
               <Text style={styles.totalLabel}>{t('insights.totalTracked')}</Text>
               <Text style={styles.totalValue}>{formatHours(data!.totalSeconds)}</Text>
+              {showWorked && (
+                <Text style={styles.totalSub}>
+                  {t('insights.outOfWorkHours', {worked: formatHours(workedSecs)})}
+                </Text>
+              )}
             </View>
             <Breakdown title={t('insights.byActivity')} slices={data!.byActivity} styles={styles} />
             <Breakdown title={t('insights.byProject')} slices={data!.byProject} styles={styles} />

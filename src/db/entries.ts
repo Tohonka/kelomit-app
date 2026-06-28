@@ -563,18 +563,30 @@ const ENTRY_SECS_SQL = `CASE
     ELSE 0
   END`;
 
+/** Activity scope for the Insights selector. */
+export type InsightsScope = 'all' | 'work' | 'personal';
+
+// Hardcoded clauses (no user input) → safe to interpolate.
+const SCOPE_FILTER: Record<InsightsScope, string> = {
+  all: '',
+  work: "AND e.activity_type = 'work'",
+  personal: "AND e.activity_type IN ('personal', 'personal_work')",
+};
+
 /** Aggregated time breakdowns over a date range, for the Insights screen. */
 export async function getInsightsBreakdown(
   startDate: string,
   endDate: string,
+  scope: InsightsScope = 'all',
 ): Promise<InsightsData> {
   const db = getDB();
+  const scopeSql = SCOPE_FILTER[scope];
 
   const activityRes = await db.execute(
     `SELECT e.activity_type AS k, CAST(SUM(${ENTRY_SECS_SQL}) AS INTEGER) AS s
        FROM entries e JOIN days d ON d.id = e.day_id
       WHERE d.date >= ? AND d.date <= ?
-        AND (e.is_todo = 0 OR e.completed_at IS NOT NULL)
+        AND (e.is_todo = 0 OR e.completed_at IS NOT NULL) ${scopeSql}
       GROUP BY e.activity_type;`,
     [startDate, endDate],
   );
@@ -583,7 +595,7 @@ export async function getInsightsBreakdown(
        FROM entries e JOIN days d ON d.id = e.day_id
        LEFT JOIN projects p ON p.id = e.project_id
       WHERE d.date >= ? AND d.date <= ?
-        AND (e.is_todo = 0 OR e.completed_at IS NOT NULL)
+        AND (e.is_todo = 0 OR e.completed_at IS NOT NULL) ${scopeSql}
       GROUP BY e.project_id;`,
     [startDate, endDate],
   );
@@ -593,7 +605,7 @@ export async function getInsightsBreakdown(
        JOIN entry_tags et ON et.entry_id = e.id
        JOIN tags t ON t.id = et.tag_id
       WHERE d.date >= ? AND d.date <= ?
-        AND (e.is_todo = 0 OR e.completed_at IS NOT NULL)
+        AND (e.is_todo = 0 OR e.completed_at IS NOT NULL) ${scopeSql}
       GROUP BY t.id;`,
     [startDate, endDate],
   );
