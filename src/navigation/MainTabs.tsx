@@ -3,7 +3,8 @@ import {useTranslation} from 'react-i18next';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import CustomTabBar from './CustomTabBar';
-import HomeScreen from '../screens/HomeScreen';
+import HomeStack from './HomeStack';
+
 import CalendarScreen from '../screens/CalendarScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import {useSettingsStore} from '../store/settingsStore';
@@ -53,7 +54,7 @@ export default function MainTabs() {
       })}>
       <Tab.Screen
         name="Home"
-        component={HomeScreen}
+        component={HomeStack}
         options={{tabBarLabel: t('navigation.home')}}
       />
       <Tab.Screen

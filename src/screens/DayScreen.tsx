@@ -18,12 +18,12 @@ import DaySplitBar from '../components/day/DaySplitBar';
 import FilterBar from '../components/day/FilterBar';
 import FAB from '../components/ui/FAB';
 import {buildQuickAddActions} from '../components/entries/quickAddActions';
-import type {RootStackScreenProps} from '../navigation/navigationTypes';
+import type {HomeStackScreenProps} from '../navigation/navigationTypes';
 import type {Entry} from '../types';
 import {calcDayWorkSecs, formatHours} from '../utils/hoursUtils';
 import {shiftDate} from '../utils/dateUtils';
 
-type Props = RootStackScreenProps<'DayScreen'>;
+type Props = HomeStackScreenProps<'DayScreen'>;
 
 const makeStyles = (c: Colors) =>
   StyleSheet.create({

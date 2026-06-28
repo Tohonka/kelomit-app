@@ -2,7 +2,6 @@ import React from 'react';
 import {useTranslation} from 'react-i18next';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import MainTabs from './MainTabs';
-import DayScreen from '../screens/DayScreen';
 import EntryDetailScreen from '../screens/EntryDetailScreen';
 import AddEntryModal from '../screens/AddEntryModal';
 import QuickAddModal from '../screens/QuickAddModal';
@@ -37,11 +36,7 @@ export default function RootNavigator() {
         component={MainTabs}
         options={{headerShown: false}}
       />
-      <Stack.Screen
-        name="DayScreen"
-        component={DayScreen}
-        options={({route}) => ({title: route.params.date})}
-      />
+
       <Stack.Screen
         name="EntryDetailScreen"
         component={EntryDetailScreen}

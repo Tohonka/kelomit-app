@@ -188,7 +188,10 @@ export default function CalendarScreen({navigation}: Props) {
   const periodTotal = Object.values(hoursMap).reduce((a, b) => a + b, 0);
 
   const navigateToDay = (date: Date) => {
-    navigation.navigate('DayScreen', {date: localDateStr(date)});
+    navigation.navigate('Home', {
+      screen: 'DayScreen',
+      params: {date: localDateStr(date)},
+    });
   };
 
   const openEntry = (entry: Entry) => {

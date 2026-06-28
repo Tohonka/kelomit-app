@@ -19,14 +19,14 @@ import QuickTimerCard from '../components/day/QuickTimerCard';
 import FAB from '../components/ui/FAB';
 import {buildQuickAddActions} from '../components/entries/quickAddActions';
 import QuickAddSheet from '../components/quickadd/QuickAddSheet';
-import type {TabScreenProps} from '../navigation/navigationTypes';
+import type {HomeStackScreenProps} from '../navigation/navigationTypes';
 import type {Entry} from '../types';
 import {getUpcomingTodos} from '../db/entries';
 import {formatDate, todayDate, nextDayDates, shiftDate} from '../utils/dateUtils';
 import {calcDayWorkSecs, formatHours} from '../utils/hoursUtils';
 import {getCurrentGeofenceDetection, type GeofenceDetection} from '../services/gpsService';
 
-type Props = TabScreenProps<'Home'>;
+type Props = HomeStackScreenProps<'HomeMain'>;
 
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
