@@ -9,6 +9,7 @@ import {formatHours} from '../utils/hoursUtils';
 
 type Period = 'week' | 'month' | 'last30';
 
+
 const PERIODS: {key: Period; labelKey: string}[] = [
   {key: 'week', labelKey: 'insights.thisWeek'},
   {key: 'month', labelKey: 'insights.thisMonth'},

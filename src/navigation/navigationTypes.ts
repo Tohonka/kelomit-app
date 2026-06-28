@@ -1,7 +1,8 @@
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import type {BottomTabScreenProps} from '@react-navigation/bottom-tabs';
-import type {CompositeScreenProps, NavigatorScreenParams} from '@react-navigation/native';
+import type {CompositeScreenProps} from '@react-navigation/native';
 import type {EntryType} from '../types';
+import type {NavigatorScreenParams} from '@react-navigation/native';
 
 export type HomeStackParamList = {
   HomeMain: undefined;
@@ -9,7 +10,8 @@ export type HomeStackParamList = {
 };
 
 export type RootStackParamList = {
-  MainTabs: NavigatorScreenParams<TabParamList> | undefined;
+  MainTabs: undefined;
+  DayScreen: {date: string};
   EntryDetailScreen: {entryId: number; dayId: number};
   AddEntryModal: {date?: string; dayId: number; entryId?: number};
   QuickAddModal: {date?: string; dayId: number; entryType: EntryType};
