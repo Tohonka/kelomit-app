@@ -114,6 +114,8 @@ const fi: typeof en = {
     languageEnglish: 'English',
     languageFinnish: 'Suomi',
     weekNumbers: 'Viikkonumerot',
+    personalHours: 'Näytä henkilökohtaiset tunnit',
+    personalHoursDescription: 'Lisää työtuntien alle toisen rivin henkilökohtaiselle ajalle',
     navVisibility: 'Alanavigaatio',
     navVisibilityDescription: 'Missä välilehtipalkki näkyy',
     navVisibilityAlways: 'Aina',

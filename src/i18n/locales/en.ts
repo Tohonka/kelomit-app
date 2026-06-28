@@ -112,6 +112,8 @@ const en = {
     languageEnglish: 'English',
     languageFinnish: 'Suomi',
     weekNumbers: 'Week numbers',
+    personalHours: 'Show personal hours',
+    personalHoursDescription: 'Adds a second personal-time line under the work total',
     navVisibility: 'Bottom navigation',
     navVisibilityDescription: 'Where the tab bar is shown',
     navVisibilityAlways: 'Always',

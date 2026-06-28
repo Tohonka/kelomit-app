@@ -1,13 +1,13 @@
 import React, {useEffect, useState, useCallback, useMemo, useRef} from 'react';
 import {useTranslation} from 'react-i18next';
-import {StyleSheet, ScrollView, Text} from 'react-native';
+import {StyleSheet, ScrollView} from 'react-native';
 import Animated, {FadeIn} from 'react-native-reanimated';
 import {format} from 'date-fns';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {GestureDetector, Gesture} from 'react-native-gesture-handler';
 import {useDayStore} from '../store/dayStore';
 import {useEntryStore} from '../store/entryStore';
-import {useTheme, typography, spacing} from '../theme';
+import {useTheme, spacing} from '../theme';
 import {getDateFnsLocale} from '../i18n';
 import type {Colors} from '../theme';
 import EntryList from '../components/entries/EntryList';
@@ -20,7 +20,9 @@ import {buildQuickAddActions} from '../components/entries/quickAddActions';
 import {useKeyboardHeight} from '../hooks/useKeyboardHeight';
 import type {HomeStackScreenProps} from '../navigation/navigationTypes';
 import type {Entry, Project, Tag} from '../types';
-import {calcDayWorkSecs, formatHours} from '../utils/hoursUtils';
+import {calcDayWorkSecs, calcHourBreakdown} from '../utils/hoursUtils';
+import {useSettingsStore} from '../store/settingsStore';
+import DayHoursReadout from '../components/day/DayHoursReadout';
 import {shiftDate} from '../utils/dateUtils';
 
 type Props = HomeStackScreenProps<'DayScreen'>;
@@ -30,12 +32,6 @@ const makeStyles = (c: Colors) =>
     container: {flex: 1, backgroundColor: c.bg},
     flex: {flex: 1},
     scrollContent: {paddingTop: spacing.md, paddingBottom: 100},
-    headerTotal: {
-      color: c.primary,
-      fontSize: typography.sizes.base,
-      fontWeight: typography.weights.semibold,
-      marginRight: spacing.md,
-    },
   });
 
 export default function DayScreen({navigation, route}: Props) {
@@ -48,6 +44,7 @@ export default function DayScreen({navigation, route}: Props) {
   const scrollRef = useRef<ScrollView>(null);
   const kbHeight = useKeyboardHeight();
   const [noteEditing, setNoteEditing] = useState(false);
+  const showPersonalHours = useSettingsStore(s => s.show_personal_hours);
 
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
@@ -91,13 +88,19 @@ export default function DayScreen({navigation, route}: Props) {
       locale: getDateFnsLocale(i18n.resolvedLanguage === 'fi' ? 'fi' : 'en'),
     });
     const totalSecs = day ? calcDayWorkSecs(day, allEntries) : 0;
+    const personalSecs = day ? calcHourBreakdown(allEntries).personalSeconds : 0;
     navigation.setOptions({
       title: label,
-      headerRight: totalSecs > 0
-        ? () => <Text style={styles.headerTotal}>{formatHours(totalSecs)}</Text>
-        : undefined,
+      headerRight: () => (
+        <DayHoursReadout
+          workSecs={totalSecs}
+          personalSecs={personalSecs}
+          showPersonal={showPersonalHours}
+          style={{marginRight: spacing.md}}
+        />
+      ),
     });
-  }, [currentDate, day, allEntries, navigation, styles, i18n.resolvedLanguage]);
+  }, [currentDate, day, allEntries, navigation, showPersonalHours, i18n.resolvedLanguage]);
 
   const goToDate = useCallback((newDate: string) => {
     setCurrentDate(newDate);

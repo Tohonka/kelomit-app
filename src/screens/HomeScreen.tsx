@@ -6,8 +6,9 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import {GestureDetector, Gesture} from 'react-native-gesture-handler';
 import {useDayStore} from '../store/dayStore';
 import {useEntryStore} from '../store/entryStore';
+import {useSettingsStore} from '../store/settingsStore';
 import {useTheme, typography, spacing} from '../theme';
-import CountUp from '../components/ui/CountUp';
+import DayHoursReadout from '../components/day/DayHoursReadout';
 import {getDateFnsLocale} from '../i18n';
 import type {Colors} from '../theme';
 import EntryList from '../components/entries/EntryList';
@@ -25,7 +26,7 @@ import type {HomeStackScreenProps} from '../navigation/navigationTypes';
 import type {Entry} from '../types';
 import {getUpcomingTodos} from '../db/entries';
 import {formatDate, todayDate, nextDayDates, shiftDate} from '../utils/dateUtils';
-import {calcDayWorkSecs, formatHours} from '../utils/hoursUtils';
+import {calcDayWorkSecs, calcHourBreakdown} from '../utils/hoursUtils';
 import {getCurrentGeofenceDetection, type GeofenceDetection} from '../services/gpsService';
 
 type Props = HomeStackScreenProps<'HomeMain'>;
@@ -49,11 +50,6 @@ const makeStyles = (c: Colors) =>
       fontSize: typography.sizes.xxl,
       fontWeight: typography.weights.black,
       color: c.textPrimary,
-    },
-    headerTotal: {
-      fontSize: typography.sizes.lg,
-      fontWeight: typography.weights.bold,
-      color: c.primary,
     },
     headerSub: {fontSize: typography.sizes.sm, color: c.textMuted, marginTop: 2},
     flex: {flex: 1},
@@ -102,6 +98,8 @@ export default function HomeScreen({navigation}: Props) {
   const date = todayDate();
   const entries = today ? (entriesByDay[today.id] ?? []) : [];
   const totalSecs = today ? calcDayWorkSecs(today, entries) : 0;
+  const personalSecs = today ? calcHourBreakdown(entries).personalSeconds : 0;
+  const showPersonalHours = useSettingsStore(s => s.show_personal_hours);
 
   useEffect(() => { loadToday(); }, [loadToday]);
 
@@ -199,13 +197,11 @@ export default function HomeScreen({navigation}: Props) {
       <View style={styles.header}>
         <View style={styles.headerRow}>
           <Text style={styles.headerDate}>{formatDate(date)}</Text>
-          {totalSecs > 0 && (
-            <CountUp
-              value={totalSecs}
-              style={styles.headerTotal}
-              format={formatHours}
-            />
-          )}
+          <DayHoursReadout
+            workSecs={totalSecs}
+            personalSecs={personalSecs}
+            showPersonal={showPersonalHours}
+          />
         </View>
         <Text style={styles.headerSub}>
           {format(new Date(), 'EEEE, MMMM d, yyyy', {

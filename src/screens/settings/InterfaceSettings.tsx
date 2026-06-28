@@ -38,6 +38,7 @@ export default function InterfaceSettings() {
     theme_mode, setThemeMode,
     language, setLanguage,
     show_week_numbers, setShowWeekNumbers,
+    show_personal_hours, setShowPersonalHours,
     nav_visibility, setNavVisibility,
     time_selector_mode, setTimeSelectorMode,
   } = useSettingsStore();
@@ -84,6 +85,18 @@ export default function InterfaceSettings() {
           <View style={[styles.toggle, show_week_numbers && styles.toggleOn]}>
             <Text style={[styles.toggleText, show_week_numbers && styles.toggleTextOn]}>
               {show_week_numbers ? t('common.on') : t('common.off')}
+            </Text>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.row} onPress={() => setShowPersonalHours(!show_personal_hours)}>
+          <View style={styles.rowTextWrap}>
+            <Text style={styles.rowLabel}>{t('settings.personalHours')}</Text>
+            <Text style={styles.rowSubLabel}>{t('settings.personalHoursDescription')}</Text>
+          </View>
+          <View style={[styles.toggle, show_personal_hours && styles.toggleOn]}>
+            <Text style={[styles.toggleText, show_personal_hours && styles.toggleTextOn]}>
+              {show_personal_hours ? t('common.on') : t('common.off')}
             </Text>
           </View>
         </TouchableOpacity>

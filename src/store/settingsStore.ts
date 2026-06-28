@@ -10,6 +10,8 @@ interface SettingsState extends Settings {
   loaded: boolean;
   theme_mode: ThemeMode;
   show_week_numbers: boolean;
+  /** Show a second "personal hours" line under the work total in the header. */
+  show_personal_hours: boolean;
   nav_visibility: NavVisibility;
   /** Opt-in: keep logging GPS via a foreground service while the app is closed. */
   background_tracking: boolean;
@@ -25,6 +27,7 @@ interface SettingsState extends Settings {
   setDefaultProjectId: (id: number | null) => Promise<void>;
   setThemeMode: (mode: ThemeMode) => Promise<void>;
   setShowWeekNumbers: (show: boolean) => Promise<void>;
+  setShowPersonalHours: (show: boolean) => Promise<void>;
   setNavVisibility: (mode: NavVisibility) => Promise<void>;
   setBackgroundTracking: (enabled: boolean) => Promise<void>;
   setUsualStart: (hhmm: string | null) => Promise<void>;
@@ -49,6 +52,7 @@ export const useSettingsStore = create<SettingsState>(set => ({
   prefill_from_usual: false,
   theme_mode: 'system',
   show_week_numbers: false,
+  show_personal_hours: false,
   nav_visibility: 'always',
   background_tracking: false,
   time_selector_mode: 'clock',
@@ -66,6 +70,7 @@ export const useSettingsStore = create<SettingsState>(set => ({
         ? raw.theme_mode
         : 'system';
     const show_week_numbers = raw.show_week_numbers === 'true';
+    const show_personal_hours = raw.show_personal_hours === 'true';
     const nav_visibility: NavVisibility =
       raw.nav_visibility === 'home_only' ? 'home_only' : 'always';
     const background_tracking = raw.background_tracking === 'true';
@@ -86,6 +91,7 @@ export const useSettingsStore = create<SettingsState>(set => ({
       ...settings,
       theme_mode,
       show_week_numbers,
+      show_personal_hours,
       nav_visibility,
       background_tracking,
       time_selector_mode,
@@ -125,6 +131,11 @@ export const useSettingsStore = create<SettingsState>(set => ({
   setShowWeekNumbers: async show => {
     await setSetting('show_week_numbers', String(show));
     set({show_week_numbers: show});
+  },
+
+  setShowPersonalHours: async show => {
+    await setSetting('show_personal_hours', String(show));
+    set({show_personal_hours: show});
   },
 
   setNavVisibility: async mode => {
