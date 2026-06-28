@@ -25,7 +25,7 @@ const makeStyles = (c: Colors) =>
     row: {
       flexDirection: 'row',
       paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
+      paddingVertical: spacing.xs,
       gap: spacing.sm,
       alignItems: 'center',
     },
@@ -70,42 +70,51 @@ export default function FilterBar({
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
-  const activeProjects = projects.filter(p => !p.archived);
   const hasFilter = selectedProjectId != null || selectedTagIds.length > 0;
 
-  if (activeProjects.length === 0 && tags.length === 0) {
+  if (projects.length === 0 && tags.length === 0) {
     return null;
   }
 
+  // The clear chip rides on the first row that renders (projects, else tags).
+  const clearChip = (
+    <TouchableOpacity style={styles.clearChip} onPress={onClear}>
+      <Text style={styles.clearText}>✕ {translate('common.clear')}</Text>
+    </TouchableOpacity>
+  );
+
   return (
     <View style={styles.wrapper}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-        {hasFilter && (
-          <TouchableOpacity style={styles.clearChip} onPress={onClear}>
-            <Text style={styles.clearText}>✕ {translate('common.clear')}</Text>
-          </TouchableOpacity>
-        )}
-        {activeProjects.map(p => (
-          <TouchableOpacity
-            key={`p-${p.id}`}
-            style={[styles.chip, selectedProjectId === p.id && styles.chipActive]}
-            onPress={() => onSelectProject(selectedProjectId === p.id ? null : p.id)}>
-            <Text style={[styles.chipText, selectedProjectId === p.id && styles.chipTextActive]}>
-              {p.name}
-            </Text>
-          </TouchableOpacity>
-        ))}
-        {tags.map(t => (
-          <TouchableOpacity
-            key={`t-${t.id}`}
-            style={[styles.chip, selectedTagIds.includes(t.id) && styles.chipActive]}
-            onPress={() => onToggleTag(t.id)}>
-            <Text style={[styles.chipText, selectedTagIds.includes(t.id) && styles.chipTextActive]}>
-              #{t.name}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      {projects.length > 0 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+          {hasFilter && clearChip}
+          {projects.map(p => (
+            <TouchableOpacity
+              key={`p-${p.id}`}
+              style={[styles.chip, selectedProjectId === p.id && styles.chipActive]}
+              onPress={() => onSelectProject(selectedProjectId === p.id ? null : p.id)}>
+              <Text style={[styles.chipText, selectedProjectId === p.id && styles.chipTextActive]}>
+                {p.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
+      {tags.length > 0 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+          {hasFilter && projects.length === 0 && clearChip}
+          {tags.map(t => (
+            <TouchableOpacity
+              key={`t-${t.id}`}
+              style={[styles.chip, selectedTagIds.includes(t.id) && styles.chipActive]}
+              onPress={() => onToggleTag(t.id)}>
+              <Text style={[styles.chipText, selectedTagIds.includes(t.id) && styles.chipTextActive]}>
+                #{t.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
     </View>
   );
 }

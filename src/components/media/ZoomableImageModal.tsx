@@ -1,7 +1,7 @@
 import React, {useMemo, useRef} from 'react';
 import {useTranslation} from 'react-i18next';
 import {Animated, Modal, View, Text, StyleSheet, TouchableOpacity} from 'react-native';
-import {GestureDetector, Gesture} from 'react-native-gesture-handler';
+import {GestureDetector, Gesture, GestureHandlerRootView} from 'react-native-gesture-handler';
 import {useTheme, typography, spacing} from '../../theme';
 import type {Colors} from '../../theme';
 import {fileUri} from '../../utils/mediaUtils';
@@ -86,7 +86,10 @@ export default function ZoomableImageModal({uri, onClose}: Props) {
 
   return (
     <Modal visible={uri != null} animationType="fade" onRequestClose={handleClose} transparent={false}>
-      <View style={styles.backdrop}>
+      {/* RN <Modal> renders in its own native window outside the app's root
+          GestureHandlerRootView, so gestures need a local root here or pinch/pan
+          silently do nothing. */}
+      <GestureHandlerRootView style={styles.backdrop}>
         <View style={styles.topBar}>
           <TouchableOpacity style={styles.closeBtn} onPress={handleClose} accessibilityLabel={t('common.close')}>
             <Text style={styles.closeText}>×</Text>
@@ -110,7 +113,7 @@ export default function ZoomableImageModal({uri, onClose}: Props) {
           </View>
         )}
         {uri && !missing && <Text style={styles.hint}>{t('gallery.zoomHint')}</Text>}
-      </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }

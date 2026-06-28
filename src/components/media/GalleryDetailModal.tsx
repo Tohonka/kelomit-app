@@ -1,7 +1,7 @@
 import React, {useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {Animated, Modal, View, Text, StyleSheet, TouchableOpacity, ScrollView} from 'react-native';
-import {GestureDetector, Gesture} from 'react-native-gesture-handler';
+import {GestureDetector, Gesture, GestureHandlerRootView} from 'react-native-gesture-handler';
 import {useTheme, typography, spacing, radius} from '../../theme';
 import type {Colors} from '../../theme';
 import type {Entry} from '../../types';
@@ -114,7 +114,9 @@ export default function GalleryDetailModal({entry, uri, onClose}: Props) {
 
   return (
     <Modal visible={visible} animationType="fade" onRequestClose={handleClose} transparent={false}>
-      <View style={styles.backdrop}>
+      {/* RN <Modal> renders outside the app's root GestureHandlerRootView, so
+          gestures need a local root here or pinch/pan silently do nothing. */}
+      <GestureHandlerRootView style={styles.backdrop}>
         <View style={styles.topBar}>
           <TouchableOpacity style={styles.closeBtn} onPress={handleClose} accessibilityLabel={t('common.close')}>
             <Text style={styles.closeText}>×</Text>
@@ -162,7 +164,7 @@ export default function GalleryDetailModal({entry, uri, onClose}: Props) {
             </ScrollView>
           </View>
         )}
-      </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }

@@ -7,8 +7,6 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import {GestureDetector, Gesture} from 'react-native-gesture-handler';
 import {useDayStore} from '../store/dayStore';
 import {useEntryStore} from '../store/entryStore';
-import {useProjectStore} from '../store/projectStore';
-import {useTagStore} from '../store/tagStore';
 import {useTheme, typography, spacing} from '../theme';
 import {getDateFnsLocale} from '../i18n';
 import type {Colors} from '../theme';
@@ -19,7 +17,7 @@ import FilterBar from '../components/day/FilterBar';
 import FAB from '../components/ui/FAB';
 import {buildQuickAddActions} from '../components/entries/quickAddActions';
 import type {HomeStackScreenProps} from '../navigation/navigationTypes';
-import type {Entry} from '../types';
+import type {Entry, Project, Tag} from '../types';
 import {calcDayWorkSecs, formatHours} from '../utils/hoursUtils';
 import {shiftDate} from '../utils/dateUtils';
 
@@ -45,8 +43,6 @@ export default function DayScreen({navigation, route}: Props) {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const {loadDay, daysCache, updateDayTimes} = useDayStore();
   const {entriesByDay, loadEntriesForDay} = useEntryStore();
-  const {projects, loaded: projectsLoaded, load: loadProjects} = useProjectStore();
-  const {tags, loaded: tagsLoaded, load: loadTags} = useTagStore();
 
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
@@ -57,10 +53,24 @@ export default function DayScreen({navigation, route}: Props) {
     [day, entriesByDay],
   );
 
+  // Filter chips list only the projects/tags actually used in this day's notes.
+  const dayProjects = useMemo(() => {
+    const seen = new Map<number, Project>();
+    for (const e of allEntries) {
+      if (e.project) { seen.set(e.project.id, e.project); }
+    }
+    return [...seen.values()];
+  }, [allEntries]);
+  const dayTags = useMemo(() => {
+    const seen = new Map<number, Tag>();
+    for (const e of allEntries) {
+      for (const tag of e.tags ?? []) { seen.set(tag.id, tag); }
+    }
+    return [...seen.values()];
+  }, [allEntries]);
+
   useEffect(() => { loadDay(currentDate); }, [currentDate, loadDay]);
   useEffect(() => { if (day) { loadEntriesForDay(day.id); } }, [day, loadEntriesForDay]);
-  useEffect(() => { if (!projectsLoaded) { loadProjects(); } }, [projectsLoaded, loadProjects]);
-  useEffect(() => { if (!tagsLoaded) { loadTags(); } }, [tagsLoaded, loadTags]);
 
   // Update navigation title and work-hours in header when day/entries change
   useEffect(() => {
@@ -122,8 +132,8 @@ export default function DayScreen({navigation, route}: Props) {
   return (
     <SafeAreaView style={styles.container}>
       <FilterBar
-        projects={projects}
-        tags={tags}
+        projects={dayProjects}
+        tags={dayTags}
         selectedProjectId={selectedProjectId}
         selectedTagIds={selectedTagIds}
         onSelectProject={setSelectedProjectId}

@@ -225,12 +225,22 @@ describe('calcDayWorkBreakdown (work-day model)', () => {
     expect(b.workSeconds).toBe(8 * H);
   });
 
-  it('ignores duration-only entries when legs exist (cannot place them)', () => {
+  it('adds work and deducts personal for duration-only entries (no "to" time)', () => {
     const day = makeDay({started_at: at(8), ended_at: at(16)});
     const entries = [
       makeEntry({id: 1, activity_type: 'work', duration_sec: 3 * H}),
       makeEntry({id: 2, activity_type: 'personal', duration_sec: 2 * H}),
     ];
+    const b = calcDayWorkBreakdown(day, entries);
+    expect(b.addedWorkSeconds).toBe(3 * H);
+    expect(b.deductedPersonalSeconds).toBe(2 * H);
+    // 8h baseline + 3h work − 2h personal
+    expect(b.workSeconds).toBe(9 * H);
+  });
+
+  it('never lets a personal_work duration-only entry adjust the total', () => {
+    const day = makeDay({started_at: at(8), ended_at: at(16)});
+    const entries = [makeEntry({activity_type: 'personal_work', duration_sec: 2 * H})];
     expect(calcDayWorkSecs(day, entries)).toBe(8 * H);
   });
 

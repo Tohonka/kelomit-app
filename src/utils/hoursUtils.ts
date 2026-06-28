@@ -147,11 +147,11 @@ export interface DayWorkBreakdown {
  *  - − the portion of genuinely `personal` entries that falls INSIDE the legs.
  * `personal_work` is only a label and never adjusts the total.
  *
- * Caveat: the adjustments require placeable (time_from/time_to) entries.
- * Duration-only entries can't be located, so they neither add nor subtract when
- * legs exist (they're assumed within the work day). When no leg is set, we fall
- * back to summing `work` entry seconds (duration-only included), since the
- * entries are then the only signal.
+ * Duration-only entries (no `time_to`) can't be located, so they count in
+ * full: `work` adds, `personal` deducts, `personal_work` is ignored. A duration
+ * that really overlaps the legs will double-count — use from–to for exact
+ * placement. When no leg is set, we fall back to summing `work` entry seconds
+ * (duration-only included), since the entries are then the only signal.
  */
 export function calcDayWorkBreakdown(day: Day, entries: Entry[]): DayWorkBreakdown {
   const legs: Interval[] = [];
@@ -172,20 +172,34 @@ export function calcDayWorkBreakdown(day: Day, entries: Entry[]): DayWorkBreakdo
   const baseline = totalLength(legUnion);
   const workOutside: Interval[] = [];
   const personalInside: Interval[] = [];
+  // Duration-only entries can't be placed on the timeline. Per the user's
+  // model, an entry with no "to" time counts in full: work adds, personal
+  // deducts (it's assumed to have eaten into the work day). personal_work is
+  // a label only. Caveat the user accepted: a duration that actually overlaps
+  // the legs will double-count — use from–to times for exact placement.
+  let addedDurationWork = 0;
+  let deductedDurationPersonal = 0;
 
   for (const e of entries) {
     const iv = entryInterval(e);
-    if (!iv) { continue; }
-    if (e.activity_type === 'work') {
-      workOutside.push(...subtract(iv, legUnion));
-    } else if (e.activity_type === 'personal') {
-      personalInside.push(...intersect(iv, legUnion));
+    if (iv) {
+      if (e.activity_type === 'work') {
+        workOutside.push(...subtract(iv, legUnion));
+      } else if (e.activity_type === 'personal') {
+        personalInside.push(...intersect(iv, legUnion));
+      }
+      // personal_work: neither added nor deducted (it's just a label).
+    } else {
+      const secs = entrySeconds(e); // duration_sec for unplaceable entries; 0 (+todo guard) otherwise
+      if (secs > 0) {
+        if (e.activity_type === 'work') { addedDurationWork += secs; }
+        else if (e.activity_type === 'personal') { deductedDurationPersonal += secs; }
+      }
     }
-    // personal_work: neither added nor deducted (it's just a label).
   }
 
-  const addedWorkSeconds = totalLength(workOutside);
-  const deductedPersonalSeconds = totalLength(personalInside);
+  const addedWorkSeconds = totalLength(workOutside) + addedDurationWork;
+  const deductedPersonalSeconds = totalLength(personalInside) + deductedDurationPersonal;
   const workSeconds = Math.max(0, baseline + addedWorkSeconds - deductedPersonalSeconds);
 
   return {

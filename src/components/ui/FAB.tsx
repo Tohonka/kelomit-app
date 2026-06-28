@@ -4,7 +4,6 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Modal,
   Pressable,
 } from 'react-native';
 import Animated, {
@@ -63,7 +62,7 @@ const makeStyles = (c: Colors) =>
       borderColor: c.primary,
     },
     label: {color: '#fff', fontSize: 28, lineHeight: 32, fontWeight: '400'},
-    backdrop: {flex: 1, backgroundColor: '#00000055'},
+    backdrop: {...StyleSheet.absoluteFill, backgroundColor: '#00000055'},
     dialWrap: {position: 'absolute', bottom: 24 + 64 + 16, right: 24, alignItems: 'flex-end', gap: spacing.md},
     actionRow: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
     actionLabel: {
@@ -90,18 +89,6 @@ const makeStyles = (c: Colors) =>
       shadowOffset: {width: 0, height: 2},
       shadowRadius: 5,
       elevation: 4,
-    },
-    closeFab: {
-      position: 'absolute',
-      bottom: 24,
-      right: 24,
-      width: 64,
-      height: 64,
-      borderRadius: radius.pill,
-      backgroundColor: c.primary,
-      alignItems: 'center',
-      justifyContent: 'center',
-      elevation: 6,
     },
   });
 
@@ -138,22 +125,13 @@ export default function FAB({onPress, label = '+', actions}: Props) {
 
   return (
     <>
-      {/* Glow ring behind FAB */}
-      <Animated.View style={[styles.glowRing, glowStyle]} pointerEvents="none" />
-
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={onPress}
-        onLongPress={hasActions ? () => setExpanded(true) : undefined}
-        delayLongPress={300}
-        activeOpacity={0.8}>
-        <Animated.Text style={[styles.label, labelAnimStyle]}>{label}</Animated.Text>
-      </TouchableOpacity>
-
-      {hasActions && (
-        <Modal visible={expanded} transparent animationType="fade" onRequestClose={() => setExpanded(false)}>
+      {/* Dial backdrop + actions live in the same coordinate space as the FAB
+          (no full-screen Modal) so the morphing +/× button stays put above the
+          bottom nav instead of the close button dropping to the screen edge. */}
+      {expanded && (
+        <>
           <Pressable style={styles.backdrop} onPress={() => setExpanded(false)} />
-          <View style={styles.dialWrap}>
+          <View style={styles.dialWrap} pointerEvents="box-none">
             {actions!.map((a, i) => (
               <Animated.View key={a.key} entering={FadeInDown.delay(i * 40).springify()} style={styles.actionRow}>
                 <View style={styles.actionLabel}>
@@ -165,11 +143,20 @@ export default function FAB({onPress, label = '+', actions}: Props) {
               </Animated.View>
             ))}
           </View>
-          <TouchableOpacity style={styles.closeFab} onPress={() => setExpanded(false)} activeOpacity={0.8}>
-            <Icon name="close" size={26} color="#fff" />
-          </TouchableOpacity>
-        </Modal>
+        </>
       )}
+
+      {/* Glow ring behind FAB */}
+      <Animated.View style={[styles.glowRing, glowStyle]} pointerEvents="none" />
+
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={expanded ? () => setExpanded(false) : onPress}
+        onLongPress={hasActions ? () => setExpanded(true) : undefined}
+        delayLongPress={300}
+        activeOpacity={0.8}>
+        <Animated.Text style={[styles.label, labelAnimStyle]}>{label}</Animated.Text>
+      </TouchableOpacity>
     </>
   );
 }
