@@ -188,6 +188,8 @@ const makeStyles = (c: Colors) =>
       fontWeight: typography.weights.medium,
       color: c.textSecondary,
     },
+    cancelBtnInverted: {borderColor: c.white},
+    cancelBtnTextInverted: {color: c.white},
   });
 
 /**
@@ -340,8 +342,8 @@ export default function QuickTimerCard() {
               disabled={busy}>
               <Text style={[styles.stopBtnText, {color: colors.primary}]}>{t('timer.stop')}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.cancelBtn} onPress={handleCancel} disabled={busy}>
-              <Text style={styles.cancelBtnText}>{t('timer.cancelTimer')}</Text>
+            <TouchableOpacity style={[styles.cancelBtn, styles.cancelBtnInverted]} onPress={handleCancel} disabled={busy}>
+              <Text style={[styles.cancelBtnText, styles.cancelBtnTextInverted]}>{t('timer.cancelTimer')}</Text>
             </TouchableOpacity>
           </View>
         </Animated.View>
