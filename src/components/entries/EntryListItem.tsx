@@ -1,6 +1,7 @@
 import React, {useMemo} from 'react';
 import {useTranslation} from 'react-i18next';
-import {View, Text, TouchableOpacity, StyleSheet} from 'react-native';
+import {View, Text, Pressable, StyleSheet} from 'react-native';
+import Animated, {SlideInLeft} from 'react-native-reanimated';
 import {useTheme, typography, spacing, radius} from '../../theme';
 import type {Colors} from '../../theme';
 import type {Entry} from '../../types';
@@ -10,6 +11,7 @@ import ActivityBadge from './ActivityBadge';
 import ProjectChip from './ProjectChip';
 import TagChip from './TagChip';
 import {formatTime, durationBetween} from '../../utils/dateUtils';
+import {usePressAnimation} from '../ui/usePressAnimation';
 
 interface Props {
   entry: Entry;
@@ -101,6 +103,7 @@ export default function EntryListItem({entry, onPress}: Props) {
   const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const {animatedStyle, onPressIn, onPressOut} = usePressAnimation();
   const resolvedDurationSec =
     entry.duration_sec != null
       ? entry.duration_sec
@@ -121,58 +124,64 @@ export default function EntryListItem({entry, onPress}: Props) {
   const leadThumb = photo ? photo.thumbnail_path || photo.file_path : null;
 
   return (
-    <TouchableOpacity style={styles.item} onPress={onPress} activeOpacity={0.7}>
-      <View style={styles.leadWrap}>
-        {mediaList.length > 0 ? (
-          <MediaThumbnail entryType={leadType} thumbnailPath={leadThumb} size={44} />
-        ) : (
-          <EntryTypeIcon type="note" size={44} />
-        )}
-        {mediaList.length > 1 && (
-          <View style={styles.countBadge}>
-            <Text style={styles.countText}>{mediaList.length}</Text>
-          </View>
-        )}
-      </View>
-      <View style={styles.content}>
-        <View style={styles.row}>
-          {entry.title ? (
-            <Text style={styles.title} numberOfLines={1}>{entry.title}</Text>
+    <Animated.View entering={SlideInLeft.springify().damping(16)} style={animatedStyle}>
+      <Pressable
+        style={styles.item}
+        onPress={onPress}
+        onPressIn={onPressIn}
+        onPressOut={onPressOut}>
+        <View style={styles.leadWrap}>
+          {mediaList.length > 0 ? (
+            <MediaThumbnail entryType={leadType} thumbnailPath={leadThumb} size={44} />
           ) : (
-            <Text style={styles.titlePlaceholder} numberOfLines={1}>
-              {entry.body ?? t('entryType.note')}
-            </Text>
+            <EntryTypeIcon type="note" size={44} />
           )}
-          <View style={styles.timeGroup}>
-            {durationLabel ? <Text style={styles.duration}>{durationLabel}</Text> : null}
-            <Text style={styles.time}>{timeLabel}</Text>
-          </View>
-        </View>
-        {entry.body && entry.title ? (
-          <Text style={styles.body} numberOfLines={2}>{entry.body}</Text>
-        ) : null}
-        <View style={styles.chips}>
-          {entry.is_todo ? (
-            <View style={[styles.todoBadge, entry.completed_at != null && styles.todoBadgeDone]}>
-              <Text style={[styles.todoBadgeText, entry.completed_at != null && styles.todoBadgeTextDone]}>
-                {entry.completed_at ? `✓ ${t('todo.done')}` : t('todo.badge')}
-              </Text>
+          {mediaList.length > 1 && (
+            <View style={styles.countBadge}>
+              <Text style={styles.countText}>{mediaList.length}</Text>
             </View>
-          ) : null}
-          <ActivityBadge type={entry.activity_type} />
-          {entry.project ? <ProjectChip project={entry.project} /> : null}
-          {(entry.tags ?? []).slice(0, 3).map(tag => (
-            <TagChip key={tag.id} name={tag.name} />
-          ))}
+          )}
         </View>
-        {entry.location_label ? (
-          <Text style={styles.location}>📍 {entry.location_label}</Text>
-        ) : entry.latitude != null ? (
-          <Text style={styles.location}>
-            📍 {entry.latitude.toFixed(4)}, {entry.longitude?.toFixed(4)}
-          </Text>
-        ) : null}
-      </View>
-    </TouchableOpacity>
+        <View style={styles.content}>
+          <View style={styles.row}>
+            {entry.title ? (
+              <Text style={styles.title} numberOfLines={1}>{entry.title}</Text>
+            ) : (
+              <Text style={styles.titlePlaceholder} numberOfLines={1}>
+                {entry.body ?? t('entryType.note')}
+              </Text>
+            )}
+            <View style={styles.timeGroup}>
+              {durationLabel ? <Text style={styles.duration}>{durationLabel}</Text> : null}
+              <Text style={styles.time}>{timeLabel}</Text>
+            </View>
+          </View>
+          {entry.body && entry.title ? (
+            <Text style={styles.body} numberOfLines={2}>{entry.body}</Text>
+          ) : null}
+          <View style={styles.chips}>
+            {entry.is_todo ? (
+              <View style={[styles.todoBadge, entry.completed_at != null && styles.todoBadgeDone]}>
+                <Text style={[styles.todoBadgeText, entry.completed_at != null && styles.todoBadgeTextDone]}>
+                  {entry.completed_at ? `✓ ${t('todo.done')}` : t('todo.badge')}
+                </Text>
+              </View>
+            ) : null}
+            <ActivityBadge type={entry.activity_type} />
+            {entry.project ? <ProjectChip project={entry.project} /> : null}
+            {(entry.tags ?? []).slice(0, 3).map(tag => (
+              <TagChip key={tag.id} name={tag.name} />
+            ))}
+          </View>
+          {entry.location_label ? (
+            <Text style={styles.location}>📍 {entry.location_label}</Text>
+          ) : entry.latitude != null ? (
+            <Text style={styles.location}>
+              📍 {entry.latitude.toFixed(4)}, {entry.longitude?.toFixed(4)}
+            </Text>
+          ) : null}
+        </View>
+      </Pressable>
+    </Animated.View>
   );
 }
