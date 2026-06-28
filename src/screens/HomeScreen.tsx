@@ -18,6 +18,7 @@ import DayEndConfirmBanner from '../components/day/DayEndConfirmBanner';
 import QuickTimerCard from '../components/day/QuickTimerCard';
 import FAB from '../components/ui/FAB';
 import {buildQuickAddActions} from '../components/entries/quickAddActions';
+import QuickAddSheet from '../components/quickadd/QuickAddSheet';
 import type {TabScreenProps} from '../navigation/navigationTypes';
 import type {Entry} from '../types';
 import {getUpcomingTodos} from '../db/entries';
@@ -89,6 +90,7 @@ export default function HomeScreen({navigation}: Props) {
   const {today, loadToday, updateDayTimes} = useDayStore();
   const {entriesByDay, loadEntriesForDay} = useEntryStore();
   const [upcoming, setUpcoming] = useState<Entry[]>([]);
+  const [sheetOpen, setSheetOpen] = useState(false);
   // Lightweight geofence diagnostic — passively shows where we think we are.
   const [detected, setDetected] = useState<GeofenceDetection>('unknown');
 
@@ -155,9 +157,13 @@ export default function HomeScreen({navigation}: Props) {
   };
 
   const quickActions = today
-    ? buildQuickAddActions(entryType =>
-        navigation.navigate('QuickAddModal', {date, dayId: today.id, entryType}),
-      )
+    ? buildQuickAddActions(entryType => {
+        if (entryType === 'note') {
+          setSheetOpen(true);
+        } else {
+          navigation.navigate('QuickAddModal', {date, dayId: today.id, entryType});
+        }
+      })
     : undefined;
 
   // Today is the end of the line: only swipe right → previous day's view.
@@ -243,6 +249,14 @@ export default function HomeScreen({navigation}: Props) {
         </View>
       </GestureDetector>
       <FAB onPress={openAddEntry} actions={quickActions} />
+      {today && (
+        <QuickAddSheet
+          visible={sheetOpen}
+          dayId={today.id}
+          onClose={() => setSheetOpen(false)}
+          onSaved={() => {}}
+        />
+      )}
     </SafeAreaView>
   );
 }
