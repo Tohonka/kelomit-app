@@ -124,7 +124,7 @@ export default function EntryListItem({entry, onPress}: Props) {
   const leadThumb = photo ? photo.thumbnail_path || photo.file_path : null;
 
   return (
-    <Animated.View entering={SlideInLeft.springify().damping(16)} style={animatedStyle}>
+    <Animated.View entering={SlideInLeft.duration(140)} style={animatedStyle}>
       <Pressable
         style={styles.item}
         onPress={onPress}

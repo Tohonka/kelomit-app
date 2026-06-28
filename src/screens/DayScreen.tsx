@@ -1,7 +1,7 @@
 import React, {useEffect, useState, useCallback, useMemo} from 'react';
 import {useTranslation} from 'react-i18next';
 import {StyleSheet, ScrollView, Text} from 'react-native';
-import Animated, {SlideInRight} from 'react-native-reanimated';
+import Animated, {FadeIn} from 'react-native-reanimated';
 import {format} from 'date-fns';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {GestureDetector, Gesture} from 'react-native-gesture-handler';
@@ -131,7 +131,7 @@ export default function DayScreen({navigation, route}: Props) {
         onClear={clearFilters}
       />
       <GestureDetector gesture={swipe}>
-        <Animated.View key={currentDate} entering={SlideInRight.springify().damping(18)} style={styles.flex}>
+        <Animated.View key={currentDate} entering={FadeIn.duration(140)} style={styles.flex}>
           <ScrollView contentContainerStyle={styles.scrollContent}>
             {day && (
               <DaySummaryCard
