@@ -185,6 +185,11 @@ const fi: typeof en = {
   },
   entries: {
     noEntries: 'Ei merkintöjä vielä. Lisää painamalla +.',
+    sortTimeDesc: 'Uusin ensin',
+    sortTimeAsc: 'Vanhin ensin',
+    sortProject: 'Projektin mukaan',
+    sortType: 'Tyypin mukaan',
+    noProject: 'Ei projektia',
     type: 'Tyyppi',
     activity: 'Aktiviteetti',
     title: 'Otsikko',

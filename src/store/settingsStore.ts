@@ -3,6 +3,7 @@ import {getAllSettings, getRawSettings, setSetting} from '../db/settings';
 import type {Settings, ActivityType} from '../types';
 import type {ThemeMode, TimeSelectorMode} from '../theme';
 import i18n, {resolveLanguageSetting, type Language} from '../i18n';
+import {DAY_LIST_MODES, type DayListMode} from '../utils/entrySort';
 
 export type NavVisibility = 'always' | 'home_only';
 
@@ -13,6 +14,8 @@ interface SettingsState extends Settings {
   /** Show a second "personal hours" line under the work total in the header. */
   show_personal_hours: boolean;
   nav_visibility: NavVisibility;
+  /** Day-list ordering/grouping mode (Home + Day), cycled via the sort pill. */
+  day_list_mode: DayListMode;
   /** Opt-in: keep logging GPS via a foreground service while the app is closed. */
   background_tracking: boolean;
   time_selector_mode: TimeSelectorMode;
@@ -29,6 +32,7 @@ interface SettingsState extends Settings {
   setShowWeekNumbers: (show: boolean) => Promise<void>;
   setShowPersonalHours: (show: boolean) => Promise<void>;
   setNavVisibility: (mode: NavVisibility) => Promise<void>;
+  setDayListMode: (mode: DayListMode) => Promise<void>;
   setBackgroundTracking: (enabled: boolean) => Promise<void>;
   setUsualStart: (hhmm: string | null) => Promise<void>;
   setUsualEnd: (hhmm: string | null) => Promise<void>;
@@ -54,6 +58,7 @@ export const useSettingsStore = create<SettingsState>(set => ({
   show_week_numbers: false,
   show_personal_hours: false,
   nav_visibility: 'always',
+  day_list_mode: 'time_desc',
   background_tracking: false,
   time_selector_mode: 'clock',
   language: 'en',
@@ -73,6 +78,11 @@ export const useSettingsStore = create<SettingsState>(set => ({
     const show_personal_hours = raw.show_personal_hours === 'true';
     const nav_visibility: NavVisibility =
       raw.nav_visibility === 'home_only' ? 'home_only' : 'always';
+    const day_list_mode: DayListMode = DAY_LIST_MODES.includes(
+      raw.day_list_mode as DayListMode,
+    )
+      ? (raw.day_list_mode as DayListMode)
+      : 'time_desc';
     const background_tracking = raw.background_tracking === 'true';
     const time_selector_mode: TimeSelectorMode =
       raw.time_selector_mode === 'keyboard' ? 'keyboard' : 'clock';
@@ -93,6 +103,7 @@ export const useSettingsStore = create<SettingsState>(set => ({
       show_week_numbers,
       show_personal_hours,
       nav_visibility,
+      day_list_mode,
       background_tracking,
       time_selector_mode,
       language,
@@ -141,6 +152,11 @@ export const useSettingsStore = create<SettingsState>(set => ({
   setNavVisibility: async mode => {
     await setSetting('nav_visibility', mode);
     set({nav_visibility: mode});
+  },
+
+  setDayListMode: async mode => {
+    await setSetting('day_list_mode', mode);
+    set({day_list_mode: mode});
   },
 
   setBackgroundTracking: async enabled => {

@@ -183,6 +183,11 @@ const en = {
   },
   entries: {
     noEntries: 'No entries yet. Tap + to add one.',
+    sortTimeDesc: 'Newest first',
+    sortTimeAsc: 'Oldest first',
+    sortProject: 'By project',
+    sortType: 'By type',
+    noProject: 'No project',
     type: 'Type',
     activity: 'Activity',
     title: 'Title',
