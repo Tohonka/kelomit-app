@@ -6,7 +6,7 @@ import {hhmmToIsoOn} from '../utils/dateUtils';
 import type {Day} from '../types';
 
 type DayTimeFields = Partial<Pick<Day,
-  'started_at' | 'ended_at' | 'started_at_2' | 'ended_at_2'
+  'started_at' | 'ended_at' | 'started_at_2' | 'ended_at_2' | 'notes'
 >>;
 
 /** Prefill params for a brand-new day, when the user has opted in and set both

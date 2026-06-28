@@ -511,7 +511,8 @@ export default function AddEntryModal({navigation, route}: Props) {
         ref={scrollRef}
         style={styles.container}
         contentContainerStyle={[styles.content, {paddingBottom: spacing.xxl + kbHeight}]}
-        keyboardShouldPersistTaps="handled">
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag">
 
       <Text style={styles.sectionLabel}>{translate('entries.activity')}</Text>
       <View style={styles.activityRow}>

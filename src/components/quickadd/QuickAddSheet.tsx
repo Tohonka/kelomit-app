@@ -193,7 +193,7 @@ export default function QuickAddSheet({visible, dayId, onClose, onSaved}: Props)
       <GestureDetector gesture={pan}>
         <Animated.View style={[styles.sheet, sheetStyle]} onLayout={onLayout}>
           <View style={styles.handle} />
-          <ScrollView keyboardShouldPersistTaps="handled">
+          <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
             <Text style={styles.heading}>{t('quickEntryType.note')}</Text>
             <Text style={styles.defaultsNote}>
               {t('entries.quickDefaults', {

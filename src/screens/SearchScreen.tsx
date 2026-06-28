@@ -121,7 +121,7 @@ export default function SearchScreen({navigation}: Props) {
       )}
 
       {results.length > 0 && (
-        <ScrollView keyboardShouldPersistTaps="handled">
+        <ScrollView keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
           <Text style={styles.countText}>
             {translate('search.results', {count: results.length})}
           </Text>

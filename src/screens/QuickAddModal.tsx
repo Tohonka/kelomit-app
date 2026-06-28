@@ -104,7 +104,8 @@ export default function QuickAddModal({navigation, route}: Props) {
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
-      keyboardShouldPersistTaps="handled">
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag">
       <Text style={styles.heading}>{t(`quickEntryType.${entryType}`)}</Text>
       <Text style={styles.defaultsNote}>
         {t('entries.quickDefaults', {

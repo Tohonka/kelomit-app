@@ -86,6 +86,11 @@ const en = {
     notificationTitle: 'End of workday?',
     question: 'Did your workday end at {{time}}?',
   },
+  dayNote: {
+    title: 'Day note',
+    add: '+ Note for this day',
+    placeholder: 'Sick day, office closed early, …',
+  },
   app: {
     dbErrorTitle: 'Failed to open database:',
   },

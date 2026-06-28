@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {View, Text, StyleSheet, ScrollView, AppState} from 'react-native';
 import {format} from 'date-fns';
@@ -13,11 +13,13 @@ import type {Colors} from '../theme';
 import EntryList from '../components/entries/EntryList';
 import EntryListItem from '../components/entries/EntryListItem';
 import DaySummaryCard from '../components/day/DaySummaryCard';
+import SpecialNoteCard from '../components/day/SpecialNoteCard';
 import DaySplitBar from '../components/day/DaySplitBar';
 import DayEndConfirmBanner from '../components/day/DayEndConfirmBanner';
 import QuickTimerCard from '../components/day/QuickTimerCard';
 import FAB from '../components/ui/FAB';
 import {buildQuickAddActions} from '../components/entries/quickAddActions';
+import {useKeyboardHeight} from '../hooks/useKeyboardHeight';
 import QuickAddSheet from '../components/quickadd/QuickAddSheet';
 import type {HomeStackScreenProps} from '../navigation/navigationTypes';
 import type {Entry} from '../types';
@@ -89,6 +91,9 @@ export default function HomeScreen({navigation}: Props) {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const {today, loadToday, updateDayTimes} = useDayStore();
   const {entriesByDay, loadEntriesForDay} = useEntryStore();
+  const scrollRef = useRef<ScrollView>(null);
+  const kbHeight = useKeyboardHeight();
+  const [noteEditing, setNoteEditing] = useState(false);
   const [upcoming, setUpcoming] = useState<Entry[]>([]);
   const [sheetOpen, setSheetOpen] = useState(false);
   // Lightweight geofence diagnostic — passively shows where we think we are.
@@ -113,6 +118,12 @@ export default function HomeScreen({navigation}: Props) {
   useEffect(() => {
     if (today) { loadEntriesForDay(today.id); }
   }, [today, loadEntriesForDay]);
+  // Lift the day-note card above the keyboard once it's actually shown.
+  useEffect(() => {
+    if (noteEditing && kbHeight > 0) {
+      requestAnimationFrame(() => scrollRef.current?.scrollToEnd({animated: true}));
+    }
+  }, [noteEditing, kbHeight]);
 
   const loadUpcoming = useCallback(() => {
     getUpcomingTodos(nextDayDates()).then(setUpcoming).catch(() => {});
@@ -202,7 +213,15 @@ export default function HomeScreen({navigation}: Props) {
           })}
         </Text>
       </View>
-      <ScrollView style={styles.flex} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        ref={scrollRef}
+        style={styles.flex}
+        contentContainerStyle={[
+          styles.scrollContent,
+          noteEditing && kbHeight > 0 && {paddingBottom: kbHeight + spacing.lg},
+        ]}
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled">
         <DayEndConfirmBanner />
         <QuickTimerCard />
         {today && (
@@ -245,6 +264,14 @@ export default function HomeScreen({navigation}: Props) {
         <Text style={styles.whereAmI}>
           {t('location.detected', {place: placeLabel(detected)})}
         </Text>
+        {today && (
+          <SpecialNoteCard
+            note={today.notes}
+            onSave={notes => updateDayTimes(date, {notes})}
+            onBeginEdit={() => setNoteEditing(true)}
+            onEndEdit={() => setNoteEditing(false)}
+          />
+        )}
       </ScrollView>
         </View>
       </GestureDetector>

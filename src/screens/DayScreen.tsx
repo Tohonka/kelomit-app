@@ -1,4 +1,4 @@
-import React, {useEffect, useState, useCallback, useMemo} from 'react';
+import React, {useEffect, useState, useCallback, useMemo, useRef} from 'react';
 import {useTranslation} from 'react-i18next';
 import {StyleSheet, ScrollView, Text} from 'react-native';
 import Animated, {FadeIn} from 'react-native-reanimated';
@@ -13,9 +13,11 @@ import type {Colors} from '../theme';
 import EntryList from '../components/entries/EntryList';
 import DaySummaryCard from '../components/day/DaySummaryCard';
 import DaySplitBar from '../components/day/DaySplitBar';
+import SpecialNoteCard from '../components/day/SpecialNoteCard';
 import FilterBar from '../components/day/FilterBar';
 import FAB from '../components/ui/FAB';
 import {buildQuickAddActions} from '../components/entries/quickAddActions';
+import {useKeyboardHeight} from '../hooks/useKeyboardHeight';
 import type {HomeStackScreenProps} from '../navigation/navigationTypes';
 import type {Entry, Project, Tag} from '../types';
 import {calcDayWorkSecs, formatHours} from '../utils/hoursUtils';
@@ -43,6 +45,9 @@ export default function DayScreen({navigation, route}: Props) {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const {loadDay, daysCache, updateDayTimes} = useDayStore();
   const {entriesByDay, loadEntriesForDay} = useEntryStore();
+  const scrollRef = useRef<ScrollView>(null);
+  const kbHeight = useKeyboardHeight();
+  const [noteEditing, setNoteEditing] = useState(false);
 
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
@@ -71,6 +76,12 @@ export default function DayScreen({navigation, route}: Props) {
 
   useEffect(() => { loadDay(currentDate); }, [currentDate, loadDay]);
   useEffect(() => { if (day) { loadEntriesForDay(day.id); } }, [day, loadEntriesForDay]);
+  // Lift the day-note card above the keyboard once it's actually shown.
+  useEffect(() => {
+    if (noteEditing && kbHeight > 0) {
+      requestAnimationFrame(() => scrollRef.current?.scrollToEnd({animated: true}));
+    }
+  }, [noteEditing, kbHeight]);
 
   // Update navigation title and work-hours in header when day/entries change
   useEffect(() => {
@@ -142,7 +153,14 @@ export default function DayScreen({navigation, route}: Props) {
       />
       <GestureDetector gesture={swipe}>
         <Animated.View key={currentDate} entering={FadeIn.duration(140)} style={styles.flex}>
-          <ScrollView contentContainerStyle={styles.scrollContent}>
+          <ScrollView
+            ref={scrollRef}
+            contentContainerStyle={[
+              styles.scrollContent,
+              noteEditing && kbHeight > 0 && {paddingBottom: kbHeight + spacing.lg},
+            ]}
+            keyboardDismissMode="on-drag"
+            keyboardShouldPersistTaps="handled">
             {day && (
               <DaySummaryCard
                 day={day}
@@ -161,6 +179,14 @@ export default function DayScreen({navigation, route}: Props) {
                 })
               }
             />
+            {day && (
+              <SpecialNoteCard
+                note={day.notes}
+                onSave={notes => updateDayTimes(currentDate, {notes})}
+                onBeginEdit={() => setNoteEditing(true)}
+                onEndEdit={() => setNoteEditing(false)}
+              />
+            )}
           </ScrollView>
         </Animated.View>
       </GestureDetector>

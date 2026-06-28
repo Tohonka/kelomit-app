@@ -88,6 +88,11 @@ const fi: typeof en = {
     notificationTitle: 'Työpäivän loppu?',
     question: 'Loppuiko työpäiväsi klo {{time}}?',
   },
+  dayNote: {
+    title: 'Päivän muistiinpano',
+    add: '+ Muistiinpano tälle päivälle',
+    placeholder: 'Sairauspäivä, toimisto kiinni aiemmin, …',
+  },
   app: {
     dbErrorTitle: 'Tietokannan avaaminen epäonnistui:',
   },
