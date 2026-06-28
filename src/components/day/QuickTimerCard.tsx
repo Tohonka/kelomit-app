@@ -24,7 +24,7 @@ import {useTheme, typography, spacing, radius} from '../../theme';
 import type {Colors} from '../../theme';
 import {elapsedSeconds} from '../../services/sessionLogic';
 import {formatTime} from '../../utils/dateUtils';
-import {haptic, HAPTIC_START, HAPTIC_SAVE} from '../../utils/haptics';
+import {haptic, HAPTIC_START, HAPTIC_SAVE, HAPTIC_CANCEL} from '../../utils/haptics';
 import ProjectPicker from '../entries/ProjectPicker';
 import type {ActivityType} from '../../types';
 
@@ -313,7 +313,7 @@ export default function QuickTimerCard() {
       {
         text: t('timer.cancelTimer'),
         style: 'destructive',
-        onPress: () => { cancel().catch(() => {}); },
+        onPress: () => { haptic(HAPTIC_CANCEL); cancel().catch(() => {}); },
       },
     ]);
   };
