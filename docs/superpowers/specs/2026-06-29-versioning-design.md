@@ -26,9 +26,9 @@ No git tags exist.
 `npm version patch|minor|major` — npm updates `package.json`, then creates a git commit
 and an **annotated tag** (`v0.4.0`). Built-in; no extra tooling for the tag.
 
-### Sync glue: `scripts/sync-version.mjs`
+### Sync glue: `scripts/sync-version.js`
 A Node script wired to npm's `version` lifecycle hook (in `package.json` `scripts`:
-`"version": "node scripts/sync-version.mjs && git add android/app/build.gradle src/version.ts"`).
+`"version": "node scripts/sync-version.js && git add android/app/build.gradle src/version.ts"`).
 The `version` hook runs **after** `package.json` is bumped and **before** npm's commit,
 so the script's edits land in the same version commit + tag. The script:
 1. Reads the new version from `package.json`.
@@ -55,7 +55,7 @@ manually as part of setup, not via `npm version`, to avoid an unwanted extra bum
 
 ## Testing
 
-`sync-version.mjs`'s gradle rewrite is a pure string transform → one small self-check:
+`sync-version.js`'s gradle rewrite is a pure string transform → one small self-check:
 given a sample gradle snippet and a target version, assert the output has the new
 `versionName` and `versionCode + 1`. The npm/git plumbing and the `version.ts` write are
 not worth testing.
