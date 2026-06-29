@@ -6,6 +6,8 @@ import EntryDetailScreen from '../screens/EntryDetailScreen';
 import AddEntryModal from '../screens/AddEntryModal';
 import QuickAddModal from '../screens/QuickAddModal';
 import ProjectsScreen from '../screens/ProjectsScreen';
+import TagsScreen from '../screens/TagsScreen';
+import TagsProjectsSettings from '../screens/settings/TagsProjectsSettings';
 import SearchScreen from '../screens/SearchScreen';
 import InsightsScreen from '../screens/InsightsScreen';
 import GalleryScreen from '../screens/GalleryScreen';
@@ -65,6 +67,16 @@ export default function RootNavigator() {
         name="ProjectsScreen"
         component={ProjectsScreen}
         options={{title: t('common.projects')}}
+      />
+      <Stack.Screen
+        name="TagsScreen"
+        component={TagsScreen}
+        options={{title: t('common.tags')}}
+      />
+      <Stack.Screen
+        name="TagsProjectsSettings"
+        component={TagsProjectsSettings}
+        options={{title: t('manager.tagsProjectsTitle')}}
       />
       <Stack.Screen
         name="SearchScreen"

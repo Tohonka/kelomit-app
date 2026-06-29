@@ -22,12 +22,17 @@ interface EntryState {
   ) => Promise<void>;
   removeEntry: (id: number, dayId: number) => Promise<void>;
   setTodoDone: (id: number, dayId: number, done: boolean) => Promise<void>;
+  /** Drop the cache so day screens reload fresh entries — used after a
+   *  tag/project merge or rename rewrites historical notes. */
+  reset: () => void;
 }
 
 export const useEntryStore = create<EntryState>(set => ({
   entriesByDay: {},
   isLoading: false,
   error: null,
+
+  reset: () => set({entriesByDay: {}}),
 
   loadEntriesForDay: async (dayId: number) => {
     set({isLoading: true, error: null});

@@ -40,3 +40,26 @@ export async function deleteTag(id: number): Promise<void> {
   const db = getDB();
   await db.execute('DELETE FROM tags WHERE id = ?;', [id]);
 }
+
+/** Rename a tag. Throws on a UNIQUE collision (name already taken, NOCASE) —
+ *  callers steer the user to merge instead. */
+export async function renameTag(id: number, name: string): Promise<void> {
+  const db = getDB();
+  await db.execute('UPDATE tags SET name = ? WHERE id = ?;', [
+    name.trim().toLowerCase(),
+    id,
+  ]);
+}
+
+/** Combine `dropId` into `keepId`: move its note links to the kept tag, then
+ *  delete it. OR IGNORE skips notes that already carry the kept tag (the
+ *  (entry_id, tag_id) PK would collide); deleting the dropped tag then cascades
+ *  those leftover links away. */
+export async function mergeTags(keepId: number, dropId: number): Promise<void> {
+  const db = getDB();
+  await db.execute(
+    'UPDATE OR IGNORE entry_tags SET tag_id = ? WHERE tag_id = ?;',
+    [keepId, dropId],
+  );
+  await db.execute('DELETE FROM tags WHERE id = ?;', [dropId]);
+}

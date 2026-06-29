@@ -5,6 +5,8 @@ import {useTranslation} from 'react-i18next';
 import {useLocationStore} from '../../store/locationStore';
 import {MIN_RADIUS_M} from '../../db/locations';
 import {getCurrentPositionOnce, getLastPositionError} from '../../services/gpsService';
+import type {KnownPosition} from '../../services/gpsService';
+import {distanceMeters} from '../../services/locationUtils';
 
 const RADIUS_STEP_M = 25;
 import {useTheme, typography, spacing, radius} from '../../theme';
@@ -64,6 +66,13 @@ const makeLocalStyles = (c: Colors) =>
     addBtnText: {color: c.primary, fontSize: typography.sizes.sm, fontWeight: typography.weights.semibold},
     addBtnDisabled: {opacity: 0.5},
     empty: {paddingHorizontal: spacing.lg, paddingVertical: spacing.md, color: c.textMuted, fontSize: typography.sizes.sm},
+    statusText: {
+      paddingHorizontal: spacing.lg,
+      paddingBottom: spacing.sm,
+      fontSize: typography.sizes.sm,
+      color: c.textSecondary,
+    },
+    statusPlace: {color: c.textPrimary, fontWeight: typography.weights.semibold},
   });
 
 export default function LocationSettings() {
@@ -73,8 +82,42 @@ export default function LocationSettings() {
   const local = useMemo(() => makeLocalStyles(colors), [colors]);
   const {locations, loaded, load, add, remove, setRadius} = useLocationStore();
   const [saving, setSaving] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [checkPos, setCheckPos] = useState<KnownPosition | null>(null);
 
   useEffect(() => { if (!loaded) { load(); } }, [loaded, load]);
+
+  // "Where am I now": forced one-shot read, then match against saved places.
+  const checkNow = async () => {
+    setChecking(true);
+    try {
+      const pos = await getCurrentPositionOnce();
+      if (!pos) {
+        const detail = getLastPositionError();
+        Alert.alert(
+          t('location.title'),
+          detail ? `${t('location.noPosition')}\n\n${detail}` : t('location.noPosition'),
+        );
+        return;
+      }
+      setCheckPos(pos);
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  // Nearest saved place whose radius contains the checked position, if any.
+  const matchedPlace = useMemo(() => {
+    if (!checkPos) { return null; }
+    let best: {loc: (typeof locations)[number]; dist: number} | null = null;
+    for (const loc of locations) {
+      const dist = distanceMeters(checkPos.latitude, checkPos.longitude, loc.latitude, loc.longitude);
+      if (dist <= loc.radius_m && (!best || dist < best.dist)) {
+        best = {loc, dist};
+      }
+    }
+    return best?.loc ?? null;
+  }, [checkPos, locations]);
 
   const saveCurrent = async (kind: LocationKind) => {
     setSaving(true);
@@ -171,6 +214,29 @@ export default function LocationSettings() {
           </TouchableOpacity>
         </View>
         <Text style={local.hint}>{t('location.autoStampHint')}</Text>
+
+        <Text style={styles.sectionHeader}>{t('location.whereAmI')}</Text>
+        {checkPos && (
+          <Text style={local.statusText}>
+            {checkPos.latitude.toFixed(4)}, {checkPos.longitude.toFixed(4)}
+            {checkPos.accuracy != null && ` · ${t('location.accuracy', {m: Math.round(checkPos.accuracy)})}`}
+            {'\n'}
+            <Text style={local.statusPlace}>
+              {matchedPlace ? t('location.detected', {place: matchedPlace.name}) : t('location.noPlaceMatch')}
+            </Text>
+          </Text>
+        )}
+        <View style={local.addRow}>
+          <TouchableOpacity
+            style={[local.addBtn, checking && local.addBtnDisabled]}
+            disabled={checking}
+            onPress={checkNow}>
+            <Text style={local.addBtnText}>
+              {checking ? t('location.checking') : t('location.checkPosition')}
+            </Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={local.hint}>{t('location.whereAmIHint')}</Text>
       </ScrollView>
     </SafeAreaView>
   );

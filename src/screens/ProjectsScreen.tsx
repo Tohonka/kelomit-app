@@ -14,6 +14,7 @@ import {useProjectStore} from '../store/projectStore';
 import {useTheme, typography, spacing, radius} from '../theme';
 import type {Colors} from '../theme';
 import Button from '../components/ui/Button';
+import ActionSheet from '../components/ui/ActionSheet';
 import type {Project} from '../types';
 
 const TYPE_OPTIONS: {type: Project['type']; labelKey: string}[] = [
@@ -86,6 +87,18 @@ const makeStyles = (c: Colors) =>
       fontSize: typography.sizes.sm,
       fontWeight: typography.weights.medium,
     },
+    banner: {
+      backgroundColor: c.primary + '15',
+      borderBottomWidth: 1,
+      borderBottomColor: c.primary,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+    },
+    bannerText: {flex: 1, color: c.textPrimary, fontSize: typography.sizes.sm},
+    bannerCancel: {color: c.primary, fontWeight: typography.weights.semibold, fontSize: typography.sizes.sm},
     projectRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -94,7 +107,9 @@ const makeStyles = (c: Colors) =>
       borderBottomWidth: 1,
       borderBottomColor: c.border,
       backgroundColor: c.bgCard,
+      minHeight: 56,
     },
+    rowTarget: {backgroundColor: c.primary + '0C'},
     projectInfo: {flex: 1},
     projectName: {
       fontSize: typography.sizes.base,
@@ -103,24 +118,36 @@ const makeStyles = (c: Colors) =>
     },
     archived: {color: c.textMuted, textDecorationLine: 'line-through'},
     projectType: {fontSize: typography.sizes.sm, color: c.textMuted, marginTop: 2},
-    actionBtn: {paddingHorizontal: spacing.md, paddingVertical: spacing.sm},
-    actionBtnText: {
-      color: c.primary,
-      fontWeight: typography.weights.medium,
-      fontSize: typography.sizes.sm,
+    editInput: {
+      flex: 1,
+      backgroundColor: c.bg,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: c.primary,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.xs,
+      fontSize: typography.sizes.base,
+      color: c.textPrimary,
+      marginRight: spacing.sm,
     },
+    editBtn: {paddingHorizontal: spacing.sm, paddingVertical: spacing.xs},
+    editBtnText: {color: c.primary, fontWeight: typography.weights.semibold, fontSize: typography.sizes.sm},
   });
 
 export default function ProjectsScreen() {
   const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const {projects, loaded, load, add, archive, unarchive} = useProjectStore();
+  const {projects, loaded, load, add, archive, unarchive, rename, merge, remove} = useProjectStore();
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState('');
   const [type, setType] = useState<Project['type']>('work');
   const [isSaving, setIsSaving] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editName, setEditName] = useState('');
+  const [mergeSource, setMergeSource] = useState<Project | null>(null);
+  const [actionProject, setActionProject] = useState<Project | null>(null);
 
   useEffect(() => {
     if (!loaded) { load(); }
@@ -140,6 +167,42 @@ export default function ProjectsScreen() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const saveRename = async () => {
+    const n = editName.trim();
+    const id = editingId;
+    if (!n || id == null) { setEditingId(null); return; }
+    const clash = projects.find(p => p.id !== id && p.name.toLowerCase() === n.toLowerCase());
+    if (clash) {
+      Alert.alert(t('common.rename'), t('manager.nameTakenProject', {name: n}));
+      return;
+    }
+    await rename(id, n);
+    setEditingId(null);
+  };
+
+  const confirmMerge = (target: Project) => {
+    const src = mergeSource;
+    if (!src || target.id === src.id) { return; }
+    Alert.alert(
+      t('manager.mergeTitle'),
+      t('manager.mergeProjectMessage', {from: src.name, to: target.name}),
+      [
+        {text: t('common.cancel'), style: 'cancel'},
+        {
+          text: t('common.merge'),
+          onPress: async () => { await merge(target.id, src.id); setMergeSource(null); },
+        },
+      ],
+    );
+  };
+
+  const confirmDelete = (project: Project) => {
+    Alert.alert(t('manager.deleteProjectTitle'), t('manager.deleteProjectMessage', {name: project.name}), [
+      {text: t('common.cancel'), style: 'cancel'},
+      {text: t('common.delete'), style: 'destructive', onPress: () => remove(project.id)},
+    ]);
   };
 
   const visible = projects.filter(p => showArchived || !p.archived);
@@ -185,6 +248,16 @@ export default function ProjectsScreen() {
                 <Text style={styles.addLabel}>{t('projects.newProjectButton')}</Text>
               </TouchableOpacity>
             )}
+            {mergeSource && (
+              <View style={styles.banner}>
+                <Text style={styles.bannerText}>
+                  {t('manager.mergeBannerProject', {name: mergeSource.name})}
+                </Text>
+                <TouchableOpacity onPress={() => setMergeSource(null)}>
+                  <Text style={styles.bannerCancel}>{t('common.cancel')}</Text>
+                </TouchableOpacity>
+              </View>
+            )}
             <TouchableOpacity style={styles.archiveToggle} onPress={() => setShowArchived(s => !s)}>
               <Text style={styles.archiveToggleText}>
                 {showArchived ? t('projects.hideArchived') : t('projects.showArchived')}
@@ -192,33 +265,61 @@ export default function ProjectsScreen() {
             </TouchableOpacity>
           </>
         }
-        renderItem={({item}) => (
-          <View style={styles.projectRow}>
-            <View style={styles.projectInfo}>
-              <Text style={[styles.projectName, item.archived && styles.archived]}>
-                {item.name}
-              </Text>
-              <Text style={styles.projectType}>{t(`projectType.${item.type}`)}</Text>
-            </View>
-            {item.archived ? (
-              <TouchableOpacity onPress={() => unarchive(item.id)} style={styles.actionBtn}>
-                <Text style={styles.actionBtnText}>{t('common.restore')}</Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                onPress={() => {
-                  Alert.alert(t('projects.archiveTitle'), t('projects.archiveMessage', {name: item.name}), [
-                    {text: t('common.cancel'), style: 'cancel'},
-                    {text: t('common.archive'), onPress: () => archive(item.id)},
-                  ]);
-                }}
-                style={styles.actionBtn}>
-                <Text style={styles.actionBtnText}>{t('common.archive')}</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
+        renderItem={({item}) => {
+          if (editingId === item.id) {
+            return (
+              <View style={styles.projectRow}>
+                <TextInput
+                  style={styles.editInput}
+                  value={editName}
+                  onChangeText={setEditName}
+                  autoFocus
+                  maxLength={80}
+                  onSubmitEditing={saveRename}
+                  returnKeyType="done"
+                />
+                <TouchableOpacity style={styles.editBtn} onPress={saveRename}>
+                  <Text style={styles.editBtnText}>{t('common.save')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.editBtn} onPress={() => setEditingId(null)}>
+                  <Text style={styles.editBtnText}>{t('common.cancel')}</Text>
+                </TouchableOpacity>
+              </View>
+            );
+          }
+          const isMergeTarget = mergeSource != null && mergeSource.id !== item.id;
+          return (
+            <TouchableOpacity
+              style={[styles.projectRow, isMergeTarget && styles.rowTarget]}
+              onPress={() => (mergeSource ? confirmMerge(item) : setActionProject(item))}
+              disabled={mergeSource != null && mergeSource.id === item.id}>
+              <View style={styles.projectInfo}>
+                <Text style={[styles.projectName, item.archived && styles.archived]}>
+                  {item.name}
+                </Text>
+                <Text style={styles.projectType}>{t(`projectType.${item.type}`)}</Text>
+              </View>
+            </TouchableOpacity>
+          );
+        }}
         contentContainerStyle={styles.list}
+      />
+      <ActionSheet
+        visible={actionProject != null}
+        title={actionProject?.name}
+        onClose={() => setActionProject(null)}
+        actions={
+          actionProject
+            ? [
+                {label: t('common.rename'), onPress: () => { setEditingId(actionProject.id); setEditName(actionProject.name); }},
+                {label: t('manager.mergeInto'), onPress: () => setMergeSource(actionProject)},
+                actionProject.archived
+                  ? {label: t('common.restore'), onPress: () => unarchive(actionProject.id)}
+                  : {label: t('common.archive'), onPress: () => archive(actionProject.id)},
+                {label: t('common.delete'), destructive: true, onPress: () => confirmDelete(actionProject)},
+              ]
+            : []
+        }
       />
     </SafeAreaView>
   );

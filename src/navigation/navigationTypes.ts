@@ -16,6 +16,8 @@ export type RootStackParamList = {
   AddEntryModal: {date?: string; dayId: number; entryId?: number};
   QuickAddModal: {date?: string; dayId: number; entryType: EntryType};
   ProjectsScreen: undefined;
+  TagsScreen: undefined;
+  TagsProjectsSettings: undefined;
   SearchScreen: undefined;
   InsightsScreen: undefined;
   GalleryScreen: undefined;

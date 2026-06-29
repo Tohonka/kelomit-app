@@ -72,7 +72,7 @@ const makeLocalStyles = (c: Colors) =>
     },
   });
 
-export default function DataSettings({navigation}: Props) {
+export default function DataSettings(_props: Props) {
   const {t} = useTranslation();
   const {colors} = useTheme();
   const language = useSettingsStore(s => s.language);
@@ -140,11 +140,6 @@ export default function DataSettings({navigation}: Props) {
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.sectionHeader}>{t('common.data')}</Text>
-
-        <TouchableOpacity style={styles.row} onPress={() => navigation.navigate('ProjectsScreen')}>
-          <Text style={styles.rowLabel}>{t('common.projects')}</Text>
-          <Text style={styles.rowCaret}>›</Text>
-        </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.row}

@@ -4,7 +4,11 @@ import {
   createProject,
   archiveProject,
   unarchiveProject,
+  renameProject,
+  mergeProjects,
+  deleteProject,
 } from '../db/projects';
+import {useEntryStore} from './entryStore';
 import type {Project} from '../types';
 
 interface ProjectState {
@@ -14,6 +18,9 @@ interface ProjectState {
   add: (name: string, type: Project['type']) => Promise<Project>;
   archive: (id: number) => Promise<void>;
   unarchive: (id: number) => Promise<void>;
+  rename: (id: number, name: string) => Promise<void>;
+  merge: (keepId: number, dropId: number) => Promise<void>;
+  remove: (id: number) => Promise<void>;
 }
 
 export const useProjectStore = create<ProjectState>((set) => ({
@@ -47,5 +54,26 @@ export const useProjectStore = create<ProjectState>((set) => ({
         p.id === id ? {...p, archived: false} : p,
       ),
     }));
+  },
+
+  rename: async (id, name) => {
+    await renameProject(id, name);
+    const trimmed = name.trim();
+    set(state => ({
+      projects: state.projects.map(p => (p.id === id ? {...p, name: trimmed} : p)),
+    }));
+    useEntryStore.getState().reset();
+  },
+
+  merge: async (keepId, dropId) => {
+    await mergeProjects(keepId, dropId);
+    set(state => ({projects: state.projects.filter(p => p.id !== dropId)}));
+    useEntryStore.getState().reset();
+  },
+
+  remove: async (id) => {
+    await deleteProject(id);
+    set(state => ({projects: state.projects.filter(p => p.id !== id)}));
+    useEntryStore.getState().reset();
   },
 }));

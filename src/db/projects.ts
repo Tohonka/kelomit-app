@@ -76,3 +76,24 @@ export async function deleteProject(id: number): Promise<void> {
   const db = getDB();
   await db.execute('DELETE FROM projects WHERE id = ?;', [id]);
 }
+
+/** Rename a project. Throws on a UNIQUE collision (name already taken) —
+ *  callers steer the user to merge instead. */
+export async function renameProject(id: number, name: string): Promise<void> {
+  const db = getDB();
+  await db.execute(
+    `UPDATE projects SET name = ?, updated_at = datetime('now') WHERE id = ?;`,
+    [name.trim(), id],
+  );
+}
+
+/** Combine `dropId` into `keepId`: repoint its notes to the kept project, then
+ *  delete it. project_id has no per-entry uniqueness so a plain UPDATE is safe. */
+export async function mergeProjects(keepId: number, dropId: number): Promise<void> {
+  const db = getDB();
+  await db.execute('UPDATE entries SET project_id = ? WHERE project_id = ?;', [
+    keepId,
+    dropId,
+  ]);
+  await db.execute('DELETE FROM projects WHERE id = ?;', [dropId]);
+}
