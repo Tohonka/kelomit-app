@@ -6,6 +6,7 @@ import {useSettingsStore} from '../store/settingsStore';
 import {useTheme, typography, spacing} from '../theme';
 import type {Colors} from '../theme';
 import type {TabScreenProps} from '../navigation/navigationTypes';
+import {APP_VERSION} from '../version';
 
 type Props = TabScreenProps<'Settings'>;
 
@@ -84,7 +85,7 @@ export default function SettingsScreen({navigation}: Props) {
         <Text style={styles.sectionHeader}>{t('settings.app')}</Text>
         <View style={styles.row}>
           <Text style={styles.rowTitle}>{t('common.version')}</Text>
-          <Text style={styles.rowValue}>0.3.82</Text>
+          <Text style={styles.rowValue}>{APP_VERSION}</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
