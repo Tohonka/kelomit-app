@@ -1,8 +1,9 @@
 import React, {useMemo, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {View, Text, StyleSheet} from 'react-native';
-import MapView, {PROVIDER_GOOGLE, type Region} from 'react-native-maps';
+import MapView, {PROVIDER_GOOGLE} from 'react-native-maps';
 import {bucketLocations, type LocationBucket} from '../../utils/bucketLocations';
+import {regionFor} from '../../utils/mapRegion';
 import LocationMarker from './LocationMarker';
 import MarkerNotesSheet from './MarkerNotesSheet';
 import {useTheme, typography, spacing} from '../../theme';
@@ -23,25 +24,6 @@ const makeStyles = (c: Colors) =>
     emptyIcon: {fontSize: 44},
     emptyText: {color: c.textMuted, fontSize: typography.sizes.base, textAlign: 'center'},
   });
-
-/** Bounding region around all points, with sane padding and minimum deltas. */
-function regionFor(points: {latitude: number; longitude: number}[]): Region | undefined {
-  if (points.length === 0) {
-    return undefined;
-  }
-  const lats = points.map(p => p.latitude);
-  const lngs = points.map(p => p.longitude);
-  const minLat = Math.min(...lats);
-  const maxLat = Math.max(...lats);
-  const minLng = Math.min(...lngs);
-  const maxLng = Math.max(...lngs);
-  return {
-    latitude: (minLat + maxLat) / 2,
-    longitude: (minLng + maxLng) / 2,
-    latitudeDelta: Math.max((maxLat - minLat) * 1.4, 0.01),
-    longitudeDelta: Math.max((maxLng - minLng) * 1.4, 0.01),
-  };
-}
 
 export default function GalleryMap({items, onSelect}: Props) {
   const {t} = useTranslation();
