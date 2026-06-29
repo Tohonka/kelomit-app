@@ -11,6 +11,7 @@ import {
   Vibration,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
+import {GestureDetector, Gesture} from 'react-native-gesture-handler';
 import {getEntry, deleteEntryMedia} from '../db/entries';
 import {useEntryStore} from '../store/entryStore';
 import {useTheme, typography, spacing, radius} from '../theme';
@@ -276,10 +277,24 @@ export default function EntryDetailScreen({navigation, route}: Props) {
     );
   };
 
+  // Swipe left = go back. failOffsetY keeps vertical scrolling intact.
+  const swipeBack = useMemo(
+    () =>
+      Gesture.Pan()
+        .runOnJS(true)
+        .activeOffsetX([-20, 20])
+        .failOffsetY([-18, 18])
+        .onEnd(e => {
+          if (e.translationX <= -50) { navigation.goBack(); }
+        }),
+    [navigation],
+  );
+
   if (!entry) { return null; }
 
   return (
     <SafeAreaView style={styles.container}>
+      <GestureDetector gesture={swipeBack}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.metaRow}>
           <ActivityBadge type={entry.activity_type} />
@@ -371,6 +386,7 @@ export default function EntryDetailScreen({navigation, route}: Props) {
           <Text style={styles.deleteBtnText}>{translate('entries.deleteEntry')}</Text>
         </TouchableOpacity>
       </ScrollView>
+      </GestureDetector>
       <ZoomableImageModal uri={zoomUri} onClose={() => setZoomUri(null)} />
     </SafeAreaView>
   );

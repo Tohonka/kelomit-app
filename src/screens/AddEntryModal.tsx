@@ -31,7 +31,7 @@ import {getLastKnownPosition} from '../services/gpsService';
 import {scheduleTodoReminder, requestNotificationPermission} from '../services/notificationService';
 import {getEntry, addEntryMedia, deleteEntryMedia} from '../db/entries';
 import {getOrCreateDay} from '../db/days';
-import {formatDate} from '../utils/dateUtils';
+import {formatDate, todayDate} from '../utils/dateUtils';
 import type {RootStackScreenProps} from '../navigation/navigationTypes';
 import type {ActivityType, Tag} from '../types';
 
@@ -166,6 +166,7 @@ const makeStyles = (c: Colors) =>
     timeModeBtnTextActive: {color: c.primary, fontWeight: typography.weights.semibold},
     durationRow: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm},
     durationInput: {flex: 1, textAlign: 'center'},
+    durationStartBlock: {gap: spacing.xs, alignItems: 'flex-start', marginTop: spacing.md},
     durationUnit: {
       fontSize: typography.sizes.base,
       color: c.textSecondary,
@@ -222,7 +223,7 @@ const makeStyles = (c: Colors) =>
 export default function AddEntryModal({navigation, route}: Props) {
   const {t: translate} = useTranslation();
   const {dayId, entryId} = route.params;
-  const entryDate = route.params.date;
+  const entryDate = route.params.date ?? todayDate();
   const isEdit = entryId != null;
   const {addEntry, editEntry, loadEntriesForDay} = useEntryStore();
   const {projects, loaded: projectsLoaded, load: loadProjects, add: addProject} = useProjectStore();
@@ -252,6 +253,8 @@ export default function AddEntryModal({navigation, route}: Props) {
   type TimeMode = 'none' | 'duration' | 'range';
   const [timeMode, setTimeMode] = useState<TimeMode>('none');
   const [durationMinutes, setDurationMinutes] = useState('');
+  // Optional explicit start for duration entries; null → default to "now" on save.
+  const [durationStart, setDurationStart] = useState<string | null>(null);
   const [timeFrom, setTimeFrom] = useState<string | null>(null);
   const [timeTo, setTimeTo] = useState<string | null>(null);
   const defaultsApplied = useRef(false);
@@ -359,6 +362,7 @@ export default function AddEntryModal({navigation, route}: Props) {
       if (e.duration_sec != null) {
         setTimeMode('duration');
         setDurationMinutes(String(Math.round(e.duration_sec / 60)));
+        setDurationStart(e.time_from);
       } else if (e.time_from != null) {
         setTimeMode('range');
         setTimeFrom(e.time_from);
@@ -412,6 +416,21 @@ export default function AddEntryModal({navigation, route}: Props) {
           ? Math.round(parseFloat(durationMinutes) * 60)
           : null;
 
+      // Every entry gets a real from→to so the hours model can place it.
+      // Duration entries: start = user-picked start, else "now" on the entry's
+      // day (ponytail: today→now; a back-dated note picks its start manually).
+      let finalFrom: string | null = null;
+      let finalTo: string | null = null;
+      if (timeMode === 'range') {
+        finalFrom = timeFrom;
+        finalTo = timeTo;
+      } else if (durationSec) {
+        const now = new Date();
+        finalFrom =
+          durationStart ?? combineDateTime(entryDate, now.getHours(), now.getMinutes());
+        finalTo = new Date(new Date(finalFrom).getTime() + durationSec * 1000).toISOString();
+      }
+
       // Persist new attachments (those without an id) onto an entry.
       const saveNewMedia = async (targetEntryId: number) => {
         for (const m of media) {
@@ -437,8 +456,8 @@ export default function AddEntryModal({navigation, route}: Props) {
             body: body.trim() || null,
             project_id: selectedProjectId,
             duration_sec: durationSec,
-            time_from: timeMode === 'range' ? timeFrom : null,
-            time_to: timeMode === 'range' ? timeTo : null,
+            time_from: finalFrom,
+            time_to: finalTo,
             tagIds: selectedTags.map(t => t.id),
           },
           dayId,
@@ -463,8 +482,8 @@ export default function AddEntryModal({navigation, route}: Props) {
           project_id: selectedProjectId,
           tagIds: selectedTags.map(t => t.id),
           duration_sec: durationSec,
-          time_from: timeMode === 'range' ? timeFrom : null,
-          time_to: timeMode === 'range' ? timeTo : null,
+          time_from: finalFrom,
+          time_to: finalTo,
           latitude: gps?.latitude ?? null,
           longitude: gps?.longitude ?? null,
           is_todo: isTodo,
@@ -627,19 +646,25 @@ export default function AddEntryModal({navigation, route}: Props) {
       </View>
 
       {timeMode === 'duration' && (
-        <View style={styles.durationRow} onLayout={rememberY('duration')}>
-          <TextInput
-            style={[styles.input, styles.durationInput]}
-            value={durationMinutes}
-            onChangeText={setDurationMinutes}
-            onFocus={onFieldFocus('duration')}
-            placeholder={translate('entries.minutes')}
-            placeholderTextColor={colors.textMuted}
-            keyboardType="numeric"
-            maxLength={5}
-          />
-          <Text style={styles.durationUnit}>{translate('entries.minuteUnit')}</Text>
-        </View>
+        <>
+          <View style={styles.durationRow} onLayout={rememberY('duration')}>
+            <TextInput
+              style={[styles.input, styles.durationInput]}
+              value={durationMinutes}
+              onChangeText={setDurationMinutes}
+              onFocus={onFieldFocus('duration')}
+              placeholder={translate('entries.minutes')}
+              placeholderTextColor={colors.textMuted}
+              keyboardType="numeric"
+              maxLength={5}
+            />
+            <Text style={styles.durationUnit}>{translate('entries.minuteUnit')}</Text>
+          </View>
+          <View style={styles.durationStartBlock}>
+            <Text style={styles.rangeLabel}>{translate('entries.startOptional')}</Text>
+            <TimePicker value={durationStart} baseDate={entryDate} onChange={setDurationStart} />
+          </View>
+        </>
       )}
 
       {timeMode === 'range' && (

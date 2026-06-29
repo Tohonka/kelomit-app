@@ -11,6 +11,7 @@ import InsightsScreen from '../screens/InsightsScreen';
 import GalleryScreen from '../screens/GalleryScreen';
 import InterfaceSettings from '../screens/settings/InterfaceSettings';
 import TrackingSettings from '../screens/settings/TrackingSettings';
+import WorkDetailsSettings from '../screens/settings/WorkDetailsSettings';
 import DataSettings from '../screens/settings/DataSettings';
 import QuickAddSettings from '../screens/settings/QuickAddSettings';
 import LocationSettings from '../screens/settings/LocationSettings';
@@ -89,6 +90,11 @@ export default function RootNavigator() {
         name="TrackingSettings"
         component={TrackingSettings}
         options={{title: t('navigation.tracking')}}
+      />
+      <Stack.Screen
+        name="WorkDetailsSettings"
+        component={WorkDetailsSettings}
+        options={{title: t('settings.workDetailsTitle')}}
       />
       <Stack.Screen
         name="DataSettings"

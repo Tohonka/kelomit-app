@@ -10,13 +10,14 @@ import type {TabScreenProps} from '../navigation/navigationTypes';
 type Props = TabScreenProps<'Settings'>;
 
 type Section = {
-  key: 'InterfaceSettings' | 'TrackingSettings' | 'DataSettings' | 'QuickAddSettings' | 'LocationSettings' | 'WidgetSettings';
+  key: 'InterfaceSettings' | 'TrackingSettings' | 'WorkDetailsSettings' | 'DataSettings' | 'QuickAddSettings' | 'LocationSettings' | 'WidgetSettings';
   titleKey: string;
   subtitleKey: string;
 };
 
 const SECTIONS: Section[] = [
   {key: 'InterfaceSettings', titleKey: 'settings.interfaceTitle', subtitleKey: 'settings.interfaceSubtitle'},
+  {key: 'WorkDetailsSettings', titleKey: 'settings.workDetailsTitle', subtitleKey: 'settings.workDetailsSubtitle'},
   {key: 'QuickAddSettings', titleKey: 'settings.quickAddTitle', subtitleKey: 'settings.quickAddSubtitle'},
   {key: 'WidgetSettings', titleKey: 'widgets.title', subtitleKey: 'widgets.settingsSubtitle'},
   {key: 'TrackingSettings', titleKey: 'settings.trackingTitle', subtitleKey: 'settings.trackingSubtitle'},

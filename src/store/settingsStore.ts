@@ -4,6 +4,7 @@ import type {Settings, ActivityType} from '../types';
 import type {ThemeMode, TimeSelectorMode} from '../theme';
 import i18n, {resolveLanguageSetting, type Language} from '../i18n';
 import {DAY_LIST_MODES, type DayListMode} from '../utils/entrySort';
+import {parseWeekdayHours, type WeekdayHours, type WeekdayOverride} from '../utils/usualHours';
 
 export type NavVisibility = 'always' | 'home_only';
 
@@ -16,6 +17,8 @@ interface SettingsState extends Settings {
   nav_visibility: NavVisibility;
   /** Day-list ordering/grouping mode (Home + Day), cycled via the sort pill. */
   day_list_mode: DayListMode;
+  /** Per-weekday overrides on top of usual_start/usual_end (JSON setting). */
+  weekday_hours: WeekdayHours;
   /** Opt-in: keep logging GPS via a foreground service while the app is closed. */
   background_tracking: boolean;
   time_selector_mode: TimeSelectorMode;
@@ -33,6 +36,8 @@ interface SettingsState extends Settings {
   setShowPersonalHours: (show: boolean) => Promise<void>;
   setNavVisibility: (mode: NavVisibility) => Promise<void>;
   setDayListMode: (mode: DayListMode) => Promise<void>;
+  /** Set (or clear, with null) the override for one weekday (0=Sun..6=Sat). */
+  setWeekdayOverride: (weekday: number, override: WeekdayOverride | null) => Promise<void>;
   setBackgroundTracking: (enabled: boolean) => Promise<void>;
   setUsualStart: (hhmm: string | null) => Promise<void>;
   setUsualEnd: (hhmm: string | null) => Promise<void>;
@@ -59,6 +64,7 @@ export const useSettingsStore = create<SettingsState>(set => ({
   show_personal_hours: false,
   nav_visibility: 'always',
   day_list_mode: 'time_desc',
+  weekday_hours: {},
   background_tracking: false,
   time_selector_mode: 'clock',
   language: 'en',
@@ -83,6 +89,7 @@ export const useSettingsStore = create<SettingsState>(set => ({
     )
       ? (raw.day_list_mode as DayListMode)
       : 'time_desc';
+    const weekday_hours = parseWeekdayHours(raw.weekday_hours);
     const background_tracking = raw.background_tracking === 'true';
     const time_selector_mode: TimeSelectorMode =
       raw.time_selector_mode === 'keyboard' ? 'keyboard' : 'clock';
@@ -104,6 +111,7 @@ export const useSettingsStore = create<SettingsState>(set => ({
       show_personal_hours,
       nav_visibility,
       day_list_mode,
+      weekday_hours,
       background_tracking,
       time_selector_mode,
       language,
@@ -157,6 +165,17 @@ export const useSettingsStore = create<SettingsState>(set => ({
   setDayListMode: async mode => {
     await setSetting('day_list_mode', mode);
     set({day_list_mode: mode});
+  },
+
+  setWeekdayOverride: async (weekday, override) => {
+    const next: WeekdayHours = {...useSettingsStore.getState().weekday_hours};
+    if (override) {
+      next[weekday] = override;
+    } else {
+      delete next[weekday];
+    }
+    await setSetting('weekday_hours', JSON.stringify(next));
+    set({weekday_hours: next});
   },
 
   setBackgroundTracking: async enabled => {

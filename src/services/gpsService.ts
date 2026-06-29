@@ -9,6 +9,7 @@ import {evaluateEndOfDay, initialEodState, type EodEvent, type EodState} from '.
 import {createDayEndConfirmation} from '../db/dayConfirmations';
 import {displayDayEndConfirmation} from './notificationService';
 import {useSettingsStore} from '../store/settingsStore';
+import {usualHoursForDate} from '../utils/usualHours';
 import {format} from 'date-fns';
 import type {SavedLocation, Day} from '../types';
 
@@ -57,7 +58,8 @@ let _eodDay: string | null = null;
 /** Feed a geofence event to the end-of-day reducer and apply its decision.
  *  Auto-fills the day's end only when empty (never overwrites a user value). */
 async function applyEndOfDay(event: EodEvent, iso: string, day: Day): Promise<void> {
-  const usualEnd = useSettingsStore.getState().usual_end;
+  const s = useSettingsStore.getState();
+  const usualEnd = usualHoursForDate(day.date, s.usual_start, s.usual_end, s.weekday_hours).end;
   const {state, action} = evaluateEndOfDay(_eod, {
     event,
     now: iso,

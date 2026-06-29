@@ -3,6 +3,7 @@ import {format} from 'date-fns';
 import {getOrCreateDay, getDayByDate, updateDay, type DayPrefill} from '../db/days';
 import {useSettingsStore} from './settingsStore';
 import {hhmmToIsoOn} from '../utils/dateUtils';
+import {usualHoursForDate} from '../utils/usualHours';
 import type {Day} from '../types';
 
 type DayTimeFields = Partial<Pick<Day,
@@ -14,12 +15,18 @@ type DayTimeFields = Partial<Pick<Day,
  *  opening it in the calendar would fabricate hours. See Iteration 3 Phase 4.1. */
 function prefillFor(date: string): DayPrefill | undefined {
   const s = useSettingsStore.getState();
-  if (!s.prefill_from_usual || !s.usual_start || !s.usual_end) {
+  if (!s.prefill_from_usual) {
+    return undefined;
+  }
+  // Resolve the weekday's hours: a custom override, a day off (→ no prefill), or
+  // the default. See usualHours.ts.
+  const {start, end} = usualHoursForDate(date, s.usual_start, s.usual_end, s.weekday_hours);
+  if (!start || !end) {
     return undefined;
   }
   return {
-    started_at: hhmmToIsoOn(date, s.usual_start),
-    ended_at: hhmmToIsoOn(date, s.usual_end),
+    started_at: hhmmToIsoOn(date, start),
+    ended_at: hhmmToIsoOn(date, end),
   };
 }
 

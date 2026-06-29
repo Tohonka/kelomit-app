@@ -28,6 +28,14 @@ export function useSaveQuickNote() {
         ? Math.round(parseFloat(durationMinutes) * 60)
         : null;
 
+      // Give duration a real from→to (start = now) so the hours model can place
+      // it — same footing as range entries. Quick add is always "today/now".
+      const startIso = new Date().toISOString();
+      const timeFrom = durationSec ? startIso : null;
+      const timeTo = durationSec
+        ? new Date(Date.now() + durationSec * 1000).toISOString()
+        : null;
+
       const tagName = quickadd_default_tag.trim();
       const tagIds: number[] = [];
       if (tagName) {
@@ -45,8 +53,8 @@ export function useSaveQuickNote() {
         project_id: quickadd_default_project_id,
         tagIds,
         duration_sec: durationSec,
-        time_from: null,
-        time_to: null,
+        time_from: timeFrom,
+        time_to: timeTo,
         latitude: gps?.latitude ?? null,
         longitude: gps?.longitude ?? null,
       });

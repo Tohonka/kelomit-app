@@ -21,6 +21,7 @@ export type RootStackParamList = {
   GalleryScreen: undefined;
   InterfaceSettings: undefined;
   TrackingSettings: undefined;
+  WorkDetailsSettings: undefined;
   DataSettings: undefined;
   QuickAddSettings: undefined;
   LocationSettings: undefined;

@@ -201,4 +201,18 @@ export const migrations: Migration[] = [
        WHERE entry_type IN ('photo','video','voice') AND file_path IS NOT NULL`,
     ],
   },
+  {
+    version: 12,
+    up: [
+      // Iteration 5.2 — every entry on equal footing on the timeline. Duration
+      // entries used to carry no timestamp, so the hours model couldn't place
+      // them. Backfill a real from→to: start = creation time, end = start +
+      // duration. Written as UTC ISO (T…Z) so new Date() reads them as UTC,
+      // matching range-mode entries. New duration entries get this at write time.
+      `UPDATE entries
+          SET time_from = strftime('%Y-%m-%dT%H:%M:%SZ', created_at),
+              time_to   = strftime('%Y-%m-%dT%H:%M:%SZ', created_at, '+' || duration_sec || ' seconds')
+        WHERE duration_sec IS NOT NULL AND time_from IS NULL`,
+    ],
+  },
 ];
