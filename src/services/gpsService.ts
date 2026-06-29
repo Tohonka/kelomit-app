@@ -1,7 +1,7 @@
 import Geolocation, {type GeolocationResponse} from '@react-native-community/geolocation';
 import {Platform} from 'react-native';
 import {check, request, PERMISSIONS, RESULTS} from 'react-native-permissions';
-import {isOutlier, distanceMeters} from './locationUtils';
+import {isOutlier, distanceMeters, isStationaryJitter} from './locationUtils';
 import {insertGpsPoint} from '../db/gps';
 import {getOrCreateDay, updateDay} from '../db/days';
 import {getLocations, insertGeofenceEvent} from '../db/locations';
@@ -13,6 +13,10 @@ import {usualHoursForDate} from '../utils/usualHours';
 import {format} from 'date-fns';
 import type {SavedLocation, Day} from '../types';
 
+// Trail point spacing. Tighter than the old 20 m so the path reflects real
+// movement; stationary GPS drift is rejected by isStationaryJitter below.
+const TRAIL_DISTANCE_FILTER_M = 10;
+
 export interface KnownPosition {
   latitude: number;
   longitude: number;
@@ -21,6 +25,9 @@ export interface KnownPosition {
 }
 
 let _lastPosition: KnownPosition | null = null;
+// Last point actually written to the trail (gate compares against this, not the
+// last *seen* fix, so slow drift can't accumulate into a phantom trail).
+let _lastRecordedPosition: KnownPosition | null = null;
 let _watchId: number | null = null;
 let _configured = false;
 let _lastError: string | null = null;
@@ -229,7 +236,7 @@ export async function startTracking(intervalMs = 60_000): Promise<void> {
     },
     {
       enableHighAccuracy: true,
-      distanceFilter: 20, // metres — minimum movement before update
+      distanceFilter: TRAIL_DISTANCE_FILTER_M, // metres — minimum movement before update
       interval: intervalMs,
       fastestInterval: Math.min(intervalMs, 15_000),
     },
@@ -241,6 +248,7 @@ export function stopTracking(): void {
     Geolocation.clearWatch(_watchId);
     _watchId = null;
   }
+  _lastRecordedPosition = null;
 }
 
 async function handlePosition(
@@ -266,15 +274,29 @@ async function handlePosition(
     const iso = new Date(now).toISOString();
     const todayStr = format(new Date(now), 'yyyy-MM-dd');
     const day = await getOrCreateDay(todayStr);
-    await insertGpsPoint({
-      day_id: day.id,
-      latitude,
-      longitude,
-      accuracy: accuracy ?? null,
-      altitude: pos.coords.altitude ?? null,
-      speed: pos.coords.speed ?? null,
-      timestamp: iso,
-    });
+    // Skip the trail write for stationary GPS drift; keep geofence/day logic
+    // running on every accepted fix so start/end inference stays responsive.
+    const jitter =
+      _lastRecordedPosition != null &&
+      isStationaryJitter(
+        _lastRecordedPosition,
+        latitude,
+        longitude,
+        accuracy ?? null,
+        pos.coords.speed ?? null,
+      );
+    if (!jitter) {
+      await insertGpsPoint({
+        day_id: day.id,
+        latitude,
+        longitude,
+        accuracy: accuracy ?? null,
+        altitude: pos.coords.altitude ?? null,
+        speed: pos.coords.speed ?? null,
+        timestamp: iso,
+      });
+      _lastRecordedPosition = {latitude, longitude, accuracy: accuracy ?? null, timestamp: now};
+    }
     await processGeofences(latitude, longitude, day, iso);
   } catch {
     // Don't crash the app on DB write failure
