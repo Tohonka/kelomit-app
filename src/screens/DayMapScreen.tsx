@@ -10,6 +10,7 @@ import {useEntryStore} from '../store/entryStore';
 import {getGpsPointsForDay} from '../db/gps';
 import {bucketLocations, type LocationBucket} from '../utils/bucketLocations';
 import {regionFor} from '../utils/mapRegion';
+import {flatMapStyle} from '../components/map/mapStyle';
 import {routeStats} from '../utils/routeStats';
 import {formatDuration} from '../utils/dateUtils';
 import LocationMarker from '../components/map/LocationMarker';
@@ -108,7 +109,7 @@ export default function DayMapScreen({navigation, route}: Props) {
           </Text>
         </View>
       )}
-      <MapView provider={PROVIDER_GOOGLE} style={styles.map} initialRegion={region}>
+      <MapView provider={PROVIDER_GOOGLE} customMapStyle={flatMapStyle} style={styles.map} initialRegion={region}>
         {routeCoords.length >= 2 && (
           <Polyline coordinates={routeCoords} strokeColor={colors.primary} strokeWidth={4} />
         )}

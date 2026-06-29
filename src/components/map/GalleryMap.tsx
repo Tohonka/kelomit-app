@@ -4,6 +4,7 @@ import {View, Text, StyleSheet} from 'react-native';
 import MapView, {PROVIDER_GOOGLE} from 'react-native-maps';
 import {bucketLocations, type LocationBucket} from '../../utils/bucketLocations';
 import {regionFor} from '../../utils/mapRegion';
+import {flatMapStyle} from './mapStyle';
 import LocationMarker from './LocationMarker';
 import MarkerNotesSheet from './MarkerNotesSheet';
 import {useTheme, typography, spacing} from '../../theme';
@@ -62,7 +63,7 @@ export default function GalleryMap({items, onSelect}: Props) {
 
   return (
     <View style={styles.container}>
-      <MapView provider={PROVIDER_GOOGLE} style={styles.map} initialRegion={region}>
+      <MapView provider={PROVIDER_GOOGLE} customMapStyle={flatMapStyle} style={styles.map} initialRegion={region}>
         {buckets.map(bucket => (
           <LocationMarker
             key={bucket.entries[0].id}
