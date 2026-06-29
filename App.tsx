@@ -7,6 +7,7 @@ import {NavigationContainer} from '@react-navigation/native';
 import {GestureHandlerRootView} from 'react-native-gesture-handler';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
 import {initDB} from './src/db/database';
+import {pruneGpsTracksOlderThan} from './src/db/gps';
 import {getAllSettings} from './src/db/settings';
 import {startTracking, stopTracking} from './src/services/gpsService';
 import {ensureNotificationChannel, registerForegroundNotifeeHandler} from './src/services/notificationService';
@@ -37,6 +38,8 @@ function AppContent() {
         ensureNotificationChannel().catch(() => {});
         // Log any sessions a home-screen widget finished while we were closed.
         useSessionStore.getState().reconcile().catch(() => {});
+        // Drop raw trail points past the retention window (best-effort).
+        pruneGpsTracksOlderThan().catch(() => {});
       })
       .catch(e => setError(String(e)));
   }, [load]);
