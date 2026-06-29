@@ -96,6 +96,12 @@ const fi: typeof en = {
     search: 'Haku',
     tracking: 'Seuranta',
   },
+  dayMap: {
+    title: 'Reitti',
+    empty: 'Tältä päivältä ei ole tallennettua reittiä.',
+    distance: 'Matka',
+    duration: 'Kesto',
+  },
   gallery: {
     groupDay: 'Päivä',
     groupWeek: 'Viikko',

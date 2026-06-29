@@ -1,6 +1,6 @@
 import React, {useEffect, useState, useCallback, useMemo, useRef} from 'react';
 import {useTranslation} from 'react-i18next';
-import {StyleSheet, ScrollView} from 'react-native';
+import {StyleSheet, ScrollView, TouchableOpacity, View} from 'react-native';
 import Animated, {FadeIn} from 'react-native-reanimated';
 import {format} from 'date-fns';
 import {SafeAreaView} from 'react-native-safe-area-context';
@@ -24,6 +24,7 @@ import {calcDayWorkSecs, calcHourBreakdown} from '../utils/hoursUtils';
 import {useSettingsStore} from '../store/settingsStore';
 import DayHoursReadout from '../components/day/DayHoursReadout';
 import {shiftDate} from '../utils/dateUtils';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 type Props = HomeStackScreenProps<'DayScreen'>;
 
@@ -32,6 +33,7 @@ const makeStyles = (c: Colors) =>
     container: {flex: 1, backgroundColor: c.bg},
     flex: {flex: 1},
     scrollContent: {paddingTop: spacing.md, paddingBottom: 100},
+    headerRight: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
   });
 
 export default function DayScreen({navigation, route}: Props) {
@@ -92,15 +94,24 @@ export default function DayScreen({navigation, route}: Props) {
     navigation.setOptions({
       title: label,
       headerRight: () => (
-        <DayHoursReadout
-          workSecs={totalSecs}
-          personalSecs={personalSecs}
-          showPersonal={showPersonalHours}
-          style={{marginRight: spacing.md}}
-        />
+        <View style={styles.headerRight}>
+          {day && (
+            <TouchableOpacity
+              onPress={() => navigation.navigate('DayMap', {dayId: day.id, date: currentDate})}
+              hitSlop={8}>
+              <Icon name="map-outline" size={22} color={colors.primary} />
+            </TouchableOpacity>
+          )}
+          <DayHoursReadout
+            workSecs={totalSecs}
+            personalSecs={personalSecs}
+            showPersonal={showPersonalHours}
+            style={{marginRight: spacing.md}}
+          />
+        </View>
       ),
     });
-  }, [currentDate, day, allEntries, navigation, showPersonalHours, i18n.resolvedLanguage]);
+  }, [currentDate, day, allEntries, navigation, showPersonalHours, i18n.resolvedLanguage, colors.primary, styles.headerRight]);
 
   const goToDate = useCallback((newDate: string) => {
     setCurrentDate(newDate);

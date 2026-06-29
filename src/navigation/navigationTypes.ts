@@ -7,6 +7,7 @@ import type {NavigatorScreenParams} from '@react-navigation/native';
 export type HomeStackParamList = {
   HomeMain: undefined;
   DayScreen: {date: string};
+  DayMap: {dayId: number; date: string};
 };
 
 export type RootStackParamList = {

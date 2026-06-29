@@ -94,6 +94,12 @@ const en = {
     search: 'Search',
     tracking: 'Tracking',
   },
+  dayMap: {
+    title: 'Route',
+    empty: 'Nothing tracked this day.',
+    distance: 'Distance',
+    duration: 'Duration',
+  },
   gallery: {
     groupDay: 'Day',
     groupWeek: 'Week',
