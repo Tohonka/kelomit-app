@@ -3,7 +3,7 @@ import {useTranslation} from 'react-i18next';
 import {Modal, View, Text, Image, ScrollView, TouchableOpacity, Pressable, StyleSheet} from 'react-native';
 import {useTheme, typography, spacing, radius} from '../../theme';
 import type {Colors} from '../../theme';
-import {fileUri, firstVisualMedia} from '../../utils/mediaUtils';
+import {firstVisualMedia, mediaThumbUri} from '../../utils/mediaUtils';
 import {formatTime} from '../../utils/dateUtils';
 import type {Entry} from '../../types';
 
@@ -52,7 +52,7 @@ const makeStyles = (c: Colors) =>
 
 function Thumb({entry, styles}: {entry: Entry; styles: ReturnType<typeof makeStyles>}) {
   const media = firstVisualMedia(entry);
-  const uri = media ? fileUri(media.thumbnail_path || media.file_path) : null;
+  const uri = media ? mediaThumbUri(media) : null;
   if (uri) {
     return <Image source={{uri}} style={styles.thumb} />;
   }

@@ -48,3 +48,14 @@ export function firstVisualMedia(entry: Entry): EntryMedia | undefined {
     .filter(m => m.media_type === 'photo' || m.media_type === 'video')
     .sort((a, b) => a.position - b.position)[0];
 }
+
+/**
+ * A displayable still for a media item, or null when there is none.
+ * Videos resolve to their thumbnail only — the raw .mp4 can't render in <Image>,
+ * so without a thumbnail we return null and callers show a glyph instead.
+ */
+export function mediaThumbUri(media: EntryMedia): string | null {
+  const path =
+    media.media_type === 'video' ? media.thumbnail_path : media.thumbnail_path || media.file_path;
+  return path ? fileUri(path) : null;
+}

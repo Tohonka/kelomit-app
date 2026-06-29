@@ -3,7 +3,7 @@ import {View, Text, Image, StyleSheet} from 'react-native';
 import {Marker} from 'react-native-maps';
 import {useTheme, typography} from '../../theme';
 import type {Colors} from '../../theme';
-import {fileUri, firstVisualMedia} from '../../utils/mediaUtils';
+import {firstVisualMedia, mediaThumbUri} from '../../utils/mediaUtils';
 import type {LocationBucket} from '../../utils/bucketLocations';
 
 interface Props {
@@ -62,7 +62,7 @@ export default function LocationMarker({bucket, onPress}: Props) {
 
   const newest = bucket.entries[0];
   const media = firstVisualMedia(newest);
-  const uri = media ? fileUri(media.thumbnail_path || media.file_path) : null;
+  const uri = media ? mediaThumbUri(media) : null;
   const count = bucket.entries.length;
 
   // tracksViewChanges must go false once the view is stable, or the map janks
