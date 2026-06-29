@@ -215,4 +215,14 @@ export const migrations: Migration[] = [
         WHERE duration_sec IS NOT NULL AND time_from IS NULL`,
     ],
   },
+  {
+    version: 13,
+    up: [
+      // Iteration 5.5 — denser trail recording + 7-day retention turn the
+      // per-day map query and the startup prune into full-table scans as data
+      // accumulates. Index the two columns they filter on.
+      'CREATE INDEX IF NOT EXISTS idx_gps_track_day ON gps_track(day_id)',
+      'CREATE INDEX IF NOT EXISTS idx_gps_track_ts ON gps_track(timestamp)',
+    ],
+  },
 ];
