@@ -1,7 +1,10 @@
-import React, {useMemo} from 'react';
+import React, {useMemo, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {View, Text, StyleSheet} from 'react-native';
-import MapView, {Marker, PROVIDER_GOOGLE, type Region} from 'react-native-maps';
+import MapView, {PROVIDER_GOOGLE, type Region} from 'react-native-maps';
+import {bucketLocations, type LocationBucket} from '../../utils/bucketLocations';
+import LocationMarker from './LocationMarker';
+import MarkerNotesSheet from './MarkerNotesSheet';
 import {useTheme, typography, spacing} from '../../theme';
 import type {Colors} from '../../theme';
 import type {MediaItem} from '../../db/entries';
@@ -58,9 +61,12 @@ export default function GalleryMap({items, onSelect}: Props) {
     return out;
   }, [items]);
 
+  const buckets = useMemo(() => bucketLocations(located, 50), [located]);
+  const [openBucket, setOpenBucket] = useState<LocationBucket | null>(null);
+
   const region = useMemo(
-    () => regionFor(located.map(e => ({latitude: e.latitude!, longitude: e.longitude!}))),
-    [located],
+    () => regionFor(buckets.map(b => ({latitude: b.latitude, longitude: b.longitude}))),
+    [buckets],
   );
 
   if (located.length === 0) {
@@ -75,17 +81,23 @@ export default function GalleryMap({items, onSelect}: Props) {
   return (
     <View style={styles.container}>
       <MapView provider={PROVIDER_GOOGLE} style={styles.map} initialRegion={region}>
-        {located.map(entry => (
-          <Marker
-            key={entry.id}
-            coordinate={{latitude: entry.latitude!, longitude: entry.longitude!}}
-            title={entry.title ?? undefined}
-            description={entry.location_label ?? undefined}
-            onCalloutPress={() => onSelect(entry)}
-            onPress={() => onSelect(entry)}
+        {buckets.map(bucket => (
+          <LocationMarker
+            key={bucket.entries[0].id}
+            bucket={bucket}
+            onPress={() =>
+              bucket.entries.length === 1
+                ? onSelect(bucket.entries[0])
+                : setOpenBucket(bucket)
+            }
           />
         ))}
       </MapView>
+      <MarkerNotesSheet
+        entries={openBucket?.entries ?? null}
+        onSelect={onSelect}
+        onClose={() => setOpenBucket(null)}
+      />
     </View>
   );
 }
