@@ -1,5 +1,6 @@
 import {Platform} from 'react-native';
 import RNFS from 'react-native-fs';
+import type {Entry, EntryMedia} from '../types';
 
 const MEDIA_DIR = `${RNFS.DocumentDirectoryPath}/kelomit/media`;
 
@@ -39,4 +40,11 @@ export function fileUri(path: string): string {
     return `file://${path}`;
   }
   return path;
+}
+
+/** Lowest-position photo or video attachment on an entry, if any. */
+export function firstVisualMedia(entry: Entry): EntryMedia | undefined {
+  return (entry.media ?? [])
+    .filter(m => m.media_type === 'photo' || m.media_type === 'video')
+    .sort((a, b) => a.position - b.position)[0];
 }
