@@ -104,6 +104,7 @@ const en = {
     noLocations: 'No located photos yet.\nGeotagged photos appear on the map.',
     fileMissing: 'This file is no longer available.',
     zoomHint: 'Pinch to zoom · double-tap to reset',
+    notesHere: 'Notes here',
   },
   dayEnd: {
     channelName: 'Workday end',

@@ -106,6 +106,7 @@ const fi: typeof en = {
     noLocations: 'Ei vielä paikannettuja kuvia.\nPaikkamerkityt kuvat näkyvät kartalla.',
     fileMissing: 'Tiedostoa ei ole enää saatavilla.',
     zoomHint: 'Nipistä zoomataksesi · kaksoisnapauta nollataksesi',
+    notesHere: 'Muistiinpanot täällä',
   },
   dayEnd: {
     channelName: 'Työpäivän loppu',
