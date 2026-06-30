@@ -19,7 +19,6 @@ import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import com.facebook.react.ReactApplication
 import com.facebook.react.bridge.Arguments
-import com.facebook.react.modules.core.DeviceEventManagerModule
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
@@ -50,8 +49,6 @@ class LocationService : Service() {
   }
 
   private var fusedClient: FusedLocationProviderClient? = null
-  private var currentIntervalMs = DEFAULT_INTERVAL_MS
-
   private val callback = object : LocationCallback() {
     override fun onLocationResult(result: LocationResult) {
       result.lastLocation?.let { emitLocation(it) }
@@ -91,7 +88,6 @@ class LocationService : Service() {
     ) {
       return // JS owns the permission prompt; do nothing until granted
     }
-    currentIntervalMs = intervalMs
     val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, intervalMs)
       .setMinUpdateDistanceMeters(10f)
       .build()
@@ -108,14 +104,8 @@ class LocationService : Service() {
       if (loc.hasSpeed()) putDouble("speed", loc.speed.toDouble()) else putNull("speed")
       putDouble("timestamp", loc.time.toDouble())
     }
-    val reactContext =
-      (application as? ReactApplication)
-        ?.reactNativeHost
-        ?.reactInstanceManager
-        ?.currentReactContext
-    reactContext
-      ?.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-      ?.emit("onBackgroundLocation", map)
+    val reactContext = (application as? ReactApplication)?.reactHost?.currentReactContext
+    reactContext?.emitDeviceEvent("onBackgroundLocation", map)
   }
 
   override fun onDestroy() {
