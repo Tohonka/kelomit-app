@@ -43,4 +43,16 @@ class BackgroundLocationModule(reactContext: ReactApplicationContext) :
       promise.reject("stop_failed", e)
     }
   }
+
+  @ReactMethod
+  fun setInterval(ms: Double, promise: Promise) {
+    try {
+      // Talk to the already-running service in-process; do NOT startForegroundService
+      // here (forbidden from background on Android 12+).
+      LocationService.instance?.updateInterval(ms.toLong())
+      promise.resolve(null)
+    } catch (e: Exception) {
+      promise.reject("set_interval_failed", e)
+    }
+  }
 }
