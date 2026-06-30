@@ -2,6 +2,7 @@ import Geolocation, {type GeolocationResponse} from '@react-native-community/geo
 import {Platform} from 'react-native';
 import {check, request, PERMISSIONS, RESULTS} from 'react-native-permissions';
 import {isOutlier, distanceMeters, isStationaryJitter} from './locationUtils';
+import {isMoving, nextTrackingMode, type TrackingMode} from './trackingMode';
 import {insertGpsPoint} from '../db/gps';
 import {getOrCreateDay, updateDay} from '../db/days';
 import {getLocations, insertGeofenceEvent} from '../db/locations';
@@ -28,6 +29,13 @@ let _lastPosition: KnownPosition | null = null;
 // Last point actually written to the trail (gate compares against this, not the
 // last *seen* fix, so slow drift can't accumulate into a phantom trail).
 let _lastRecordedPosition: KnownPosition | null = null;
+// Adaptive sampling state: 'fast' while moving (dense trail), 'slow' while still
+// (battery). The watch is re-armed when the mode changes. See trackingMode.ts.
+let _trackingMode: TrackingMode = 'fast';
+let _stationaryStreak = 0;
+let _slowIntervalMs = 60_000; // set from startTracking's arg (the gps_interval_ms setting)
+// ponytail: tune on device.
+const FAST_INTERVAL_MS = 4_000;
 let _watchId: number | null = null;
 let _configured = false;
 let _lastError: string | null = null;
@@ -227,6 +235,20 @@ export async function startTracking(intervalMs = 60_000): Promise<void> {
   }
   ensureConfigured();
   await refreshGeofences();
+  // Start in FAST so a trip already in progress at launch records densely; the
+  // passed interval becomes the SLOW (stationary) cadence.
+  _slowIntervalMs = intervalMs;
+  _trackingMode = 'fast';
+  _stationaryStreak = 0;
+  armWatch(FAST_INTERVAL_MS);
+}
+
+/** (Re)create the position watch at the given interval. Clears any existing
+ *  watch first, so it doubles as the re-arm used on a mode change. */
+function armWatch(intervalMs: number): void {
+  if (_watchId !== null) {
+    Geolocation.clearWatch(_watchId);
+  }
   _watchId = Geolocation.watchPosition(
     pos => {
       handlePosition(pos);
@@ -249,6 +271,8 @@ export function stopTracking(): void {
     _watchId = null;
   }
   _lastRecordedPosition = null;
+  _trackingMode = 'fast';
+  _stationaryStreak = 0;
 }
 
 async function handlePosition(
@@ -256,18 +280,36 @@ async function handlePosition(
 ): Promise<void> {
   const {latitude, longitude, accuracy} = pos.coords;
   const now = pos.timestamp;
+  const speed = pos.coords.speed ?? null;
 
-  // Outlier rejection
+  // Outlier rejection + movement detection, both relative to the last seen fix.
+  let movingNow = isMoving(speed, 0, 0); // first-fix / speed-only case
   if (_lastPosition) {
     const elapsedMs = now - _lastPosition.timestamp;
+    const disp = distanceMeters(
+      _lastPosition.latitude,
+      _lastPosition.longitude,
+      latitude,
+      longitude,
+    );
     if (
       isOutlier(latitude, longitude, _lastPosition.latitude, _lastPosition.longitude, elapsedMs)
     ) {
       return;
     }
+    movingNow = isMoving(speed, disp, elapsedMs);
   }
 
   _lastPosition = {latitude, longitude, accuracy: accuracy ?? null, timestamp: now};
+
+  // Adaptive sampling: fast while moving, slow while still. Re-arm the watch
+  // only when the desired mode actually changes.
+  _stationaryStreak = movingNow ? 0 : _stationaryStreak + 1;
+  const desiredMode = nextTrackingMode(_trackingMode, movingNow, _stationaryStreak);
+  if (desiredMode !== _trackingMode) {
+    _trackingMode = desiredMode;
+    armWatch(desiredMode === 'fast' ? FAST_INTERVAL_MS : _slowIntervalMs);
+  }
 
   // Persist to DB + run geofence detection
   try {
