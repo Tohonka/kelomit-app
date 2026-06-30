@@ -25,6 +25,10 @@ describe('isMoving', () => {
   it('is not moving on the first fix (no speed, zero elapsed)', () => {
     expect(isMoving(null, 0, 0)).toBe(false);
   });
+
+  it('treats exactly-zero speed as still', () => {
+    expect(isMoving(0.0, 9999, 1000)).toBe(false);
+  });
 });
 
 describe('nextTrackingMode', () => {
@@ -38,5 +42,9 @@ describe('nextTrackingMode', () => {
 
   it('relaxes to slow once the still streak is reached', () => {
     expect(nextTrackingMode('fast', false, STATIONARY_STREAK_TO_SLOW)).toBe('slow');
+  });
+
+  it('stays slow while still and under the threshold', () => {
+    expect(nextTrackingMode('slow', false, 1)).toBe('slow');
   });
 });

@@ -249,6 +249,8 @@ function armWatch(intervalMs: number): void {
   if (_watchId !== null) {
     Geolocation.clearWatch(_watchId);
   }
+  // watchPosition returns the new id synchronously, so there is no async gap
+  // between clearing the old watch and assigning the new one (single-threaded JS).
   _watchId = Geolocation.watchPosition(
     pos => {
       handlePosition(pos);
@@ -270,6 +272,9 @@ export function stopTracking(): void {
     Geolocation.clearWatch(_watchId);
     _watchId = null;
   }
+  // Clear the last-seen anchor too, so a restart isolates its first fix (no
+  // bogus displacement velocity computed against a stale, minutes-old position).
+  _lastPosition = null;
   _lastRecordedPosition = null;
   _trackingMode = 'fast';
   _stationaryStreak = 0;
