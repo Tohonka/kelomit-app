@@ -10,6 +10,14 @@ import {evaluateEndOfDay, initialEodState, type EodEvent, type EodState} from '.
 import {createDayEndConfirmation} from '../db/dayConfirmations';
 import {displayDayEndConfirmation} from './notificationService';
 import {useSettingsStore} from '../store/settingsStore';
+import {
+  isBackgroundLocationAvailable,
+  startBackgroundLocationService,
+  stopBackgroundLocationService,
+  subscribeBackgroundLocation,
+  setBackgroundInterval,
+  type NativeFix,
+} from '../native/backgroundLocation';
 import {usualHoursForDate} from '../utils/usualHours';
 import {format} from 'date-fns';
 import type {SavedLocation, Day} from '../types';
@@ -41,6 +49,11 @@ let _slowIntervalMs = 60_000; // set from startTracking's arg (the gps_interval_
 // ponytail: tune on device.
 const FAST_INTERVAL_MS = 4_000;
 let _watchId: number | null = null;
+// Active source for fixes: 'native' (foreground-service fused location, Doze-safe)
+// when background tracking is on, else 'js' (foreground-only watchPosition).
+let _source: 'js' | 'native' = 'js';
+let _active = false;
+let _nativeSub: {remove: () => void} | null = null;
 let _configured = false;
 let _lastError: string | null = null;
 
@@ -230,7 +243,7 @@ export async function getCurrentPositionOnce(): Promise<KnownPosition | null> {
 }
 
 export async function startTracking(intervalMs = 60_000): Promise<void> {
-  if (_watchId !== null) {
+  if (_active) {
     return; // already running
   }
   const ok = await requestLocationPermission();
@@ -239,12 +252,38 @@ export async function startTracking(intervalMs = 60_000): Promise<void> {
   }
   ensureConfigured();
   await refreshGeofences();
-  // Start in FAST so a trip already in progress at launch records densely; the
-  // passed interval becomes the SLOW (stationary) cadence.
   _slowIntervalMs = intervalMs;
   _trackingMode = 'fast';
   _stationaryStreak = 0;
-  armWatch(FAST_INTERVAL_MS);
+  _active = true;
+
+  const wantsBackground = useSettingsStore.getState().background_tracking;
+  if (wantsBackground && isBackgroundLocationAvailable()) {
+    // Native fused location in the foreground service (Doze-resistant). Fixes
+    // arrive as 'onBackgroundLocation' events and run the same pipeline.
+    _source = 'native';
+    _nativeSub = subscribeBackgroundLocation(handleNativeFix);
+    await startBackgroundLocationService(); // starts at the native default (fast)
+  } else {
+    _source = 'js';
+    armWatch(FAST_INTERVAL_MS);
+  }
+}
+
+/** Adapt a native fix into the GeolocationResponse shape handlePosition reads. */
+function handleNativeFix(fix: NativeFix): void {
+  handlePosition({
+    coords: {
+      latitude: fix.latitude,
+      longitude: fix.longitude,
+      accuracy: fix.accuracy ?? 0,
+      altitude: fix.altitude,
+      speed: fix.speed,
+      altitudeAccuracy: null,
+      heading: null,
+    },
+    timestamp: fix.timestamp,
+  } as unknown as GeolocationResponse);
 }
 
 /** (Re)create the position watch at the given interval. Clears any existing
@@ -272,12 +311,16 @@ function armWatch(intervalMs: number): void {
 }
 
 export function stopTracking(): void {
-  if (_watchId !== null) {
+  if (_source === 'native') {
+    _nativeSub?.remove();
+    _nativeSub = null;
+    stopBackgroundLocationService();
+  } else if (_watchId !== null) {
     Geolocation.clearWatch(_watchId);
     _watchId = null;
   }
-  // Clear the last-seen anchor too, so a restart isolates its first fix (no
-  // bogus displacement velocity computed against a stale, minutes-old position).
+  _active = false;
+  _source = 'js';
   _lastPosition = null;
   _lastRecordedPosition = null;
   _trackingMode = 'fast';
@@ -317,7 +360,12 @@ async function handlePosition(
   const desiredMode = nextTrackingMode(_trackingMode, movingNow, _stationaryStreak);
   if (desiredMode !== _trackingMode) {
     _trackingMode = desiredMode;
-    armWatch(desiredMode === 'fast' ? FAST_INTERVAL_MS : _slowIntervalMs);
+    const ms = desiredMode === 'fast' ? FAST_INTERVAL_MS : _slowIntervalMs;
+    if (_source === 'native') {
+      setBackgroundInterval(ms);
+    } else {
+      armWatch(ms);
+    }
   }
 
   // Persist to DB + run geofence detection
