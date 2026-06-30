@@ -18,6 +18,10 @@ import type {SavedLocation, Day} from '../types';
 // movement; stationary GPS drift is rejected by isStationaryJitter below.
 const TRAIL_DISTANCE_FILTER_M = 10;
 
+// Reject fixes worse than this (metres) from the trail — indoor network fixes
+// can read 60-80 m and wander, polluting the path. ponytail: tune on device.
+const MAX_TRAIL_ACCURACY_M = 50;
+
 export interface KnownPosition {
   latitude: number;
   longitude: number;
@@ -332,7 +336,10 @@ async function handlePosition(
         accuracy ?? null,
         pos.coords.speed ?? null,
       );
-    if (!jitter) {
+    // Drop imprecise fixes from the trail: indoor network fixes wander tens of
+    // metres and read as fake movement. Geofence/day logic still uses every fix.
+    const lowQuality = accuracy != null && accuracy > MAX_TRAIL_ACCURACY_M;
+    if (!jitter && !lowQuality) {
       await insertGpsPoint({
         day_id: day.id,
         latitude,
