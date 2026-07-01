@@ -37,7 +37,8 @@ export default function TrackingSettings() {
     } else {
       await setBackgroundTracking(false);
     }
-    // Re-evaluate the fix source (native vs js) by restarting tracking.
+    // Restart tracking so the native source is added/removed to match the toggle
+    // (the JS watch baseline runs either way).
     if (gps_enabled) { stopTracking(); startTracking(gps_interval_ms); }
   };
 
