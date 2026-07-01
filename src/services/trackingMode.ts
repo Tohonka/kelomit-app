@@ -40,3 +40,23 @@ export function nextTrackingMode(
   }
   return prev;
 }
+
+// Two fix sources (JS watch + native FGS) can both fire; a fix arriving within
+// this window of the last accepted one is treated as the other source's duplicate.
+// ponytail: tune on device.
+export const MIN_FIX_GAP_MS = 2000;
+
+/**
+ * Whether a fix arriving at `nowMs` duplicates one already accepted at
+ * `lastAcceptedMs` (within `minGapMs`). `lastAcceptedMs <= 0` means none yet.
+ */
+export function isDuplicateFix(
+  nowMs: number,
+  lastAcceptedMs: number,
+  minGapMs: number = MIN_FIX_GAP_MS,
+): boolean {
+  if (lastAcceptedMs <= 0) {
+    return false;
+  }
+  return nowMs - lastAcceptedMs < minGapMs;
+}

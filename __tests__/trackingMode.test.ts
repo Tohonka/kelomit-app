@@ -1,6 +1,8 @@
 import {
   isMoving,
   nextTrackingMode,
+  isDuplicateFix,
+  MIN_FIX_GAP_MS,
   STATIONARY_STREAK_TO_SLOW,
 } from '../src/services/trackingMode';
 
@@ -46,5 +48,23 @@ describe('nextTrackingMode', () => {
 
   it('stays slow while still and under the threshold', () => {
     expect(nextTrackingMode('slow', false, 1)).toBe('slow');
+  });
+});
+
+describe('isDuplicateFix', () => {
+  it('is not a duplicate when there is no prior accepted fix', () => {
+    expect(isDuplicateFix(10_000, 0)).toBe(false);
+  });
+
+  it('flags a fix arriving within the gap as a duplicate', () => {
+    expect(isDuplicateFix(10_500, 10_000)).toBe(true); // 500ms < 2000ms
+  });
+
+  it('accepts a fix arriving after the gap', () => {
+    expect(isDuplicateFix(14_000, 10_000)).toBe(false); // 4000ms >= 2000ms
+  });
+
+  it('treats a fix exactly at the gap boundary as not a duplicate', () => {
+    expect(isDuplicateFix(10_000 + MIN_FIX_GAP_MS, 10_000)).toBe(false);
   });
 });
