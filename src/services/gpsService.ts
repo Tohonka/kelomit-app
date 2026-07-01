@@ -2,7 +2,7 @@ import Geolocation, {type GeolocationResponse} from '@react-native-community/geo
 import {Platform} from 'react-native';
 import {check, request, PERMISSIONS, RESULTS} from 'react-native-permissions';
 import {isOutlier, distanceMeters, isStationaryJitter} from './locationUtils';
-import {isMoving, nextTrackingMode, type TrackingMode} from './trackingMode';
+import {isMoving, nextTrackingMode, isDuplicateFix, type TrackingMode} from './trackingMode';
 import {insertGpsPoint} from '../db/gps';
 import {getOrCreateDay, updateDay} from '../db/days';
 import {getLocations, insertGeofenceEvent} from '../db/locations';
@@ -49,11 +49,13 @@ let _slowIntervalMs = 60_000; // set from startTracking's arg (the gps_interval_
 // ponytail: tune on device.
 const FAST_INTERVAL_MS = 4_000;
 let _watchId: number | null = null;
-// Active source for fixes: 'native' (foreground-service fused location, Doze-safe)
-// when background tracking is on, else 'js' (foreground-only watchPosition).
-let _source: 'js' | 'native' = 'js';
+// When background tracking is on, the native FGS runs as an ADDITIONAL source
+// alongside the always-on JS watch (both feed handlePosition). See spec 5.8.
+let _nativeActive = false;
 let _active = false;
 let _nativeSub: {remove: () => void} | null = null;
+// Wall-clock ms of the last accepted fix, for cross-source dedup.
+let _lastAcceptedFixMs = 0;
 let _configured = false;
 let _lastError: string | null = null;
 
@@ -255,18 +257,20 @@ export async function startTracking(intervalMs = 60_000): Promise<void> {
   _slowIntervalMs = intervalMs;
   _trackingMode = 'fast';
   _stationaryStreak = 0;
+  _lastAcceptedFixMs = 0;
   _active = true;
 
+  // JS watch is the always-on baseline — never worse than the pre-5.7 build.
+  armWatch(FAST_INTERVAL_MS);
+
+  // Native fused location in the foreground service is an ADDITIONAL,
+  // Doze-resistant source when background tracking is on. Both feed handlePosition;
+  // the dedup gate collapses overlap.
   const wantsBackground = useSettingsStore.getState().background_tracking;
   if (wantsBackground && isBackgroundLocationAvailable()) {
-    // Native fused location in the foreground service (Doze-resistant). Fixes
-    // arrive as 'onBackgroundLocation' events and run the same pipeline.
-    _source = 'native';
+    _nativeActive = true;
     _nativeSub = subscribeBackgroundLocation(handleNativeFix);
     await startBackgroundLocationService(); // starts at the native default (fast)
-  } else {
-    _source = 'js';
-    armWatch(FAST_INTERVAL_MS);
   }
 }
 
@@ -311,16 +315,18 @@ function armWatch(intervalMs: number): void {
 }
 
 export function stopTracking(): void {
-  if (_source === 'native') {
-    _nativeSub?.remove();
-    _nativeSub = null;
-    stopBackgroundLocationService();
-  } else if (_watchId !== null) {
+  if (_watchId !== null) {
     Geolocation.clearWatch(_watchId);
     _watchId = null;
   }
+  if (_nativeActive) {
+    _nativeSub?.remove();
+    _nativeSub = null;
+    stopBackgroundLocationService();
+  }
   _active = false;
-  _source = 'js';
+  _nativeActive = false;
+  _lastAcceptedFixMs = 0;
   _lastPosition = null;
   _lastRecordedPosition = null;
   _trackingMode = 'fast';
@@ -330,6 +336,14 @@ export function stopTracking(): void {
 async function handlePosition(
   pos: GeolocationResponse,
 ): Promise<void> {
+  // Two sources (JS watch + native FGS) can both deliver fixes; collapse
+  // near-simultaneous duplicates so points/geofences aren't double-counted.
+  const arrivedMs = Date.now();
+  if (isDuplicateFix(arrivedMs, _lastAcceptedFixMs)) {
+    return;
+  }
+  _lastAcceptedFixMs = arrivedMs;
+
   const {latitude, longitude, accuracy} = pos.coords;
   const now = pos.timestamp;
   const speed = pos.coords.speed ?? null;
@@ -361,10 +375,9 @@ async function handlePosition(
   if (desiredMode !== _trackingMode) {
     _trackingMode = desiredMode;
     const ms = desiredMode === 'fast' ? FAST_INTERVAL_MS : _slowIntervalMs;
-    if (_source === 'native') {
+    armWatch(ms); // JS baseline is always retuned
+    if (_nativeActive) {
       setBackgroundInterval(ms);
-    } else {
-      armWatch(ms);
     }
   }
 
