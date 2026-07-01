@@ -5,6 +5,7 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import {useSettingsStore} from '../../store/settingsStore';
 import {startTracking, stopTracking} from '../../services/gpsService';
 import {ensureBackgroundLocationPermission} from '../../services/permissionService';
+import {requestNotificationPermission} from '../../services/notificationService';
 import {useTheme} from '../../theme';
 import {makeSettingsStyles} from './settingsStyles';
 
@@ -34,6 +35,8 @@ export default function TrackingSettings() {
       const ok = await ensureBackgroundLocationPermission();
       if (!ok) { return; }
       await setBackgroundTracking(true);
+      // The keep-alive notification needs POST_NOTIFICATIONS on Android 13+.
+      requestNotificationPermission().catch(() => {});
     } else {
       await setBackgroundTracking(false);
     }

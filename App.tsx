@@ -10,7 +10,7 @@ import {initDB} from './src/db/database';
 import {pruneGpsTracksOlderThan} from './src/db/gps';
 import {getAllSettings} from './src/db/settings';
 import {startTracking, stopTracking} from './src/services/gpsService';
-import {ensureNotificationChannel, registerForegroundNotifeeHandler} from './src/services/notificationService';
+import {ensureNotificationChannel, registerForegroundNotifeeHandler, requestNotificationPermission} from './src/services/notificationService';
 import {useSettingsStore} from './src/store/settingsStore';
 import {useSessionStore} from './src/store/sessionStore';
 import {useTheme, lightColors, typography} from './src/theme';
@@ -54,6 +54,12 @@ function AppContent() {
     const startGpsIfEnabled = async () => {
       const settings = await getAllSettings().catch(() => null);
       if (settings?.gps_enabled) {
+        // The background foreground service posts an ongoing notification; on
+        // Android 13+ it stays hidden without POST_NOTIFICATIONS, so request it
+        // when background tracking is on. Idempotent — no repeat dialogs.
+        if (useSettingsStore.getState().background_tracking) {
+          requestNotificationPermission().catch(() => {});
+        }
         // startTracking starts the native foreground service itself when
         // background tracking is on (and must run while foreground — Android 12+
         // forbids starting an FGS from the background). Called on launch + resume.
