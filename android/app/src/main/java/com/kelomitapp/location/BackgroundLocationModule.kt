@@ -6,6 +6,7 @@ import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import com.facebook.react.bridge.ReadableArray
 
 /**
  * JS bridge to start/stop the background-location foreground service
@@ -45,14 +46,33 @@ class BackgroundLocationModule(reactContext: ReactApplicationContext) :
   }
 
   @ReactMethod
-  fun setInterval(ms: Double, promise: Promise) {
+  fun setMode(mode: String, ms: Double, promise: Promise) {
     try {
       // Talk to the already-running service in-process; do NOT startForegroundService
       // here (forbidden from background on Android 12+).
-      LocationService.instance?.updateInterval(ms.toLong())
+      LocationService.instance?.updateMode(mode, ms.toLong())
       promise.resolve(null)
     } catch (e: Exception) {
-      promise.reject("set_interval_failed", e)
+      promise.reject("set_mode_failed", e)
+    }
+  }
+
+  @ReactMethod
+  fun enterParked(fences: ReadableArray, promise: Promise) {
+    try {
+      val parsed = (0 until fences.size()).mapNotNull { i ->
+        val f = fences.getMap(i) ?: return@mapNotNull null
+        LocationService.ParkFence(
+          id = f.getDouble("id").toLong(),
+          latitude = f.getDouble("latitude"),
+          longitude = f.getDouble("longitude"),
+          radiusM = f.getDouble("radius").toFloat(),
+        )
+      }
+      LocationService.instance?.enterParked(parsed)
+      promise.resolve(null)
+    } catch (e: Exception) {
+      promise.reject("enter_parked_failed", e)
     }
   }
 }

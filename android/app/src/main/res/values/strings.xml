@@ -13,4 +13,5 @@
     <string name="location_channel_name">Location tracking</string>
     <string name="location_service_title">Kelomit is tracking location</string>
     <string name="location_service_text">Logging your location in the background.</string>
+    <string name="location_service_paused_text">Paused at a saved place — resumes when you leave.</string>
 </resources>

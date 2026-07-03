@@ -15,11 +15,15 @@ import android.location.Location
 import android.os.Build
 import android.os.IBinder
 import android.os.Looper
+import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import com.facebook.react.ReactApplication
 import com.facebook.react.bridge.Arguments
 import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.Geofence
+import com.google.android.gms.location.GeofencingClient
+import com.google.android.gms.location.GeofencingRequest
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
@@ -33,7 +37,8 @@ import com.kelomitapp.R
  * version, it now REQUESTS location itself via the fused provider — a location-typed
  * foreground service keeps getting updates under Doze, where the JS watch was
  * throttled. Each fix is emitted to JS (`onBackgroundLocation`), which runs the
- * existing processing pipeline. JS retunes the interval via [updateInterval].
+ * existing processing pipeline. JS retunes cadence/power via [updateMode], and
+ * parks the request entirely (OS geofence-exit wake) via [enterParked].
  */
 class LocationService : Service() {
   companion object {
@@ -48,7 +53,19 @@ class LocationService : Service() {
     var instance: LocationService? = null
   }
 
+  data class ParkFence(val id: Long, val latitude: Double, val longitude: Double, val radiusM: Float)
+
   private var fusedClient: FusedLocationProviderClient? = null
+  private var geofencingClient: GeofencingClient? = null
+  private var parked = false
+  private val geofencePendingIntent: PendingIntent by lazy {
+    val intent = Intent(this, GeofenceExitReceiver::class.java)
+    // FLAG_MUTABLE: the geofencing API fills in the triggering event (API 31+).
+    PendingIntent.getBroadcast(
+      this, 0, intent,
+      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
+    )
+  }
   private val callback = object : LocationCallback() {
     override fun onLocationResult(result: LocationResult) {
       result.lastLocation?.let { emitLocation(it) }
@@ -61,6 +78,7 @@ class LocationService : Service() {
     super.onCreate()
     instance = this
     fusedClient = LocationServices.getFusedLocationProviderClient(this)
+    geofencingClient = LocationServices.getGeofencingClient(this)
   }
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -71,24 +89,80 @@ class LocationService : Service() {
       startForeground(NOTIF_ID, notification)
     }
     val interval = intent?.getLongExtra(EXTRA_INTERVAL, DEFAULT_INTERVAL_MS) ?: DEFAULT_INTERVAL_MS
-    startLocationUpdates(interval)
+    startLocationUpdates(interval, Priority.PRIORITY_HIGH_ACCURACY)
     return START_STICKY
   }
 
-  /** Called from the JS bridge (same process) to change the request cadence. */
-  fun updateInterval(ms: Long) {
-    startLocationUpdates(ms)
+  /** Called from the JS bridge (same process) to change cadence + power level.
+   *  Also exits parked state (JS calls this on app-foreground wake). */
+  fun updateMode(mode: String, ms: Long) {
+    if (parked) exitParked(restart = false)
+    val priority = if (mode == "slow") {
+      Priority.PRIORITY_BALANCED_POWER_ACCURACY // no GPS chip while idling
+    } else {
+      Priority.PRIORITY_HIGH_ACCURACY
+    }
+    startLocationUpdates(ms, priority)
+  }
+
+  /** Park: drop the location request entirely; arm OS geofence-exit wakes.
+   *  The service (and its notification) stays alive — an idle process is
+   *  ~free and keeps the React context warm for the wake. */
+  @SuppressLint("MissingPermission")
+  fun enterParked(fences: List<ParkFence>) {
+    if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+      != PackageManager.PERMISSION_GRANTED || fences.isEmpty()
+    ) {
+      return
+    }
+    fusedClient?.removeLocationUpdates(callback)
+    val geofences = fences.map {
+      Geofence.Builder()
+        .setRequestId(it.id.toString())
+        .setCircularRegion(it.latitude, it.longitude, it.radiusM)
+        .setExpirationDuration(Geofence.NEVER_EXPIRE)
+        .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_EXIT)
+        .build()
+    }
+    val request = GeofencingRequest.Builder()
+      .setInitialTrigger(0) // never fire on registration
+      .addGeofences(geofences)
+      .build()
+    geofencingClient?.addGeofences(request, geofencePendingIntent)
+    parked = true
+    Log.d("KelomitLoc", "parked with ${fences.size} fence(s)")
+    updateNotification(paused = true)
+  }
+
+  /** Geofence-exit wake (from GeofenceExitReceiver). */
+  fun onGeofenceExitWake() {
+    Log.d("KelomitLoc", "geofence exit wake")
+    exitParked(restart = true)
+  }
+
+  private fun exitParked(restart: Boolean) {
+    geofencingClient?.removeGeofences(geofencePendingIntent)
+    parked = false
+    updateNotification(paused = false)
+    if (restart) {
+      startLocationUpdates(DEFAULT_INTERVAL_MS, Priority.PRIORITY_HIGH_ACCURACY)
+    }
+  }
+
+  private fun updateNotification(paused: Boolean) {
+    val mgr = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    mgr.notify(NOTIF_ID, buildNotification(paused))
   }
 
   @SuppressLint("MissingPermission")
-  private fun startLocationUpdates(intervalMs: Long) {
+  private fun startLocationUpdates(intervalMs: Long, priority: Int) {
     val client = fusedClient ?: return
     if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
       != PackageManager.PERMISSION_GRANTED
     ) {
       return // JS owns the permission prompt; do nothing until granted
     }
-    val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, intervalMs)
+    val request = LocationRequest.Builder(priority, intervalMs)
       .setMinUpdateDistanceMeters(10f)
       .build()
     client.removeLocationUpdates(callback)
@@ -105,17 +179,22 @@ class LocationService : Service() {
       putDouble("timestamp", loc.time.toDouble())
     }
     val reactContext = (application as? ReactApplication)?.reactHost?.currentReactContext
+    Log.d(
+      "KelomitLoc",
+      "fix lat=${loc.latitude} lon=${loc.longitude} spd=${loc.speed} acc=${loc.accuracy} ctx=${reactContext != null}",
+    )
     reactContext?.emitDeviceEvent("onBackgroundLocation", map)
   }
 
   override fun onDestroy() {
     super.onDestroy()
     fusedClient?.removeLocationUpdates(callback)
+    geofencingClient?.removeGeofences(geofencePendingIntent)
     instance = null
     stopForeground(STOP_FOREGROUND_REMOVE)
   }
 
-  private fun buildNotification(): Notification {
+  private fun buildNotification(paused: Boolean = false): Notification {
     createChannel()
     val tapIntent = Intent(this, MainActivity::class.java).apply {
       flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -128,7 +207,7 @@ class LocationService : Service() {
     )
     return NotificationCompat.Builder(this, CHANNEL_ID)
       .setContentTitle(getString(R.string.location_service_title))
-      .setContentText(getString(R.string.location_service_text))
+      .setContentText(getString(if (paused) R.string.location_service_paused_text else R.string.location_service_text))
       .setSmallIcon(R.drawable.ic_stat_tracking)
       .setOngoing(true)
       .setShowWhen(false)
