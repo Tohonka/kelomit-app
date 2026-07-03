@@ -60,6 +60,11 @@ geofence-driven day start/end inference. Fix the fast-rate corner-cutting. Keep 
 - Geofence *enter* logic, end-of-day inference, trail jitter/accuracy gates: untouched.
   Parked only starts while already inside a fence, and the exit wake delivers fixes
   right as the user leaves, so `processGeofences` still sees the exit crossing.
+- **Parking is deferred while an end-of-day exit is pending** (final-review fix): the
+  >1 h eod rule is tick-driven and ticks stop while parked, so with
+  `_eod.pendingExit` set the ladder stays in slow mode (≤1 h) until the rule
+  resolves, then parking proceeds. Otherwise an off-time work exit followed by
+  parking at Home would strand the pending end past day rollover (never committed).
 
 ### Instrumentation (open item from 5.8 handoff)
 

@@ -436,7 +436,14 @@ async function handlePosition(
   // parked (zero requests, OS geofence wake) when still inside a saved place
   // with the native FGS running. See trackingMode.ts + spec 5.9.
   _stationaryStreak = movingNow ? 0 : _stationaryStreak + 1;
-  const canPark = _nativeActive && _insideIds.size > 0;
+  // Park gating: needs the native FGS (to receive the geofence wake), a saved
+  // place we're inside (_insideIds lags this fix by one — processGeofences
+  // below updates it; self-correcting, worst case parks one fix late), and no
+  // unresolved end-of-day exit: the >1 h eod rule is tick-driven and ticks
+  // stop while parked, so parking waits (≤1 h of slow mode) until the pending
+  // exit resolves. ponytail: a manual end can leave pendingExit stuck → no
+  // parking that evening, i.e. pre-5.9 slow-mode behavior; acceptable.
+  const canPark = _nativeActive && _insideIds.size > 0 && _eod.pendingExit === null;
   applyMode(nextTrackingMode(_trackingMode, movingNow, _stationaryStreak, canPark), speed);
 
   // Persist to DB + run geofence detection
