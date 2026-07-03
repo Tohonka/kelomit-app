@@ -72,9 +72,6 @@ export function enterParkedNative(fences: ParkFence[]): void {
   }
 }
 
-/** Deprecated: use setBackgroundMode('fast', ms) instead. Kept for Task 3 transition. */
-export const setBackgroundInterval = (ms: number) => setBackgroundMode('fast', ms);
-
 /** Subscribe to native background fixes. Returns a remover. */
 export function subscribeBackgroundLocation(
   cb: (fix: NativeFix) => void,

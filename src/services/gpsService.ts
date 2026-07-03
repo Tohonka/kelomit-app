@@ -2,7 +2,15 @@ import Geolocation, {type GeolocationResponse} from '@react-native-community/geo
 import {Platform} from 'react-native';
 import {check, request, PERMISSIONS, RESULTS} from 'react-native-permissions';
 import {isOutlier, distanceMeters, isStationaryJitter} from './locationUtils';
-import {isMoving, nextTrackingMode, isDuplicateFix, type TrackingMode} from './trackingMode';
+import {
+  isMoving,
+  nextTrackingMode,
+  isDuplicateFix,
+  fastIntervalForSpeed,
+  dedupGapMs,
+  FAST_INTERVAL_MS,
+  type TrackingMode,
+} from './trackingMode';
 import {insertGpsPoint} from '../db/gps';
 import {getOrCreateDay, updateDay} from '../db/days';
 import {getLocations, insertGeofenceEvent} from '../db/locations';
@@ -15,7 +23,9 @@ import {
   startBackgroundLocationService,
   stopBackgroundLocationService,
   subscribeBackgroundLocation,
-  setBackgroundInterval,
+  setBackgroundMode,
+  enterParkedNative,
+  type ParkFence,
   type NativeFix,
 } from '../native/backgroundLocation';
 import {usualHoursForDate} from '../utils/usualHours';
@@ -46,8 +56,10 @@ let _lastRecordedPosition: KnownPosition | null = null;
 let _trackingMode: TrackingMode = 'fast';
 let _stationaryStreak = 0;
 let _slowIntervalMs = 60_000; // set from startTracking's arg (the gps_interval_ms setting)
-// ponytail: tune on device.
-const FAST_INTERVAL_MS = 4_000;
+// Current watch config, for change detection (sprint↔walk retunes within
+// 'fast' as well as mode changes) and for the interval-scaled dedup gap.
+let _currentIntervalMs = FAST_INTERVAL_MS;
+let _currentHighAccuracy = true;
 let _watchId: number | null = null;
 // When background tracking is on, the native FGS runs as an ADDITIONAL source
 // alongside the always-on JS watch (both feed handlePosition). See spec 5.8.
@@ -246,6 +258,11 @@ export async function getCurrentPositionOnce(): Promise<KnownPosition | null> {
 
 export async function startTracking(intervalMs = 60_000): Promise<void> {
   if (_active) {
+    if (_trackingMode === 'parked') {
+      // Resume-from-background while parked: re-arm immediately; the ladder
+      // will settle back to slow/parked if we're in fact still.
+      applyMode('fast', null);
+    }
     return; // already running
   }
   const ok = await requestLocationPermission();
@@ -261,7 +278,7 @@ export async function startTracking(intervalMs = 60_000): Promise<void> {
   _active = true;
 
   // JS watch is the always-on baseline — never worse than the pre-5.7 build.
-  armWatch(FAST_INTERVAL_MS);
+  armWatch(FAST_INTERVAL_MS, true);
 
   // Native fused location in the foreground service is an ADDITIONAL,
   // Doze-resistant source when background tracking is on. Both feed handlePosition;
@@ -276,6 +293,7 @@ export async function startTracking(intervalMs = 60_000): Promise<void> {
 
 /** Adapt a native fix into the GeolocationResponse shape handlePosition reads. */
 function handleNativeFix(fix: NativeFix): void {
+  console.log('[gps] native fix', fix.latitude, fix.longitude, 'spd', fix.speed);
   handlePosition({
     coords: {
       latitude: fix.latitude,
@@ -290,12 +308,17 @@ function handleNativeFix(fix: NativeFix): void {
   } as unknown as GeolocationResponse);
 }
 
-/** (Re)create the position watch at the given interval. Clears any existing
- *  watch first, so it doubles as the re-arm used on a mode change. */
-function armWatch(intervalMs: number): void {
+/** (Re)create the position watch with the given cadence and power level.
+ *  Clears any existing watch first, so it doubles as the re-arm used on a
+ *  mode or tier change. Slow mode uses low accuracy (no GPS chip; wifi/cell
+ *  is enough to notice departure and the >MAX_TRAIL_ACCURACY_M filter keeps
+ *  poor fixes out of the trail). */
+function armWatch(intervalMs: number, highAccuracy: boolean): void {
   if (_watchId !== null) {
     Geolocation.clearWatch(_watchId);
   }
+  _currentIntervalMs = intervalMs;
+  _currentHighAccuracy = highAccuracy;
   // watchPosition returns the new id synchronously, so there is no async gap
   // between clearing the old watch and assigning the new one (single-threaded JS).
   _watchId = Geolocation.watchPosition(
@@ -306,12 +329,51 @@ function armWatch(intervalMs: number): void {
       // Silently ignore individual position errors
     },
     {
-      enableHighAccuracy: true,
+      enableHighAccuracy: highAccuracy,
       distanceFilter: TRAIL_DISTANCE_FILTER_M, // metres — minimum movement before update
       interval: intervalMs,
       fastestInterval: Math.min(intervalMs, 15_000),
     },
   );
+}
+
+/** Apply the desired mode to both sources. Re-arms only when the effective
+ *  watch config actually changes (mode change OR sprint↔walk tier change). */
+function applyMode(mode: TrackingMode, speed: number | null): void {
+  if (mode === 'parked') {
+    if (_trackingMode !== 'parked') {
+      _trackingMode = 'parked';
+      if (_watchId !== null) {
+        Geolocation.clearWatch(_watchId);
+        _watchId = null;
+      }
+      // Fence every saved place we're currently inside; 1.25× matches the JS
+      // exit hysteresis so the OS wake and processGeofences agree.
+      const fences: ParkFence[] = _geofences
+        .filter(loc => _insideIds.has(loc.id))
+        .map(loc => ({
+          id: loc.id,
+          latitude: loc.latitude,
+          longitude: loc.longitude,
+          radius: loc.radius_m * 1.25,
+        }));
+      enterParkedNative(fences);
+    }
+    return;
+  }
+  const interval = mode === 'fast' ? fastIntervalForSpeed(speed) : _slowIntervalMs;
+  const highAccuracy = mode === 'fast';
+  if (
+    mode !== _trackingMode ||
+    interval !== _currentIntervalMs ||
+    highAccuracy !== _currentHighAccuracy
+  ) {
+    _trackingMode = mode;
+    armWatch(interval, highAccuracy);
+    if (_nativeActive) {
+      setBackgroundMode(mode, interval); // also exits native parked state
+    }
+  }
 }
 
 export function stopTracking(): void {
@@ -331,6 +393,8 @@ export function stopTracking(): void {
   _lastRecordedPosition = null;
   _trackingMode = 'fast';
   _stationaryStreak = 0;
+  _currentIntervalMs = FAST_INTERVAL_MS;
+  _currentHighAccuracy = true;
 }
 
 async function handlePosition(
@@ -339,7 +403,7 @@ async function handlePosition(
   // Two sources (JS watch + native FGS) can both deliver fixes; collapse
   // near-simultaneous duplicates so points/geofences aren't double-counted.
   const arrivedMs = Date.now();
-  if (isDuplicateFix(arrivedMs, _lastAcceptedFixMs)) {
+  if (isDuplicateFix(arrivedMs, _lastAcceptedFixMs, dedupGapMs(_currentIntervalMs))) {
     return;
   }
   _lastAcceptedFixMs = arrivedMs;
@@ -368,18 +432,12 @@ async function handlePosition(
 
   _lastPosition = {latitude, longitude, accuracy: accuracy ?? null, timestamp: now};
 
-  // Adaptive sampling: fast while moving, slow while still. Re-arm the watch
-  // only when the desired mode actually changes.
+  // Power ladder: fast (speed-tiered) while moving, slow+balanced while still,
+  // parked (zero requests, OS geofence wake) when still inside a saved place
+  // with the native FGS running. See trackingMode.ts + spec 5.9.
   _stationaryStreak = movingNow ? 0 : _stationaryStreak + 1;
-  const desiredMode = nextTrackingMode(_trackingMode, movingNow, _stationaryStreak);
-  if (desiredMode !== _trackingMode) {
-    _trackingMode = desiredMode;
-    const ms = desiredMode === 'fast' ? FAST_INTERVAL_MS : _slowIntervalMs;
-    armWatch(ms); // JS baseline is always retuned
-    if (_nativeActive) {
-      setBackgroundInterval(ms);
-    }
-  }
+  const canPark = _nativeActive && _insideIds.size > 0;
+  applyMode(nextTrackingMode(_trackingMode, movingNow, _stationaryStreak, canPark), speed);
 
   // Persist to DB + run geofence detection
   try {
