@@ -103,11 +103,13 @@ export default function HomeScreen({navigation}: Props) {
 
   useEffect(() => { loadToday(); }, [loadToday]);
 
-  // Roll over to the new day if the app was left open / backgrounded past
-  // midnight — otherwise Home keeps showing yesterday's day on resume.
+  // Re-read today from the DB whenever the app returns to the foreground. Covers
+  // both the midnight rollover AND background updates to the same day (e.g. a
+  // geofence stamping start/end time while backgrounded) — otherwise the cached
+  // `today` stays stale until a cold restart.
   useEffect(() => {
     const sub = AppState.addEventListener('change', state => {
-      if (state === 'active' && useDayStore.getState().today?.date !== todayDate()) {
+      if (state === 'active') {
         loadToday();
       }
     });

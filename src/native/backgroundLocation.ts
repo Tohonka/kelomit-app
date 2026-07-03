@@ -1,4 +1,4 @@
-import {NativeModules} from 'react-native';
+import {NativeModules, DeviceEventEmitter} from 'react-native';
 
 /**
  * Wrapper over the native `BackgroundLocation` module: starts/stops the
@@ -9,9 +9,20 @@ import {NativeModules} from 'react-native';
 interface BackgroundLocationNative {
   start(): Promise<void>;
   stop(): Promise<void>;
+  setMode(mode: string, ms: number): Promise<void>;
+  enterParked(fences: ParkFence[]): Promise<void>;
 }
 
 const Native = NativeModules.BackgroundLocation as BackgroundLocationNative | undefined;
+
+/** A saved location to fence while parked (radius already includes the
+ *  exit hysteresis multiplier). */
+export interface ParkFence {
+  id: number;
+  latitude: number;
+  longitude: number;
+  radius: number; // metres
+}
 
 export const isBackgroundLocationAvailable = (): boolean => Native != null;
 
@@ -29,4 +40,41 @@ export async function stopBackgroundLocationService(): Promise<void> {
   } catch {
     // ignore
   }
+}
+
+export interface NativeFix {
+  latitude: number;
+  longitude: number;
+  accuracy: number | null;
+  altitude: number | null;
+  speed: number | null;
+  timestamp: number; // ms since epoch
+}
+
+/** Retune the running service: cadence + power priority (fast = high accuracy,
+ *  slow = balanced power). Also exits native parked state if active. No-op on
+ *  binaries without the native method. */
+export function setBackgroundMode(mode: 'fast' | 'slow', ms: number): void {
+  try {
+    Native?.setMode?.(mode, ms)?.catch(() => {});
+  } catch {
+    // ignore
+  }
+}
+
+/** Park: native drops its location request and arms OS geofence-exit wakes on
+ *  the given fences. The FGS stays alive (idle) to receive the wake. */
+export function enterParkedNative(fences: ParkFence[]): void {
+  try {
+    Native?.enterParked?.(fences)?.catch(() => {});
+  } catch {
+    // ignore
+  }
+}
+
+/** Subscribe to native background fixes. Returns a remover. */
+export function subscribeBackgroundLocation(
+  cb: (fix: NativeFix) => void,
+): {remove: () => void} {
+  return DeviceEventEmitter.addListener('onBackgroundLocation', cb);
 }

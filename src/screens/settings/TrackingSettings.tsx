@@ -5,10 +5,7 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import {useSettingsStore} from '../../store/settingsStore';
 import {startTracking, stopTracking} from '../../services/gpsService';
 import {ensureBackgroundLocationPermission} from '../../services/permissionService';
-import {
-  startBackgroundLocationService,
-  stopBackgroundLocationService,
-} from '../../native/backgroundLocation';
+import {requestNotificationPermission} from '../../services/notificationService';
 import {useTheme} from '../../theme';
 import {makeSettingsStyles} from './settingsStyles';
 
@@ -26,11 +23,8 @@ export default function TrackingSettings() {
     await setGpsEnabled(next);
     if (next) {
       startTracking(gps_interval_ms);
-      // Resume the keep-alive service if background tracking was already on.
-      if (background_tracking) { startBackgroundLocationService(); }
     } else {
       stopTracking();
-      stopBackgroundLocationService();
     }
   };
 
@@ -41,13 +35,14 @@ export default function TrackingSettings() {
       const ok = await ensureBackgroundLocationPermission();
       if (!ok) { return; }
       await setBackgroundTracking(true);
-      // Start now, while in the foreground (Android forbids starting it later
-      // from the background).
-      startBackgroundLocationService();
+      // The keep-alive notification needs POST_NOTIFICATIONS on Android 13+.
+      requestNotificationPermission().catch(() => {});
     } else {
       await setBackgroundTracking(false);
-      stopBackgroundLocationService();
     }
+    // Restart tracking so the native source is added/removed to match the toggle
+    // (the JS watch baseline runs either way).
+    if (gps_enabled) { stopTracking(); startTracking(gps_interval_ms); }
   };
 
   return (

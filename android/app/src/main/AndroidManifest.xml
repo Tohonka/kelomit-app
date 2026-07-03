@@ -89,5 +89,11 @@
         android:name=".location.LocationService"
         android:exported="false"
         android:foregroundServiceType="location" />
+
+      <!-- Wakes the parked location service when the OS reports a saved-place
+           exit (GeofencingClient PendingIntent target). -->
+      <receiver
+        android:name=".location.GeofenceExitReceiver"
+        android:exported="false" />
     </application>
 </manifest>

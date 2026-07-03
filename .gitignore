@@ -40,4 +40,5 @@ node_modules
 .maps.env
 .code-workspace
 /plans_etc
+/realUserData
 deploy.config.json
