@@ -12,7 +12,8 @@ import {
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {GestureDetector, Gesture} from 'react-native-gesture-handler';
-import {getEntry, deleteEntryMedia} from '../db/entries';
+import {getEntry, deleteEntryMedia, updateEntry} from '../db/entries';
+import {mergeTranscriptIntoBody} from '../utils/transcript';
 import {useEntryStore} from '../store/entryStore';
 import {useTheme, typography, spacing, radius} from '../theme';
 import type {Colors} from '../theme';
@@ -20,6 +21,7 @@ import ActivityBadge from '../components/entries/ActivityBadge';
 import ProjectChip from '../components/entries/ProjectChip';
 import TagChip from '../components/entries/TagChip';
 import AudioPlayer from '../components/media/AudioPlayer';
+import VoiceTranscript from '../components/media/VoiceTranscript';
 import ZoomableImageModal from '../components/media/ZoomableImageModal';
 import type {RootStackScreenProps} from '../navigation/navigationTypes';
 import type {Entry, EntryMedia} from '../types';
@@ -212,6 +214,10 @@ export default function EntryDetailScreen({navigation, route}: Props) {
     ]);
   };
 
+  const refreshEntry = () => {
+    getEntry(entryId).then(e => { if (e) { setEntry(e); } });
+  };
+
   const handleDelete = () => {
     if (!entry) { return; }
     const entryToDelete = entry;
@@ -262,6 +268,16 @@ export default function EntryDetailScreen({navigation, route}: Props) {
       return (
         <View key={m.id} style={styles.attachWrap}>
           <AudioPlayer filePath={m.file_path} durationSec={m.duration_sec} />
+          <VoiceTranscript
+            media={m}
+            onChanged={refreshEntry}
+            onNeedKey={() => navigation.navigate('TranscriptionSettings')}
+            onUseAsNote={async text => {
+              if (!entry) { return; }
+              await updateEntry(entry.id, {body: mergeTranscriptIntoBody(entry.body, text)});
+              refreshEntry();
+            }}
+          />
           {removeBtn}
         </View>
       );
