@@ -42,3 +42,4 @@ node_modules
 /plans_etc
 /realUserData
 deploy.config.json
+.kuiskaus.env
