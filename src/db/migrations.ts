@@ -225,4 +225,13 @@ export const migrations: Migration[] = [
       'CREATE INDEX IF NOT EXISTS idx_gps_track_ts ON gps_track(timestamp)',
     ],
   },
+  {
+    version: 14,
+    up: [
+      // Phase 1 voice transcription — store the speech-to-text result on the
+      // voice attachment itself. Nullable, editable. No backfill: zero voice
+      // clips exist yet.
+      'ALTER TABLE entry_media ADD COLUMN transcript TEXT',
+    ],
+  },
 ];
