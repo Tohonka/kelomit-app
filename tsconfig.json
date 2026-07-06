@@ -1,7 +1,13 @@
 {
   "extends": "@react-native/typescript-config",
   "compilerOptions": {
-    "types": ["jest"]
+    "types": ["jest"],
+    // ponytail: whisper.rn@0.6.0's package.json "exports" map has no "." entry
+    // (only "./*"), so tsc can't resolve the bare specifier even though Metro
+    // resolves it fine via the "react-native" main field. Remap for tsc only.
+    "paths": {
+      "whisper.rn": ["./node_modules/whisper.rn/lib/typescript/index"]
+    }
   },
   "include": ["**/*.ts", "**/*.tsx"],
   "exclude": ["**/node_modules", "**/Pods"]

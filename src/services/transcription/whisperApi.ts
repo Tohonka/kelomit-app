@@ -12,6 +12,7 @@ export type TranscriptionErrorKind =
   | 'auth'
   | 'rate'
   | 'network'
+  | 'model-missing'
   | 'other';
 
 export class TranscriptionError extends Error {
