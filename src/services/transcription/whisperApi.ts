@@ -1,3 +1,4 @@
+import RNFS from 'react-native-fs';
 import {getApiKey} from './keychain';
 
 const ENDPOINT = 'https://api.openai.com/v1/audio/transcriptions';
@@ -7,6 +8,7 @@ const MODEL = 'whisper-1';
 
 export type TranscriptionErrorKind =
   | 'no-key'
+  | 'no-file'
   | 'auth'
   | 'rate'
   | 'network'
@@ -38,6 +40,14 @@ export function parseTranscriptionResponse(status: number, body: unknown): strin
 export async function transcribe(audioUri: string): Promise<string> {
   const key = await getApiKey();
   if (!key) { throw new TranscriptionError('no-key', 'No API key set'); }
+
+  // Pre-flight: a missing file makes the multipart fetch fail instantly with a
+  // "Network request failed" that would otherwise masquerade as a conn(network)
+  // problem. Check first so the user gets an honest message.
+  const fsPath = audioUri.replace('file://', '');
+  if (!(await RNFS.exists(fsPath))) {
+    throw new TranscriptionError('no-file', 'Recording file not found');
+  }
 
   const uri = audioUri.startsWith('file://') ? audioUri : `file://${audioUri}`;
   const form = new FormData();

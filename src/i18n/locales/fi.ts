@@ -300,6 +300,8 @@ const fi: typeof en = {
     errRate: 'Käyttöraja tai kuluraja saavutettu. Yritä myöhemmin.',
     errNetwork: 'Ei yhteyttä. Tarkista verkko.',
     errOther: 'Litterointi epäonnistui. Yritä uudelleen.',
+    errFileMissing: 'Äänitiedostoa ei löytynyt. Yritä äänittää uudelleen.',
+    errNoSpeech: 'Äänityksestä ei tunnistettu puhetta.',
     goToSettings: 'Avaa asetukset',
   },
   time: {

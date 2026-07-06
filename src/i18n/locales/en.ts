@@ -298,6 +298,8 @@ const en = {
     errRate: 'Rate limit or spend cap reached. Try later.',
     errNetwork: 'No connection. Check your network.',
     errOther: 'Transcription failed. Try again.',
+    errFileMissing: 'Recording file not found. Try recording again.',
+    errNoSpeech: 'No speech detected in this recording.',
     goToSettings: 'Open settings',
   },
   time: {

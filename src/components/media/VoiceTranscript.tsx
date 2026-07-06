@@ -56,6 +56,7 @@ export default function VoiceTranscript({media, onChanged, onNeedKey, onUseAsNot
       case 'auth': return t('transcription.errAuth');
       case 'rate': return t('transcription.errRate');
       case 'network': return t('transcription.errNetwork');
+      case 'no-file': return t('transcription.errFileMissing');
       default: return t('transcription.errOther');
     }
   };
@@ -64,6 +65,12 @@ export default function VoiceTranscript({media, onChanged, onNeedKey, onUseAsNot
     setBusy(true);
     try {
       const result = await transcribe(media.file_path);
+      if (!result) {
+        // Whisper heard no speech — tell the user instead of silently storing
+        // "" (which would just revert to the Transcribe button).
+        Alert.alert(t('transcription.errNoSpeech'));
+        return;
+      }
       await updateEntryMedia(media.id!, {transcript: result});
       setText(result);
       onChanged();
