@@ -95,6 +95,9 @@ export default function VoiceRecorder({filePath, onRecord, onDiscard}: Props) {
   const [elapsed, setElapsed] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const elapsedRef = useRef(0);
+  // The path we hand to startRecorder is where the file actually lands. Keep it:
+  // stopRecorder() resolves with the status string "Recorder stopped", NOT a path.
+  const recordPathRef = useRef<string | null>(null);
 
   useEffect(() => {
     return () => {
@@ -109,6 +112,7 @@ export default function VoiceRecorder({filePath, onRecord, onDiscard}: Props) {
     try {
       await ensureMediaDir();
       const path = makeMediaPath('voice', 'm4a');
+      recordPathRef.current = path;
       await audioRecorderPlayer.startRecorder(path);
       audioRecorderPlayer.addRecordBackListener((e: RecordBackType) => {
         const seconds = Math.floor(e.currentPosition / 1000);
@@ -123,10 +127,13 @@ export default function VoiceRecorder({filePath, onRecord, onDiscard}: Props) {
 
   const stopRecording = async () => {
     try {
-      const result = await audioRecorderPlayer.stopRecorder();
+      await audioRecorderPlayer.stopRecorder();
       audioRecorderPlayer.removeRecordBackListener();
       setState('done');
-      onRecord(result, elapsedRef.current);
+      const path = recordPathRef.current;
+      if (path) {
+        onRecord(path, elapsedRef.current);
+      }
     } catch (e) {
       Alert.alert(t('media.stopRecordingError'), String(e));
     }
