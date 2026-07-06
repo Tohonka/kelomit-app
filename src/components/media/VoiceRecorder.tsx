@@ -118,11 +118,14 @@ export default function VoiceRecorder({filePath, onRecord, onDiscard}: Props) {
       await ensureMediaDir();
       const path = makeMediaPath('voice', 'wav');
       recordPathRef.current = path;
+      // ponytail: single active recording at a time (one VoiceRecorder mounts
+      // per add-entry flow), so a unique per-take filename is enough — no locking.
+      // Unique name means a failed move (below) leaves a recoverable, non-clobbered file.
       NitroAudioRecord.setup({
         sampleRate: 16000,
         channels: 1,
         bitsPerSample: 16,
-        wavFile: 'kelomit_rec.wav',
+        wavFile: `kelomit_rec_${Date.now()}.wav`,
       });
       NitroAudioRecord.start();
       elapsedRef.current = 0;
@@ -138,21 +141,30 @@ export default function VoiceRecorder({filePath, onRecord, onDiscard}: Props) {
   };
 
   const stopRecording = async () => {
+    if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null; }
+    let producedPath: string;
     try {
-      if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null; }
-      const producedPath = await NitroAudioRecord.stop(); // saved wav path
-      const dest = recordPathRef.current!;
-      // Move the recorder's output into our media dir (consistent storage).
-      const src = producedPath.replace('file://', '');
+      producedPath = await NitroAudioRecord.stop(); // saved wav path
+    } catch (e) {
+      Alert.alert(t('media.stopRecordingError'), String(e));
+      return;
+    }
+    const src = producedPath.replace('file://', '');
+    const dest = recordPathRef.current!;
+    // Move the recorder's output into our media dir (consistent storage). If the
+    // move fails, keep the recorder's own uniquely-named WAV rather than losing
+    // the take the user just recorded — it's a valid file either way.
+    let finalPath = dest;
+    try {
       if (src !== dest) {
         if (await RNFS.exists(dest)) { await RNFS.unlink(dest); }
         await RNFS.moveFile(src, dest);
       }
-      setState('done');
-      onRecord(dest, elapsedRef.current);
-    } catch (e) {
-      Alert.alert(t('media.stopRecordingError'), String(e));
+    } catch {
+      finalPath = src;
     }
+    setState('done');
+    onRecord(finalPath, elapsedRef.current);
   };
 
   const togglePlay = async () => {
