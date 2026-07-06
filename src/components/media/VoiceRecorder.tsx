@@ -1,8 +1,10 @@
 import React, {useMemo, useState, useEffect, useRef} from 'react';
 import {useTranslation} from 'react-i18next';
 import {View, Text, TouchableOpacity, StyleSheet, Alert} from 'react-native';
+import {NitroAudioRecord} from 'react-native-nitro-audio-record';
+import RNFS from 'react-native-fs';
 import audioRecorderPlayer from 'react-native-audio-recorder-player';
-import type {RecordBackType, PlayBackType} from 'react-native-audio-recorder-player';
+import type {PlayBackType} from 'react-native-audio-recorder-player';
 import {useTheme, typography, spacing, radius} from '../../theme';
 import type {Colors} from '../../theme';
 import {ensureMicrophonePermission} from '../../services/permissionService';
@@ -95,13 +97,16 @@ export default function VoiceRecorder({filePath, onRecord, onDiscard}: Props) {
   const [elapsed, setElapsed] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const elapsedRef = useRef(0);
-  // The path we hand to startRecorder is where the file actually lands. Keep it:
-  // stopRecorder() resolves with the status string "Recorder stopped", NOT a path.
+  // The path we want the file to end up at. NitroAudioRecord always saves under
+  // its own document-dir wavFile name; stop() resolves with that real path, which
+  // we then move to `recordPathRef.current` (our media dir) for consistent storage.
   const recordPathRef = useRef<string | null>(null);
+  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     return () => {
-      audioRecorderPlayer.stopRecorder().catch(() => {});
+      if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null; }
+      NitroAudioRecord.stop().catch(() => {});
       audioRecorderPlayer.stopPlayer().catch(() => {});
     };
   }, []);
@@ -111,14 +116,21 @@ export default function VoiceRecorder({filePath, onRecord, onDiscard}: Props) {
     if (!ok) { return; }
     try {
       await ensureMediaDir();
-      const path = makeMediaPath('voice', 'm4a');
+      const path = makeMediaPath('voice', 'wav');
       recordPathRef.current = path;
-      await audioRecorderPlayer.startRecorder(path);
-      audioRecorderPlayer.addRecordBackListener((e: RecordBackType) => {
-        const seconds = Math.floor(e.currentPosition / 1000);
-        elapsedRef.current = seconds;
-        setElapsed(seconds);
+      NitroAudioRecord.setup({
+        sampleRate: 16000,
+        channels: 1,
+        bitsPerSample: 16,
+        wavFile: 'kelomit_rec.wav',
       });
+      NitroAudioRecord.start();
+      elapsedRef.current = 0;
+      setElapsed(0);
+      tickRef.current = setInterval(() => {
+        elapsedRef.current += 1;
+        setElapsed(elapsedRef.current);
+      }, 1000);
       setState('recording');
     } catch (e) {
       Alert.alert(t('media.recordingError'), String(e));
@@ -127,13 +139,17 @@ export default function VoiceRecorder({filePath, onRecord, onDiscard}: Props) {
 
   const stopRecording = async () => {
     try {
-      await audioRecorderPlayer.stopRecorder();
-      audioRecorderPlayer.removeRecordBackListener();
-      setState('done');
-      const path = recordPathRef.current;
-      if (path) {
-        onRecord(path, elapsedRef.current);
+      if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null; }
+      const producedPath = await NitroAudioRecord.stop(); // saved wav path
+      const dest = recordPathRef.current!;
+      // Move the recorder's output into our media dir (consistent storage).
+      const src = producedPath.replace('file://', '');
+      if (src !== dest) {
+        if (await RNFS.exists(dest)) { await RNFS.unlink(dest); }
+        await RNFS.moveFile(src, dest);
       }
+      setState('done');
+      onRecord(dest, elapsedRef.current);
     } catch (e) {
       Alert.alert(t('media.stopRecordingError'), String(e));
     }

@@ -32,6 +32,7 @@
     "react-native-keychain": "^10.0.0",
     "react-native-localize": "^3.7.0",
     "react-native-maps": "^1.27.2",
+    "react-native-nitro-audio-record": "^0.1.1",
     "react-native-nitro-modules": "0.26.3",
     "react-native-permissions": "^5.5.3",
     "react-native-reanimated": "^4.5.0",
