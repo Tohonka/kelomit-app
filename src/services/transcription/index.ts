@@ -1,10 +1,15 @@
-// Transcription seam. Phase 1: one provider (Whisper API). Later phases
-// (on-device whisper.rn, custom endpoint) switch here behind this signature.
-import {transcribe as whisperApiTranscribe} from './whisperApi';
+// Transcription seam. Dispatches to the on-device (whisper.rn) or OpenAI-API
+// provider based on the `transcription_provider` setting (default on-device).
+import {getSetting} from '../../db/settings';
+import {transcribe as apiTranscribe} from './whisperApi';
+import {transcribe as onDeviceTranscribe} from './onDevice';
+import {selectProvider} from './selectProvider';
 
 export {TranscriptionError} from './whisperApi';
 export type {TranscriptionErrorKind} from './whisperApi';
+export {selectProvider} from './selectProvider';
 
-export function transcribe(audioUri: string): Promise<string> {
-  return whisperApiTranscribe(audioUri);
+export async function transcribe(audioUri: string): Promise<string> {
+  const provider = selectProvider(await getSetting('transcription_provider'));
+  return provider === 'api' ? apiTranscribe(audioUri) : onDeviceTranscribe(audioUri);
 }
