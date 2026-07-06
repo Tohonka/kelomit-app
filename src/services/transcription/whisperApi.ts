@@ -23,6 +23,13 @@ export class TranscriptionError extends Error {
   }
 }
 
+/** Multipart file part (name + mime) for the upload, from the path extension.
+ *  Voice notes are .wav (Phase 2); legacy notes may be .m4a. */
+export function filePartFor(path: string): {name: string; type: string} {
+  if (/\.wav$/i.test(path)) { return {name: 'clip.wav', type: 'audio/wav'}; }
+  return {name: 'clip.m4a', type: 'audio/m4a'};
+}
+
 /** Pure: HTTP status + parsed JSON → transcript text, or a typed throw.
  *  Extracted so it is unit-testable without a network. */
 export function parseTranscriptionResponse(status: number, body: unknown): string {
@@ -50,9 +57,10 @@ export async function transcribe(audioUri: string): Promise<string> {
   }
 
   const uri = audioUri.startsWith('file://') ? audioUri : `file://${audioUri}`;
+  const part = filePartFor(audioUri);
   const form = new FormData();
   // RN FormData accepts this {uri,name,type} shape for file parts.
-  form.append('file', {uri, name: 'clip.m4a', type: 'audio/m4a'} as unknown as Blob);
+  form.append('file', {uri, name: part.name, type: part.type} as unknown as Blob);
   form.append('model', MODEL);
   form.append('response_format', 'json');
 

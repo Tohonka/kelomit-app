@@ -1,6 +1,7 @@
 import {
   parseTranscriptionResponse,
   TranscriptionError,
+  filePartFor,
 } from '../src/services/transcription/whisperApi';
 
 // Returns the thrown error's kind, or 'no-throw' if it didn't throw — so a
@@ -30,5 +31,20 @@ describe('parseTranscriptionResponse', () => {
 
   it('maps other statuses → other', () => {
     expect(kindOf(() => parseTranscriptionResponse(500, {}))).toBe('other');
+  });
+});
+
+describe('filePartFor', () => {
+  it('maps .wav → audio/wav', () => {
+    expect(filePartFor('/x/voice_1.wav')).toEqual({name: 'clip.wav', type: 'audio/wav'});
+  });
+  it('maps .m4a → audio/m4a', () => {
+    expect(filePartFor('/x/voice_1.m4a')).toEqual({name: 'clip.m4a', type: 'audio/m4a'});
+  });
+  it('falls back to m4a for unknown/extensionless', () => {
+    expect(filePartFor('/x/voice_1')).toEqual({name: 'clip.m4a', type: 'audio/m4a'});
+  });
+  it('is case-insensitive', () => {
+    expect(filePartFor('/x/V.WAV')).toEqual({name: 'clip.wav', type: 'audio/wav'});
   });
 });
