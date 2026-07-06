@@ -75,8 +75,11 @@ export default function VoiceTranscript({media, onChanged, onNeedKey, onUseAsNot
       setText(result);
       onChanged();
     } catch (e) {
-      if (e instanceof TranscriptionError && e.kind === 'no-key') {
-        Alert.alert(t('transcription.errNoKey'), undefined, [
+      if (e instanceof TranscriptionError && (e.kind === 'no-key' || e.kind === 'model-missing')) {
+        const msg = e.kind === 'no-key'
+          ? t('transcription.errNoKey')
+          : t('transcription.errModelMissing');
+        Alert.alert(msg, undefined, [
           {text: t('common.cancel'), style: 'cancel'},
           {text: t('transcription.goToSettings'), onPress: onNeedKey},
         ]);

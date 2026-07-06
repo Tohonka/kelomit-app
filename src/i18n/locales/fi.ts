@@ -306,6 +306,7 @@ const fi: typeof en = {
     transcriptLabel: 'Litterointi',
     useAsNote: 'Käytä muistiinpanon tekstinä',
     errNoKey: 'Aseta ensin OpenAI API-avain.',
+    errModelMissing: 'Laitteen mallia ei ole ladattu. Avaa asetukset ladataksesi sen.',
     errAuth: 'API-avain hylättiin. Tarkista se asetuksista.',
     errRate: 'Käyttöraja tai kuluraja saavutettu. Yritä myöhemmin.',
     errNetwork: 'Ei yhteyttä. Tarkista verkko.',

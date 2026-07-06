@@ -304,6 +304,7 @@ const en = {
     transcriptLabel: 'Transcript',
     useAsNote: 'Use as note text',
     errNoKey: 'Set an OpenAI API key first.',
+    errModelMissing: 'The on-device model isn\'t downloaded. Open settings to download it.',
     errAuth: 'API key was rejected. Check it in settings.',
     errRate: 'Rate limit or spend cap reached. Try later.',
     errNetwork: 'No connection. Check your network.',
