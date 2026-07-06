@@ -18,6 +18,7 @@ import DataSettings from '../screens/settings/DataSettings';
 import QuickAddSettings from '../screens/settings/QuickAddSettings';
 import LocationSettings from '../screens/settings/LocationSettings';
 import WidgetSettings from '../screens/settings/WidgetSettings';
+import TranscriptionSettings from '../screens/settings/TranscriptionSettings';
 import {useTheme} from '../theme';
 import type {RootStackParamList} from './navigationTypes';
 
@@ -127,6 +128,11 @@ export default function RootNavigator() {
         name="WidgetSettings"
         component={WidgetSettings}
         options={{title: t('widgets.title')}}
+      />
+      <Stack.Screen
+        name="TranscriptionSettings"
+        component={TranscriptionSettings}
+        options={{title: t('transcription.title')}}
       />
     </Stack.Navigator>
   );

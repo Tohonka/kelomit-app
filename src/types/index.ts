@@ -69,6 +69,7 @@ export interface EntryMedia {
   duration_sec: number | null;
   /** Ordering within the note (0-based). */
   position: number;
+  transcript: string | null;
   created_at: string;
   updated_at: string;
 }

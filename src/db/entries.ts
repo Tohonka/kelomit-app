@@ -15,6 +15,7 @@ function rowToMedia(row: RawRow): EntryMedia {
     thumbnail_path: (row.thumbnail_path as string | null) ?? null,
     duration_sec: (row.duration_sec as number | null) ?? null,
     position: row.position as number,
+    transcript: (row.transcript as string | null) ?? null,
     created_at: row.created_at as string,
     updated_at: row.updated_at as string,
   };
@@ -225,6 +226,19 @@ export async function getEntryMedia(entryId: number): Promise<EntryMedia[]> {
 export async function deleteEntryMedia(mediaId: number): Promise<void> {
   const db = getDB();
   await db.execute('DELETE FROM entry_media WHERE id = ?;', [mediaId]);
+}
+
+/** Patch a media attachment. Phase 1: transcript only. */
+export async function updateEntryMedia(
+  mediaId: number,
+  patch: {transcript?: string | null},
+): Promise<void> {
+  if (patch.transcript === undefined) { return; }
+  const db = getDB();
+  await db.execute(
+    "UPDATE entry_media SET transcript = ?, updated_at = datetime('now') WHERE id = ?;",
+    [patch.transcript, mediaId],
+  );
 }
 
 export interface CreateEntryParams {
