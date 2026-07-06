@@ -5,4 +5,6 @@ export default {
   exists: jest.fn(() => Promise.resolve(true)),
   mkdir: jest.fn(() => Promise.resolve()),
   unlink: jest.fn(() => Promise.resolve()),
+  downloadFile: jest.fn(() => ({promise: Promise.resolve({statusCode: 200})})),
+  moveFile: jest.fn(() => Promise.resolve()),
 };
