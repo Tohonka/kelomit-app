@@ -4,7 +4,7 @@ import {View, Text, ScrollView, TouchableOpacity} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useSettingsStore} from '../../store/settingsStore';
 import {startTracking, stopTracking} from '../../services/gpsService';
-import {ensureBackgroundLocationPermission} from '../../services/permissionService';
+import {ensureBackgroundLocationPermission, ensureActivityRecognitionPermission} from '../../services/permissionService';
 import {requestNotificationPermission} from '../../services/notificationService';
 import {useTheme} from '../../theme';
 import {makeSettingsStyles} from './settingsStyles';
@@ -37,6 +37,9 @@ export default function TrackingSettings() {
       await setBackgroundTracking(true);
       // The keep-alive notification needs POST_NOTIFICATIONS on Android 13+.
       requestNotificationPermission().catch(() => {});
+      // Optional: lets the parked service wake fast on movement (geofence is the
+      // fallback if denied), so we don't block the toggle on it.
+      ensureActivityRecognitionPermission().catch(() => {});
     } else {
       await setBackgroundTracking(false);
     }

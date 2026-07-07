@@ -20,6 +20,11 @@ import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import com.facebook.react.ReactApplication
 import com.facebook.react.bridge.Arguments
+import com.google.android.gms.location.ActivityRecognition
+import com.google.android.gms.location.ActivityRecognitionClient
+import com.google.android.gms.location.ActivityTransition
+import com.google.android.gms.location.ActivityTransitionRequest
+import com.google.android.gms.location.DetectedActivity
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofencingClient
@@ -57,10 +62,19 @@ class LocationService : Service() {
 
   private var fusedClient: FusedLocationProviderClient? = null
   private var geofencingClient: GeofencingClient? = null
+  private var activityClient: ActivityRecognitionClient? = null
   private var parked = false
   private val geofencePendingIntent: PendingIntent by lazy {
     val intent = Intent(this, GeofenceExitReceiver::class.java)
     // FLAG_MUTABLE: the geofencing API fills in the triggering event (API 31+).
+    PendingIntent.getBroadcast(
+      this, 0, intent,
+      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
+    )
+  }
+  private val activityPendingIntent: PendingIntent by lazy {
+    val intent = Intent(this, ActivityTransitionReceiver::class.java)
+    // FLAG_MUTABLE: the activity-recognition API fills in the transition result.
     PendingIntent.getBroadcast(
       this, 0, intent,
       PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
@@ -79,6 +93,7 @@ class LocationService : Service() {
     instance = this
     fusedClient = LocationServices.getFusedLocationProviderClient(this)
     geofencingClient = LocationServices.getGeofencingClient(this)
+    activityClient = ActivityRecognition.getClient(this)
   }
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -129,9 +144,45 @@ class LocationService : Service() {
       .addGeofences(geofences)
       .build()
     geofencingClient?.addGeofences(request, geofencePendingIntent)
+    requestActivityUpdates()
     parked = true
     Log.d("KelomitLoc", "parked with ${fences.size} fence(s)")
     updateNotification(paused = true)
+  }
+
+  /** Second, lower-latency wake source while parked: the activity-recognition
+   *  engine reporting the user started moving. Best-effort — if ACTIVITY_RECOGNITION
+   *  isn't granted we simply lean on the geofence-exit fallback. */
+  @SuppressLint("MissingPermission")
+  private fun requestActivityUpdates() {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+      ActivityCompat.checkSelfPermission(this, Manifest.permission.ACTIVITY_RECOGNITION)
+      != PackageManager.PERMISSION_GRANTED
+    ) {
+      return
+    }
+    // Register ENTER transitions for every "moving" activity, so any event the
+    // receiver sees means "started moving" (see ActivityTransitionReceiver).
+    val moving = listOf(
+      DetectedActivity.WALKING,
+      DetectedActivity.RUNNING,
+      DetectedActivity.ON_FOOT,
+      DetectedActivity.ON_BICYCLE,
+      DetectedActivity.IN_VEHICLE,
+    )
+    val transitions = moving.map {
+      ActivityTransition.Builder()
+        .setActivityType(it)
+        .setActivityTransition(ActivityTransition.ACTIVITY_TRANSITION_ENTER)
+        .build()
+    }
+    activityClient?.requestActivityTransitionUpdates(
+      ActivityTransitionRequest(transitions), activityPendingIntent,
+    )
+  }
+
+  private fun removeActivityUpdates() {
+    activityClient?.removeActivityTransitionUpdates(activityPendingIntent)
   }
 
   /** Geofence-exit wake (from GeofenceExitReceiver). */
@@ -140,8 +191,17 @@ class LocationService : Service() {
     exitParked(restart = true)
   }
 
+  /** Activity-recognition wake (from ActivityTransitionReceiver): the user
+   *  started moving while parked. Ignore stray transitions when not parked. */
+  fun onActivityMoveWake() {
+    if (!parked) return
+    Log.d("KelomitLoc", "activity move wake -> exit parked")
+    exitParked(restart = true)
+  }
+
   private fun exitParked(restart: Boolean) {
     geofencingClient?.removeGeofences(geofencePendingIntent)
+    removeActivityUpdates()
     parked = false
     updateNotification(paused = false)
     if (restart) {
@@ -190,6 +250,7 @@ class LocationService : Service() {
     super.onDestroy()
     fusedClient?.removeLocationUpdates(callback)
     geofencingClient?.removeGeofences(geofencePendingIntent)
+    removeActivityUpdates()
     instance = null
     stopForeground(STOP_FOREGROUND_REMOVE)
   }

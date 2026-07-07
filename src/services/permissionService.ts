@@ -42,6 +42,27 @@ export async function ensureMicrophonePermission(): Promise<boolean> {
 }
 
 /**
+ * Best-effort ACTIVITY_RECOGNITION (Android 10+): lets the parked GPS service
+ * wake fast on detected movement instead of waiting for the laggy geofence exit.
+ * Optional — a denial just falls back to the geofence, so this never alerts or
+ * blocks. Returns whether it's granted.
+ */
+export async function ensureActivityRecognitionPermission(): Promise<boolean> {
+  if (Platform.OS !== 'android') {
+    return false;
+  }
+  const perm = PERMISSIONS.ANDROID.ACTIVITY_RECOGNITION;
+  const status = await check(perm);
+  if (status === RESULTS.GRANTED) {
+    return true;
+  }
+  if (status === RESULTS.DENIED) {
+    return (await request(perm)) === RESULTS.GRANTED;
+  }
+  return false; // BLOCKED/UNAVAILABLE — silent, geofence remains the fallback
+}
+
+/**
  * Request "Allow all the time" location, needed for background GPS. On Android
  * 10+ foreground (fine) location must be granted first, and the background grant
  * is made from system Settings — so a DENIED/BLOCKED result here means the user

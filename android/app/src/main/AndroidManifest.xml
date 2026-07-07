@@ -15,6 +15,9 @@
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <!-- Fast wake from a parked saved-place: detect the user starting to move
+         (walking/cycling/vehicle) before the geofence exit fires. -->
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
 
     <!-- Media-library / external-storage permissions intentionally trimmed
          (Iteration 3 Phase 2): gallery imports use the Android system photo
@@ -94,6 +97,12 @@
            exit (GeofencingClient PendingIntent target). -->
       <receiver
         android:name=".location.GeofenceExitReceiver"
+        android:exported="false" />
+
+      <!-- Wakes the parked location service the moment activity-recognition
+           reports the user started moving (faster than the geofence exit). -->
+      <receiver
+        android:name=".location.ActivityTransitionReceiver"
         android:exported="false" />
     </application>
 </manifest>
