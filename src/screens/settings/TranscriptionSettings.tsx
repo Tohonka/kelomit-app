@@ -15,6 +15,7 @@ const makeLocalStyles = (c: Colors) =>
     block: {paddingHorizontal: spacing.lg, paddingVertical: spacing.md, backgroundColor: c.bgCard, borderBottomWidth: 1, borderBottomColor: c.border},
     label: {fontSize: typography.sizes.base, color: c.textPrimary, marginBottom: spacing.sm},
     status: {fontSize: typography.sizes.xs, color: c.textMuted, marginBottom: spacing.md},
+    hint: {fontSize: typography.sizes.xs, color: c.textMuted, marginTop: spacing.sm},
     input: {
       backgroundColor: c.bg,
       borderRadius: radius.md,
@@ -43,18 +44,25 @@ export default function TranscriptionSettings() {
   const [hasKey, setHasKey] = useState(false);
   const [draft, setDraft] = useState('');
   const [provider, setProvider] = useState<Provider>('ondevice');
+  const [language, setLanguage] = useState<'auto' | 'fi' | 'en'>('auto');
   const [modelState, setModelState] = useState<'missing' | 'ready'>('missing');
   const [dlPct, setDlPct] = useState<number | null>(null);
 
   useEffect(() => {
     getApiKey().then(k => setHasKey(!!k));
     getSetting('transcription_provider').then(v => setProvider(selectProvider(v)));
+    getSetting('transcription_language').then(v => setLanguage(v === 'fi' || v === 'en' ? v : 'auto'));
     getModelState().then(setModelState);
   }, []);
 
   const pickProvider = async (p: Provider) => {
     setProvider(p);
     await setSetting('transcription_provider', p);
+  };
+
+  const pickLanguage = async (l: 'auto' | 'fi' | 'en') => {
+    setLanguage(l);
+    await setSetting('transcription_language', l);
   };
 
   const runDownload = async () => {
@@ -110,6 +118,23 @@ export default function TranscriptionSettings() {
 
         {provider === 'ondevice' && (
           <>
+            <Text style={styles.sectionHeader}>{t('transcription.languageTitle')}</Text>
+            <View style={local.block}>
+              <View style={local.engineRow}>
+                {(['auto', 'fi', 'en'] as const).map(l => (
+                  <TouchableOpacity
+                    key={l}
+                    style={[local.btn, language !== l && local.btnClear]}
+                    onPress={() => pickLanguage(l)}>
+                    <Text style={[local.btnText, language !== l && local.btnClearText]}>
+                      {l === 'auto' ? t('transcription.languageAuto') : l === 'fi' ? t('transcription.languageFi') : t('transcription.languageEn')}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <Text style={local.hint}>{t('transcription.languageHint')}</Text>
+            </View>
+
             <Text style={styles.sectionHeader}>{t('transcription.modelTitle')}</Text>
             <View style={local.block}>
               <Text style={local.status}>

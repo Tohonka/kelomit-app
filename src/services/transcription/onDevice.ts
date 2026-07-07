@@ -1,7 +1,7 @@
 import {initWhisper} from 'whisper.rn';
 import {MODEL_PATH, getModelState} from './modelManager';
 import {TranscriptionError} from './whisperApi';
-import {useSettingsStore} from '../../store/settingsStore';
+import {getSetting} from '../../db/settings';
 
 /** Transcribe a 16 kHz mono WAV entirely on-device. Loads the model, runs,
  *  then releases the context (frees ~140 MB). ponytail: cache the context if
@@ -12,8 +12,10 @@ export async function transcribe(audioUri: string): Promise<string> {
   }
   const filePath = audioUri.startsWith('file://') ? audioUri : `file://${audioUri}`;
   // The base model's language auto-detect is unreliable (mis-IDs Finnish as
-  // English → gibberish), so hint it with the app's active language ('en'|'fi').
-  const language = useSettingsStore.getState().language;
+  // English → gibberish), so honour the explicit transcription_language setting.
+  // 'auto'/unset falls back to whisper's own auto-detect.
+  const setting = await getSetting('transcription_language');
+  const language = setting === 'fi' || setting === 'en' ? setting : 'auto';
   let ctx: Awaited<ReturnType<typeof initWhisper>> | null = null;
   try {
     ctx = await initWhisper({filePath: MODEL_PATH});
