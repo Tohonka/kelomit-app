@@ -234,4 +234,23 @@ export const migrations: Migration[] = [
       'ALTER TABLE entry_media ADD COLUMN transcript TEXT',
     ],
   },
+  {
+    version: 15,
+    up: [
+      // On-device diagnostics — structured, queryable event log for debugging
+      // intermittent GPS / background-service behaviour over days of real use.
+      // The parallel flat `diag.log` file (written by JS AND the native FGS) is
+      // the survives-process-death timeline; this table is the JS-side queryable
+      // half, fed by the single logDiag() hook. Retention-pruned by time.
+      `CREATE TABLE IF NOT EXISTS diag_log (
+        id      INTEGER PRIMARY KEY AUTOINCREMENT,
+        ts      TEXT NOT NULL,
+        source  TEXT,
+        tag     TEXT,
+        msg     TEXT,
+        data    TEXT
+      )`,
+      'CREATE INDEX IF NOT EXISTS idx_diag_log_ts ON diag_log(ts)',
+    ],
+  },
 ];

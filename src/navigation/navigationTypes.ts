@@ -30,6 +30,7 @@ export type RootStackParamList = {
   LocationSettings: undefined;
   WidgetSettings: undefined;
   TranscriptionSettings: undefined;
+  DiagnosticsSettings: undefined;
 };
 
 export type TabParamList = {

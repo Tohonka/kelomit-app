@@ -19,6 +19,7 @@ import QuickAddSettings from '../screens/settings/QuickAddSettings';
 import LocationSettings from '../screens/settings/LocationSettings';
 import WidgetSettings from '../screens/settings/WidgetSettings';
 import TranscriptionSettings from '../screens/settings/TranscriptionSettings';
+import DiagnosticsSettings from '../screens/settings/DiagnosticsSettings';
 import {useTheme} from '../theme';
 import type {RootStackParamList} from './navigationTypes';
 
@@ -133,6 +134,11 @@ export default function RootNavigator() {
         name="TranscriptionSettings"
         component={TranscriptionSettings}
         options={{title: t('transcription.title')}}
+      />
+      <Stack.Screen
+        name="DiagnosticsSettings"
+        component={DiagnosticsSettings}
+        options={{title: t('diagnostics.title')}}
       />
     </Stack.Navigator>
   );

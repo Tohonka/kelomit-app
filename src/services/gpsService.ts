@@ -1,5 +1,6 @@
 import Geolocation, {type GeolocationResponse} from '@react-native-community/geolocation';
-import {Platform} from 'react-native';
+import {Platform, AppState, type AppStateStatus} from 'react-native';
+import {diag} from './diag';
 import {check, request, PERMISSIONS, RESULTS} from 'react-native-permissions';
 import {isOutlier, distanceMeters, isStationaryJitter} from './locationUtils';
 import {
@@ -70,6 +71,14 @@ let _nativeSub: {remove: () => void} | null = null;
 let _lastAcceptedFixMs = 0;
 let _configured = false;
 let _lastError: string | null = null;
+
+// Diagnostics: last time ANY fix arrived (pre-dedup) + a watchdog that flags the
+// JS watch silently dying (no error callback, no fixes). ponytail: tune on device.
+let _lastFixArrivedMs = 0;
+let _watchdog: ReturnType<typeof setInterval> | null = null;
+let _appStateHooked = false;
+const WATCHDOG_MS = 60_000;
+const STALL_MS = 3 * 60_000; // no fix for 3 min while actively (non-parked) tracking
 
 /** Human-readable detail of the most recent one-shot location failure, for
  *  surfacing in the UI while diagnosing device issues. */
@@ -276,6 +285,9 @@ export async function startTracking(intervalMs = 60_000): Promise<void> {
   _stationaryStreak = 0;
   _lastAcceptedFixMs = 0;
   _active = true;
+  diag('track.start', `interval=${intervalMs}`);
+  startWatchdog();
+  hookAppState();
 
   // JS watch is the always-on baseline — never worse than the pre-5.7 build.
   armWatch(FAST_INTERVAL_MS, true);
@@ -313,6 +325,36 @@ function handleNativeFix(fix: NativeFix): void {
  *  mode or tier change. Slow mode uses low accuracy (no GPS chip; wifi/cell
  *  is enough to notice departure and the >MAX_TRAIL_ACCURACY_M filter keeps
  *  poor fixes out of the trail). */
+/** Flags the JS watch silently dying: actively tracking (not parked) yet no fix
+ *  from either source for STALL_MS. Runs off a JS interval, so it's reliable in
+ *  the foreground; the native heartbeat covers the backgrounded case. */
+function startWatchdog(): void {
+  if (_watchdog !== null) {
+    return;
+  }
+  _watchdog = setInterval(() => {
+    if (!_active || _trackingMode === 'parked') {
+      return;
+    }
+    const sinceFix = _lastFixArrivedMs === 0 ? -1 : Date.now() - _lastFixArrivedMs;
+    if (sinceFix > STALL_MS) {
+      diag('watch.stall', `sinceFixMs=${sinceFix} mode=${_trackingMode} watchId=${_watchId}`);
+    }
+  }, WATCHDOG_MS);
+}
+
+/** Log app foreground/background transitions once — a lens on whether listeners
+ *  survive lifecycle events (a stall right after 'active' = re-register bug). */
+function hookAppState(): void {
+  if (_appStateHooked) {
+    return;
+  }
+  _appStateHooked = true;
+  AppState.addEventListener('change', (s: AppStateStatus) => {
+    diag('app.state', s, {active: _active, mode: _trackingMode, watchId: _watchId});
+  });
+}
+
 function armWatch(intervalMs: number, highAccuracy: boolean): void {
   if (_watchId !== null) {
     Geolocation.clearWatch(_watchId);
@@ -325,8 +367,10 @@ function armWatch(intervalMs: number, highAccuracy: boolean): void {
     pos => {
       handlePosition(pos);
     },
-    _err => {
-      // Silently ignore individual position errors
+    err => {
+      // Individual fixes still aren't fatal, but a silently-swallowed error was
+      // exactly the blind spot — record it (code 2=unavailable, 3=timeout).
+      diag('watch.error', `code=${err.code}`, {message: err.message});
     },
     {
       enableHighAccuracy: highAccuracy,
@@ -335,6 +379,7 @@ function armWatch(intervalMs: number, highAccuracy: boolean): void {
       fastestInterval: Math.min(intervalMs, 15_000),
     },
   );
+  diag('watch.arm', `interval=${intervalMs} highAcc=${highAccuracy}`);
 }
 
 /** Apply the desired mode to both sources. Re-arms only when the effective
@@ -377,6 +422,11 @@ function applyMode(mode: TrackingMode, speed: number | null): void {
 }
 
 export function stopTracking(): void {
+  diag('track.stop', '');
+  if (_watchdog !== null) {
+    clearInterval(_watchdog);
+    _watchdog = null;
+  }
   if (_watchId !== null) {
     Geolocation.clearWatch(_watchId);
     _watchId = null;
@@ -403,6 +453,7 @@ async function handlePosition(
   // Two sources (JS watch + native FGS) can both deliver fixes; collapse
   // near-simultaneous duplicates so points/geofences aren't double-counted.
   const arrivedMs = Date.now();
+  _lastFixArrivedMs = arrivedMs; // pre-dedup: proves the source is still alive
   if (isDuplicateFix(arrivedMs, _lastAcceptedFixMs, dedupGapMs(_currentIntervalMs))) {
     return;
   }

@@ -52,6 +52,10 @@ class LocationService : Service() {
     const val EXTRA_INTERVAL = "interval_ms"
     const val DEFAULT_INTERVAL_MS = 4000L
 
+    // Diagnostics heartbeat: at most one "still alive" line per this interval,
+    // driven off incoming fixes (no extra wakeups). ponytail: tune on device.
+    private const val HEARTBEAT_MS = 10 * 60 * 1000L
+
     // Same-process handle so JS can retune the running service without
     // startForegroundService (which Android 12+ forbids from the background).
     @Volatile
@@ -80,9 +84,24 @@ class LocationService : Service() {
       PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
     )
   }
+  // Diagnostics state: last availability (log only transitions) + a throttle so
+  // the per-fix heartbeat lands at most every HEARTBEAT_MS.
+  private var lastAvailable: Boolean? = null
+  private var lastHeartbeatAt = 0L
+  private var lastFixAt = 0L
   private val callback = object : LocationCallback() {
     override fun onLocationResult(result: LocationResult) {
       result.lastLocation?.let { emitLocation(it) }
+    }
+
+    // The "provider degrading" signal Tommi asked about: fires false when the
+    // fused provider can no longer produce fixes (sensors off, indoors, Doze).
+    override fun onLocationAvailability(availability: com.google.android.gms.location.LocationAvailability) {
+      val available = availability.isLocationAvailable
+      if (available != lastAvailable) {
+        lastAvailable = available
+        DiagLog.write(this@LocationService, "loc.availability", "available=$available parked=$parked")
+      }
     }
   }
 
@@ -94,6 +113,7 @@ class LocationService : Service() {
     fusedClient = LocationServices.getFusedLocationProviderClient(this)
     geofencingClient = LocationServices.getGeofencingClient(this)
     activityClient = ActivityRecognition.getClient(this)
+    DiagLog.write(this, "svc.onCreate", "")
   }
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -104,6 +124,7 @@ class LocationService : Service() {
       startForeground(NOTIF_ID, notification)
     }
     val interval = intent?.getLongExtra(EXTRA_INTERVAL, DEFAULT_INTERVAL_MS) ?: DEFAULT_INTERVAL_MS
+    DiagLog.write(this, "svc.onStart", "interval=$interval flags=$flags")
     startLocationUpdates(interval, Priority.PRIORITY_HIGH_ACCURACY)
     return START_STICKY
   }
@@ -146,7 +167,7 @@ class LocationService : Service() {
     geofencingClient?.addGeofences(request, geofencePendingIntent)
     requestActivityUpdates()
     parked = true
-    Log.d("KelomitLoc", "parked with ${fences.size} fence(s)")
+    DiagLog.write(this, "park.enter", "fences=${fences.size}")
     updateNotification(paused = true)
   }
 
@@ -187,7 +208,7 @@ class LocationService : Service() {
 
   /** Geofence-exit wake (from GeofenceExitReceiver). */
   fun onGeofenceExitWake() {
-    Log.d("KelomitLoc", "geofence exit wake")
+    DiagLog.write(this, "wake.geofence", "parked=$parked")
     exitParked(restart = true)
   }
 
@@ -195,7 +216,7 @@ class LocationService : Service() {
    *  started moving while parked. Ignore stray transitions when not parked. */
   fun onActivityMoveWake() {
     if (!parked) return
-    Log.d("KelomitLoc", "activity move wake -> exit parked")
+    DiagLog.write(this, "wake.activity", "")
     exitParked(restart = true)
   }
 
@@ -203,6 +224,7 @@ class LocationService : Service() {
     geofencingClient?.removeGeofences(geofencePendingIntent)
     removeActivityUpdates()
     parked = false
+    DiagLog.write(this, "park.exit", "restart=$restart")
     updateNotification(paused = false)
     if (restart) {
       startLocationUpdates(DEFAULT_INTERVAL_MS, Priority.PRIORITY_HIGH_ACCURACY)
@@ -243,11 +265,21 @@ class LocationService : Service() {
       "KelomitLoc",
       "fix lat=${loc.latitude} lon=${loc.longitude} spd=${loc.speed} acc=${loc.accuracy} ctx=${reactContext != null}",
     )
+    // Heartbeat: throttled proof-of-life with the gap since the last fix (a big
+    // gap = provider stall or a Doze throttle) and whether JS is reachable.
+    val now = System.currentTimeMillis()
+    if (now - lastHeartbeatAt >= HEARTBEAT_MS) {
+      val sinceFix = if (lastFixAt == 0L) -1 else now - lastFixAt
+      DiagLog.write(this, "hb", "sinceFixMs=$sinceFix acc=${loc.accuracy} ctx=${reactContext != null}")
+      lastHeartbeatAt = now
+    }
+    lastFixAt = now
     reactContext?.emitDeviceEvent("onBackgroundLocation", map)
   }
 
   override fun onDestroy() {
     super.onDestroy()
+    DiagLog.write(this, "svc.onDestroy", "parked=$parked")
     fusedClient?.removeLocationUpdates(callback)
     geofencingClient?.removeGeofences(geofencePendingIntent)
     removeActivityUpdates()
