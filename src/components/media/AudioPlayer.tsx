@@ -1,7 +1,7 @@
 import React, {useMemo, useState, useEffect} from 'react';
 import {View, Text, TouchableOpacity, StyleSheet, type ViewStyle} from 'react-native';
-import audioRecorderPlayer from 'react-native-audio-recorder-player';
-import type {PlayBackType} from 'react-native-audio-recorder-player';
+import audioRecorderPlayer from 'react-native-nitro-sound';
+import type {PlayBackType} from 'react-native-nitro-sound';
 import {useTheme, typography, spacing, radius} from '../../theme';
 import type {Colors} from '../../theme';
 

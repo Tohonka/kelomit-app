@@ -22,7 +22,7 @@
          to app-scoped storage.
          READ_MEDIA_IMAGES/VIDEO/AUDIO are simply not declared.
          READ/WRITE_EXTERNAL_STORAGE ARE injected by transitive deps
-         (react-native-audio-recorder-player + react-native-fs, uncapped), so
+         (audio/media libs + react-native-fs, uncapped), so
          they must be force-removed from the merged manifest below. Re-add a
          specific permission only if a feature genuinely needs shared storage,
          with a comment explaining why. -->
