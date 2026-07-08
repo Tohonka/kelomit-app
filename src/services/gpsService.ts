@@ -33,10 +33,6 @@ import {usualHoursForDate} from '../utils/usualHours';
 import {format} from 'date-fns';
 import type {SavedLocation, Day} from '../types';
 
-// Trail point spacing. Tighter than the old 20 m so the path reflects real
-// movement; stationary GPS drift is rejected by isStationaryJitter below.
-const TRAIL_DISTANCE_FILTER_M = 10;
-
 // Reject fixes worse than this (metres) from the trail — indoor network fixes
 // can read 60-80 m and wander, polluting the path. ponytail: tune on device.
 const MAX_TRAIL_ACCURACY_M = 50;
@@ -374,7 +370,12 @@ function armWatch(intervalMs: number, highAccuracy: boolean): void {
     },
     {
       enableHighAccuracy: highAccuracy,
-      distanceFilter: TRAIL_DISTANCE_FILTER_M, // metres — minimum movement before update
+      // No provider distanceFilter: it withheld ALL fixes while stationary, so
+      // the fix-driven fast→slow downgrade never happened and the watch dead-
+      // locked in fast mode (see 5-hour gap 2026-07-08). Fixes now flow at the
+      // interval cadence; the trail stays clean via the isStationaryJitter +
+      // MAX_TRAIL_ACCURACY_M gate in handlePosition (which already ran per-fix).
+      distanceFilter: 0,
       interval: intervalMs,
       fastestInterval: Math.min(intervalMs, 15_000),
     },
@@ -487,14 +488,12 @@ async function handlePosition(
   // parked (zero requests, OS geofence wake) when still inside a saved place
   // with the native FGS running. See trackingMode.ts + spec 5.9.
   _stationaryStreak = movingNow ? 0 : _stationaryStreak + 1;
-  // Park gating: needs the native FGS (to receive the geofence wake), a saved
-  // place we're inside (_insideIds lags this fix by one — processGeofences
-  // below updates it; self-correcting, worst case parks one fix late), and no
-  // unresolved end-of-day exit: the >1 h eod rule is tick-driven and ticks
-  // stop while parked, so parking waits (≤1 h of slow mode) until the pending
-  // exit resolves. ponytail: a manual end can leave pendingExit stuck → no
-  // parking that evening, i.e. pre-5.9 slow-mode behavior; acceptable.
-  const canPark = _nativeActive && _insideIds.size > 0 && _eod.pendingExit === null;
+  // ponytail: parking ("no tracking rule") disabled for now — slow mode (60 s,
+  // balanced power) is the battery floor and movement detection carries it.
+  // Leaves the native geofence-exit + activity-recognition wake code dormant;
+  // re-enable (restore the _nativeActive && _insideIds.size > 0 && pendingExit
+  // gate) when the stop-tracking widget lands. See fix/gps-tracking handoff.
+  const canPark = false;
   applyMode(nextTrackingMode(_trackingMode, movingNow, _stationaryStreak, canPark), speed);
 
   // Persist to DB + run geofence detection

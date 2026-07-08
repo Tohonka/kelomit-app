@@ -430,7 +430,7 @@ const en = {
     radius: '{{m}} m radius',
     decreaseRadius: 'Decrease radius',
     increaseRadius: 'Increase radius',
-    radiusFloorHint: 'Minimum radius is 50 m to protect your privacy.',
+    radiusFloorHint: 'Minimum radius is 14 m (GPS accuracy limit).',
     noPosition: 'Could not get your location. Make sure location is on and try again.',
     autoStampHint: 'Arriving at a Work place auto-fills the day start time, and leaving fills the end time — only when you haven\'t set them yourself.',
     deleteTitle: 'Remove place',

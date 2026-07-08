@@ -432,7 +432,7 @@ const fi: typeof en = {
     radius: '{{m}} m säde',
     decreaseRadius: 'Pienennä sädettä',
     increaseRadius: 'Suurenna sädettä',
-    radiusFloorHint: 'Pienin säde on 50 m yksityisyytesi suojaamiseksi.',
+    radiusFloorHint: 'Pienin säde on 14 m (GPS-tarkkuuden raja).',
     noPosition: 'Sijaintia ei saatu. Varmista että paikannus on päällä ja yritä uudelleen.',
     autoStampHint: 'Työpaikalle saapuminen täyttää päivän aloitusajan ja sieltä lähteminen lopetusajan – vain jos et ole itse asettanut niitä.',
     deleteTitle: 'Poista paikka',

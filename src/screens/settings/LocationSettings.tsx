@@ -3,12 +3,11 @@ import {View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert} from 'react
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useTranslation} from 'react-i18next';
 import {useLocationStore} from '../../store/locationStore';
-import {MIN_RADIUS_M} from '../../db/locations';
+import {MIN_RADIUS_M, radiusStep} from '../../db/locations';
 import {getCurrentPositionOnce, getLastPositionError} from '../../services/gpsService';
 import type {KnownPosition} from '../../services/gpsService';
 import {distanceMeters} from '../../services/locationUtils';
 
-const RADIUS_STEP_M = 25;
 import {useTheme, typography, spacing, radius} from '../../theme';
 import type {Colors} from '../../theme';
 import type {LocationKind} from '../../types';
@@ -178,7 +177,7 @@ export default function LocationSettings() {
                     disabled={atFloor}
                     accessibilityRole="button"
                     accessibilityLabel={t('location.decreaseRadius')}
-                    onPress={() => setRadius(loc.id, loc.radius_m - RADIUS_STEP_M)}>
+                    onPress={() => setRadius(loc.id, loc.radius_m - radiusStep(loc.radius_m))}>
                     <Text style={local.stepBtnText}>−</Text>
                   </TouchableOpacity>
                   <Text style={local.radiusValue}>{t('location.radius', {m: loc.radius_m})}</Text>
@@ -186,7 +185,7 @@ export default function LocationSettings() {
                     style={local.stepBtn}
                     accessibilityRole="button"
                     accessibilityLabel={t('location.increaseRadius')}
-                    onPress={() => setRadius(loc.id, loc.radius_m + RADIUS_STEP_M)}>
+                    onPress={() => setRadius(loc.id, loc.radius_m + radiusStep(loc.radius_m))}>
                     <Text style={local.stepBtnText}>+</Text>
                   </TouchableOpacity>
                 </View>

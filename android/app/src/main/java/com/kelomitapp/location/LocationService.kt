@@ -244,8 +244,11 @@ class LocationService : Service() {
     ) {
       return // JS owns the permission prompt; do nothing until granted
     }
+    // No setMinUpdateDistanceMeters: a distance filter withheld all fixes while
+    // stationary, starving JS's fix-driven fast→slow downgrade (5-hour deadlock
+    // 2026-07-08). Fixes flow at the interval; JS's isStationaryJitter gate keeps
+    // stationary drift out of the trail.
     val request = LocationRequest.Builder(priority, intervalMs)
-      .setMinUpdateDistanceMeters(10f)
       .build()
     client.removeLocationUpdates(callback)
     client.requestLocationUpdates(request, callback, Looper.getMainLooper())

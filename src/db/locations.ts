@@ -3,7 +3,7 @@ import type {SavedLocation, LocationKind, GeofenceEvent} from '../types';
 import {clampRadius, DEFAULT_RADIUS_M} from '../utils/geofence';
 
 // Re-export so existing call sites can keep importing from db/locations.
-export {clampRadius, MIN_RADIUS_M, DEFAULT_RADIUS_M} from '../utils/geofence';
+export {clampRadius, radiusStep, MIN_RADIUS_M, DEFAULT_RADIUS_M} from '../utils/geofence';
 
 type RawRow = Record<string, unknown>;
 
