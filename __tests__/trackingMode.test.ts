@@ -54,6 +54,21 @@ describe('nextTrackingMode', () => {
   it('stays slow while still and under the threshold', () => {
     expect(nextTrackingMode('slow', false, 1)).toBe('slow');
   });
+
+  it('does NOT relax to slow while recently moving (drought guard)', () => {
+    // A GPS-lock drought during movement yields poor "stationary" fixes; the
+    // recentlyMoving guard must keep us in fast so the chip re-acquires instead
+    // of powering down to balanced-power slow (the scooter death spiral).
+    expect(
+      nextTrackingMode('fast', false, STATIONARY_STREAK_TO_SLOW, false, true),
+    ).toBe('fast');
+  });
+
+  it('relaxes to slow once movement memory has expired', () => {
+    expect(
+      nextTrackingMode('fast', false, STATIONARY_STREAK_TO_SLOW, false, false),
+    ).toBe('slow');
+  });
 });
 
 describe('nextTrackingMode – parked', () => {
@@ -107,10 +122,20 @@ describe('fastIntervalForSpeed', () => {
 
   it('uses the normal fast interval when speed is unknown', () => {
     expect(fastIntervalForSpeed(null)).toBe(FAST_INTERVAL_MS);
+    expect(fastIntervalForSpeed(null, SPRINT_INTERVAL_MS)).toBe(FAST_INTERVAL_MS);
   });
 
-  it('sprints exactly at the threshold', () => {
-    expect(fastIntervalForSpeed(3.0)).toBe(SPRINT_INTERVAL_MS);
+  // Hysteresis: enter sprint at 3.5 m/s, exit at 2.5 — so speed wobbling around
+  // the old flat 3.0 boundary no longer re-arms the watch every couple seconds.
+  it('does not enter sprint until above the enter threshold', () => {
+    expect(fastIntervalForSpeed(3.0, FAST_INTERVAL_MS)).toBe(FAST_INTERVAL_MS);
+    expect(fastIntervalForSpeed(3.5, FAST_INTERVAL_MS)).toBe(SPRINT_INTERVAL_MS);
+  });
+
+  it('stays in sprint through a dip until below the exit threshold', () => {
+    expect(fastIntervalForSpeed(3.0, SPRINT_INTERVAL_MS)).toBe(SPRINT_INTERVAL_MS);
+    expect(fastIntervalForSpeed(2.5, SPRINT_INTERVAL_MS)).toBe(SPRINT_INTERVAL_MS);
+    expect(fastIntervalForSpeed(2.4, SPRINT_INTERVAL_MS)).toBe(FAST_INTERVAL_MS);
   });
 });
 

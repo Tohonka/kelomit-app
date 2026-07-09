@@ -10,6 +10,7 @@ import {
   fastIntervalForSpeed,
   dedupGapMs,
   FAST_INTERVAL_MS,
+  STATIONARY_STREAK_TO_SLOW,
   type TrackingMode,
 } from './trackingMode';
 import {insertGpsPoint} from '../db/gps';
@@ -75,6 +76,15 @@ let _watchdog: ReturnType<typeof setInterval> | null = null;
 let _appStateHooked = false;
 const WATCHDOG_MS = 60_000;
 const STALL_MS = 3 * 60_000; // no fix for 3 min while actively (non-parked) tracking
+
+// Movement memory: while a trustworthy fix showed real movement this recently,
+// refuse the fast→slow power-down. A GPS-lock drought during movement yields
+// poor network fixes that read as "stationary"; without this, 3 of them (~12 s)
+// dropped us to balanced-power slow, which then can't re-acquire while moving —
+// the e-scooter death spiral (2026-07-09). ponytail: tune on device.
+const MOVEMENT_MEMORY_MS = 120_000;
+// Wall-clock of the last good-accuracy MOVING fix (0 = none this session).
+let _lastMovingFixMs = 0;
 
 /** Human-readable detail of the most recent one-shot location failure, for
  *  surfacing in the UI while diagnosing device issues. */
@@ -280,6 +290,7 @@ export async function startTracking(intervalMs = 60_000): Promise<void> {
   _trackingMode = 'fast';
   _stationaryStreak = 0;
   _lastAcceptedFixMs = 0;
+  _lastMovingFixMs = 0;
   _active = true;
   diag('track.start', `interval=${intervalMs}`);
   startWatchdog();
@@ -407,7 +418,7 @@ function applyMode(mode: TrackingMode, speed: number | null): void {
     }
     return;
   }
-  const interval = mode === 'fast' ? fastIntervalForSpeed(speed) : _slowIntervalMs;
+  const interval = mode === 'fast' ? fastIntervalForSpeed(speed, _currentIntervalMs) : _slowIntervalMs;
   const highAccuracy = mode === 'fast';
   if (
     mode !== _trackingMode ||
@@ -440,6 +451,7 @@ export function stopTracking(): void {
   _active = false;
   _nativeActive = false;
   _lastAcceptedFixMs = 0;
+  _lastMovingFixMs = 0;
   _lastPosition = null;
   _lastRecordedPosition = null;
   _trackingMode = 'fast';
@@ -488,13 +500,42 @@ async function handlePosition(
   // parked (zero requests, OS geofence wake) when still inside a saved place
   // with the native FGS running. See trackingMode.ts + spec 5.9.
   _stationaryStreak = movingNow ? 0 : _stationaryStreak + 1;
+  // Movement memory: only a trustworthy (good-accuracy) moving fix refreshes it.
+  // Poor network fixes (acc > MAX_TRAIL_ACCURACY_M) carry no reliable movement
+  // signal, so they neither set nor clear it — that's what stops a lost-lock
+  // drought from masquerading as "stationary" and powering us down.
+  if (movingNow && accuracy != null && accuracy <= MAX_TRAIL_ACCURACY_M) {
+    _lastMovingFixMs = arrivedMs;
+  }
+  const recentlyMoving =
+    _lastMovingFixMs > 0 && arrivedMs - _lastMovingFixMs < MOVEMENT_MEMORY_MS;
   // ponytail: parking ("no tracking rule") disabled for now — slow mode (60 s,
   // balanced power) is the battery floor and movement detection carries it.
   // Leaves the native geofence-exit + activity-recognition wake code dormant;
   // re-enable (restore the _nativeActive && _insideIds.size > 0 && pendingExit
   // gate) when the stop-tracking widget lands. See fix/gps-tracking handoff.
   const canPark = false;
-  applyMode(nextTrackingMode(_trackingMode, movingNow, _stationaryStreak, canPark), speed);
+  const desiredMode = nextTrackingMode(
+    _trackingMode,
+    movingNow,
+    _stationaryStreak,
+    canPark,
+    recentlyMoving,
+  );
+  // Confirms the guard on the next device capture: fires only when a would-be
+  // downgrade to slow was held off because we moved recently (the fix working).
+  if (
+    !movingNow &&
+    recentlyMoving &&
+    _stationaryStreak >= STATIONARY_STREAK_TO_SLOW &&
+    desiredMode !== 'slow'
+  ) {
+    diag('mode.hold', `held ${_trackingMode} sinceMoveMs=${arrivedMs - _lastMovingFixMs}`, {
+      streak: _stationaryStreak,
+      acc: accuracy,
+    });
+  }
+  applyMode(desiredMode, speed);
 
   // Persist to DB + run geofence detection
   try {

@@ -4,10 +4,13 @@ export type TrackingMode = 'fast' | 'slow' | 'parked';
 export const MOVE_SPEED_MS = 1.0; // m/s (~3.6 km/h) at/above which we treat as moving
 export const STATIONARY_STREAK_TO_SLOW = 3; // consecutive still fixes before backing off
 
-// Speed-tiered fast rate: above SPRINT_SPEED_MS (scooter/bike/car) sample at
-// SPRINT_INTERVAL_MS so corners aren't cut (25 km/h × 4 s ≈ 28 m between fixes).
-// ponytail: tune on device.
-export const SPRINT_SPEED_MS = 3.0; // m/s (~11 km/h)
+// Speed-tiered fast rate: at scooter/bike/car speed sample at SPRINT_INTERVAL_MS
+// so corners aren't cut (25 km/h × 4 s ≈ 28 m between fixes). Hysteresis band
+// (enter 3.5, exit 2.5) so speed wobbling around a single boundary doesn't
+// re-arm the watch every couple seconds — that churn destabilised the provider
+// on an e-scooter (2026-07-09). ponytail: tune on device.
+export const SPRINT_ENTER_MS = 3.5; // m/s (~13 km/h) — cross UP into sprint
+export const SPRINT_EXIT_MS = 2.5; // m/s (~9 km/h) — drop back to normal fast
 export const SPRINT_INTERVAL_MS = 2_000;
 export const FAST_INTERVAL_MS = 4_000;
 
@@ -34,9 +37,20 @@ export function isMoving(
   return displacementM / (elapsedMs / 1000) >= MOVE_SPEED_MS;
 }
 
-/** Interval for 'fast' mode, tiered by current speed. */
-export function fastIntervalForSpeed(speed: number | null): number {
-  return speed != null && speed >= SPRINT_SPEED_MS ? SPRINT_INTERVAL_MS : FAST_INTERVAL_MS;
+/** Interval for 'fast' mode, tiered by current speed with hysteresis. Pass the
+ *  current interval so the band knows which side we're on: once in sprint, stay
+ *  there until speed drops below the exit threshold; from normal fast, only
+ *  sprint once above the (higher) enter threshold. */
+export function fastIntervalForSpeed(
+  speed: number | null,
+  currentIntervalMs: number = FAST_INTERVAL_MS,
+): number {
+  if (speed == null) {
+    return FAST_INTERVAL_MS;
+  }
+  const inSprint = currentIntervalMs === SPRINT_INTERVAL_MS;
+  const threshold = inSprint ? SPRINT_EXIT_MS : SPRINT_ENTER_MS;
+  return speed >= threshold ? SPRINT_INTERVAL_MS : FAST_INTERVAL_MS;
 }
 
 /**
@@ -44,12 +58,19 @@ export function fastIntervalForSpeed(speed: number | null): number {
  * 'slow' after a sustained still streak; fully park (no location requests,
  * OS geofence wake) after STREAK_TO_PARK when `canPark` (still inside a saved
  * geofence AND the native FGS is running to receive the wake).
+ *
+ * `recentlyMoving` blocks the power-DOWN to slow: a GPS-lock drought during
+ * movement produces poor network fixes that read as "stationary" (speed 0/null),
+ * and dropping to balanced-power slow then can't re-acquire the chip while
+ * moving — the e-scooter death spiral (2026-07-09). While a trustworthy fix
+ * showed real movement recently, stay fast so the chip re-locks.
  */
 export function nextTrackingMode(
   prev: TrackingMode,
   movingNow: boolean,
   stationaryStreak: number,
   canPark: boolean = false,
+  recentlyMoving: boolean = false,
 ): TrackingMode {
   if (movingNow) {
     return 'fast';
@@ -57,7 +78,7 @@ export function nextTrackingMode(
   if (canPark && stationaryStreak >= STREAK_TO_PARK) {
     return 'parked';
   }
-  if (stationaryStreak >= STATIONARY_STREAK_TO_SLOW) {
+  if (!recentlyMoving && stationaryStreak >= STATIONARY_STREAK_TO_SLOW) {
     return 'slow';
   }
   return prev;
