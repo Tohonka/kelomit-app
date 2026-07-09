@@ -2,9 +2,11 @@ import RNFS from 'react-native-fs';
 import {getApiKey} from './keychain';
 
 const ENDPOINT = 'https://api.openai.com/v1/audio/transcriptions';
-// ponytail: whisper-1 is cheapest and auto-detects language (Finnish/English).
-// Swap to gpt-4o-mini-transcribe or a self-hosted endpoint here if needed.
-const MODEL = 'whisper-1';
+// ponytail: gpt-4o-transcribe — higher quality than whisper-1, auto-detects
+// language (Finnish/English), and accepts a `prompt` param for steering style
+// (e.g. verbatim, puhekieli) if that's added later. Only json/text
+// response_format is supported (no verbose_json/srt/vtt, unlike whisper-1).
+const MODEL = 'gpt-4o-transcribe';
 
 export type TranscriptionErrorKind =
   | 'no-key'
@@ -63,7 +65,7 @@ export async function transcribe(audioUri: string): Promise<string> {
   // RN FormData accepts this {uri,name,type} shape for file parts.
   form.append('file', {uri, name: part.name, type: part.type} as unknown as Blob);
   form.append('model', MODEL);
-  form.append('response_format', 'json');
+  form.append('response_format', 'json'); // gpt-4o-transcribe: only json/text supported
 
   let res: Response;
   try {
