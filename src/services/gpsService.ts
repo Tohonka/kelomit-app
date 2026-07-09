@@ -491,7 +491,14 @@ async function handlePosition(
     ) {
       return;
     }
-    movingNow = isMoving(speed, disp, elapsedMs);
+    // Displacement only counts as movement between two decent-accuracy fixes;
+    // poor network fixes wander tens of metres and would fake motion indoors.
+    const trustDisp =
+      accuracy != null &&
+      accuracy <= MAX_TRAIL_ACCURACY_M &&
+      _lastPosition.accuracy != null &&
+      _lastPosition.accuracy <= MAX_TRAIL_ACCURACY_M;
+    movingNow = isMoving(speed, trustDisp ? disp : 0, elapsedMs);
   }
 
   _lastPosition = {latitude, longitude, accuracy: accuracy ?? null, timestamp: now};

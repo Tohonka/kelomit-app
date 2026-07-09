@@ -20,16 +20,19 @@ export const FAST_INTERVAL_MS = 4_000;
 export const STREAK_TO_PARK = STATIONARY_STREAK_TO_SLOW + 2;
 
 /**
- * Whether the device is moving. Prefers the fused `speed` field; falls back to
- * displacement over elapsed time when speed is unavailable (null).
+ * Whether the device is moving: either signal clears the bar. Speed alone is
+ * NOT trusted as "still" — balanced-power network fixes report speed 0.0 (not
+ * null) while genuinely moving, which kept slow mode from ever upgrading and
+ * straight-lined whole commutes (2026-07-09). Callers gate `displacementM` on
+ * fix accuracy so wandering indoor fixes can't fake movement.
  */
 export function isMoving(
   speed: number | null,
   displacementM: number,
   elapsedMs: number,
 ): boolean {
-  if (speed != null) {
-    return speed >= MOVE_SPEED_MS;
+  if (speed != null && speed >= MOVE_SPEED_MS) {
+    return true;
   }
   if (elapsedMs <= 0) {
     return false;

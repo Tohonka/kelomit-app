@@ -16,9 +16,14 @@ describe('isMoving', () => {
     expect(isMoving(2.0, 0, 1000)).toBe(true);
   });
 
-  it('uses speed when present and ignores displacement (still)', () => {
-    // speed says still even though displacement is large → still
-    expect(isMoving(0.2, 9999, 1000)).toBe(false);
+  it('trusts displacement even when speed reads 0 — network fixes lie', () => {
+    // Ride-home regression 2026-07-09: balanced-power network fixes report
+    // speed 0.0 (not null) while the position moved 380 m in ~2 min.
+    expect(isMoving(0.0, 380, 123_000)).toBe(true); // ~3.1 m/s
+  });
+
+  it('stays still when neither speed nor displacement clears the bar', () => {
+    expect(isMoving(0.2, 30, 60_000)).toBe(false); // 0.5 m/s wander
   });
 
   it('falls back to displacement/elapsed when speed is null (moving)', () => {
@@ -31,10 +36,6 @@ describe('isMoving', () => {
 
   it('is not moving on the first fix (no speed, zero elapsed)', () => {
     expect(isMoving(null, 0, 0)).toBe(false);
-  });
-
-  it('treats exactly-zero speed as still', () => {
-    expect(isMoving(0.0, 9999, 1000)).toBe(false);
   });
 });
 
