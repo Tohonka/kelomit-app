@@ -329,9 +329,9 @@ function handleNativeFix(fix: NativeFix): void {
 
 /** (Re)create the position watch with the given cadence and power level.
  *  Clears any existing watch first, so it doubles as the re-arm used on a
- *  mode or tier change. Slow mode uses low accuracy (no GPS chip; wifi/cell
- *  is enough to notice departure and the >MAX_TRAIL_ACCURACY_M filter keeps
- *  poor fixes out of the trail). */
+ *  mode or tier change. All modes use high accuracy; slow mode saves battery
+ *  purely via the long interval (low accuracy starved movement detection and
+ *  deadlocked the ladder — see applyMode). */
 /** Flags the JS watch silently dying: actively tracking (not parked) yet no fix
  *  from either source for STALL_MS. Runs off a JS interval, so it's reliable in
  *  the foreground; the native heartbeat covers the backgrounded case. */
@@ -419,7 +419,10 @@ function applyMode(mode: TrackingMode, speed: number | null): void {
     return;
   }
   const interval = mode === 'fast' ? fastIntervalForSpeed(speed, _currentIntervalMs) : _slowIntervalMs;
-  const highAccuracy = mode === 'fast';
+  // Always high accuracy: low-accuracy slow fixes report speed=null + huge
+  // accuracy, so JS can't detect movement resuming and never upgrades back to
+  // fast (straight-lined commutes 2026-07-10). Battery saving is in the interval.
+  const highAccuracy = true;
   if (
     mode !== _trackingMode ||
     interval !== _currentIntervalMs ||

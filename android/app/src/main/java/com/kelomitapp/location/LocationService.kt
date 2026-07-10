@@ -133,12 +133,12 @@ class LocationService : Service() {
    *  Also exits parked state (JS calls this on app-foreground wake). */
   fun updateMode(mode: String, ms: Long) {
     if (parked) exitParked(restart = false)
-    val priority = if (mode == "slow") {
-      Priority.PRIORITY_BALANCED_POWER_ACCURACY // no GPS chip while idling
-    } else {
-      Priority.PRIORITY_HIGH_ACCURACY
-    }
-    startLocationUpdates(ms, priority)
+    // Always high-accuracy, even in slow mode. BALANCED_POWER drops the GPS chip
+    // for network/cell fixes, which report speed=null + huge accuracy — so once
+    // slow, JS could never see the real speed/displacement that upgrades back to
+    // fast, and whole commutes straight-lined (2026-07-10). The battery saving in
+    // slow comes from the long interval (ms), not the accuracy flag.
+    startLocationUpdates(ms, Priority.PRIORITY_HIGH_ACCURACY)
   }
 
   /** Park: drop the location request entirely; arm OS geofence-exit wakes.
