@@ -44,3 +44,4 @@ node_modules
 deploy.config.json
 .kuiskaus.env
 .DS_Store
+.DS_Store
