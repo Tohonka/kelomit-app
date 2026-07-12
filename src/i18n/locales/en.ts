@@ -102,6 +102,13 @@ const en = {
     distance: 'Distance',
     duration: 'Duration',
   },
+  map: {
+    todaysMap: "Today's map",
+    fullScreen: 'Full screen',
+    locations: 'Locations',
+    noVisits: 'No stops tracked yet today.',
+    unknownPlace: 'Unknown place',
+  },
   gallery: {
     groupDay: 'Day',
     groupWeek: 'Week',
@@ -429,6 +436,8 @@ const en = {
     addCurrent: 'Save current position',
     atWorkNow: "I'm at work now",
     atHomeNow: "I'm at home now",
+    saveHere: 'Save this place',
+    namePlaceholder: 'Place name (optional)',
     work: 'Work',
     home: 'Home',
     detected: 'Detected: {{place}}',
@@ -448,6 +457,9 @@ const en = {
     checking: 'Checking…',
     accuracy: '±{{m}} m',
     noPlaceMatch: 'Not inside any saved place',
+    placesKey: 'Google Places API key',
+    placesKeyPlaceholder: 'Paste API key (optional)',
+    placesKeyHint: 'Used to name stops that aren\'t a saved place. Only the place name is fetched (free Places tier). Needs a REST-callable key with the Places API enabled.',
   },
   permissions: {
     requiredTitle: 'Permission required',

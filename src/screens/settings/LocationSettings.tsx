@@ -1,5 +1,5 @@
 import React, {useEffect, useMemo, useState} from 'react';
-import {View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert} from 'react-native';
+import {View, Text, TextInput, ScrollView, TouchableOpacity, StyleSheet, Alert} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useTranslation} from 'react-i18next';
 import {useLocationStore} from '../../store/locationStore';
@@ -7,6 +7,8 @@ import {MIN_RADIUS_M, radiusStep} from '../../db/locations';
 import {getCurrentPositionOnce, getLastPositionError} from '../../services/gpsService';
 import type {KnownPosition} from '../../services/gpsService';
 import {distanceMeters} from '../../services/locationUtils';
+import {getSetting, setSetting} from '../../db/settings';
+import {PLACES_API_KEY_SETTING} from '../../services/placesService';
 
 import {useTheme, typography, spacing, radius} from '../../theme';
 import type {Colors} from '../../theme';
@@ -52,6 +54,30 @@ const makeLocalStyles = (c: Colors) =>
     stepBtnDisabled: {opacity: 0.4},
     stepBtnText: {fontSize: 22, lineHeight: 26, color: c.textPrimary, fontWeight: typography.weights.semibold},
     radiusValue: {fontSize: typography.sizes.sm, color: c.textSecondary, minWidth: 88, textAlign: 'center'},
+    formWrap: {paddingHorizontal: spacing.lg, paddingTop: spacing.md, gap: spacing.sm},
+    nameInput: {
+      borderWidth: 1.5,
+      borderColor: c.border,
+      borderRadius: radius.md,
+      backgroundColor: c.bgCard,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      fontSize: typography.sizes.base,
+      color: c.textPrimary,
+    },
+    kindRow: {flexDirection: 'row', gap: spacing.sm},
+    kindChip: {
+      flex: 1,
+      paddingVertical: spacing.sm,
+      borderRadius: radius.md,
+      borderWidth: 1.5,
+      borderColor: c.border,
+      backgroundColor: c.bgMuted,
+      alignItems: 'center',
+    },
+    kindChipActive: {borderColor: c.primary, backgroundColor: c.primary + '18'},
+    kindChipText: {fontSize: typography.sizes.sm, color: c.textSecondary, fontWeight: typography.weights.medium},
+    kindChipTextActive: {color: c.primary, fontWeight: typography.weights.semibold},
     addRow: {flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingTop: spacing.md},
     addBtn: {
       flex: 1,
@@ -83,6 +109,16 @@ export default function LocationSettings() {
   const [saving, setSaving] = useState(false);
   const [checking, setChecking] = useState(false);
   const [checkPos, setCheckPos] = useState<KnownPosition | null>(null);
+  const [newName, setNewName] = useState('');
+  const [newKind, setNewKind] = useState<LocationKind>('work');
+  const [placesKey, setPlacesKey] = useState('');
+
+  useEffect(() => {
+    getSetting(PLACES_API_KEY_SETTING).then(v => setPlacesKey(v ?? '')).catch(() => {});
+  }, []);
+
+  const kindLabel = (k: LocationKind) =>
+    k === 'work' ? t('location.work') : k === 'home' ? t('location.home') : t('location.placeOther');
 
   useEffect(() => { if (!loaded) { load(); } }, [loaded, load]);
 
@@ -118,7 +154,7 @@ export default function LocationSettings() {
     return best?.loc ?? null;
   }, [checkPos, locations]);
 
-  const saveCurrent = async (kind: LocationKind) => {
+  const saveHere = async () => {
     setSaving(true);
     try {
       const pos = await getCurrentPositionOnce();
@@ -131,12 +167,13 @@ export default function LocationSettings() {
         return;
       }
       await add({
-        name: kind === 'work' ? t('location.work') : t('location.home'),
-        kind,
+        name: newName.trim() || kindLabel(newKind),
+        kind: newKind,
         latitude: pos.latitude,
         longitude: pos.longitude,
         radius_m: 150,
       });
+      setNewName('');
     } finally {
       setSaving(false);
     }
@@ -162,7 +199,7 @@ export default function LocationSettings() {
               <View key={loc.id} style={local.locItem}>
                 <View style={local.locTopRow}>
                   <Text style={local.locName}>
-                    {loc.name} · {loc.kind === 'work' ? t('location.work') : loc.kind === 'home' ? t('location.home') : loc.kind}
+                    {loc.name} · {kindLabel(loc.kind)}
                   </Text>
                   <TouchableOpacity onPress={() => confirmDelete(loc.id, loc.name)}>
                     <Text style={local.deleteText}>{t('common.delete')}</Text>
@@ -198,18 +235,36 @@ export default function LocationSettings() {
         )}
 
         <Text style={styles.sectionHeader}>{t('location.addCurrent')}</Text>
+        <View style={local.formWrap}>
+          <TextInput
+            style={local.nameInput}
+            value={newName}
+            onChangeText={setNewName}
+            placeholder={t('location.namePlaceholder')}
+            placeholderTextColor={colors.textMuted}
+            maxLength={60}
+          />
+          <View style={local.kindRow}>
+            {(['home', 'work', 'other'] as LocationKind[]).map(k => (
+              <TouchableOpacity
+                key={k}
+                style={[local.kindChip, newKind === k && local.kindChipActive]}
+                onPress={() => setNewKind(k)}>
+                <Text style={[local.kindChipText, newKind === k && local.kindChipTextActive]}>
+                  {kindLabel(k)}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
         <View style={local.addRow}>
           <TouchableOpacity
             style={[local.addBtn, saving && local.addBtnDisabled]}
             disabled={saving}
-            onPress={() => saveCurrent('work')}>
-            <Text style={local.addBtnText}>{t('location.atWorkNow')}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[local.addBtn, saving && local.addBtnDisabled]}
-            disabled={saving}
-            onPress={() => saveCurrent('home')}>
-            <Text style={local.addBtnText}>{t('location.atHomeNow')}</Text>
+            onPress={saveHere}>
+            <Text style={local.addBtnText}>
+              {saving ? t('location.checking') : t('location.saveHere')}
+            </Text>
           </TouchableOpacity>
         </View>
         <Text style={local.hint}>{t('location.autoStampHint')}</Text>
@@ -236,6 +291,21 @@ export default function LocationSettings() {
           </TouchableOpacity>
         </View>
         <Text style={local.hint}>{t('location.whereAmIHint')}</Text>
+
+        <Text style={styles.sectionHeader}>{t('location.placesKey')}</Text>
+        <View style={local.formWrap}>
+          <TextInput
+            style={local.nameInput}
+            value={placesKey}
+            onChangeText={setPlacesKey}
+            onEndEditing={() => setSetting(PLACES_API_KEY_SETTING, placesKey.trim())}
+            placeholder={t('location.placesKeyPlaceholder')}
+            placeholderTextColor={colors.textMuted}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+        </View>
+        <Text style={local.hint}>{t('location.placesKeyHint')}</Text>
       </ScrollView>
     </SafeAreaView>
   );

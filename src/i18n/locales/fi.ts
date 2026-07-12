@@ -104,6 +104,13 @@ const fi: typeof en = {
     distance: 'Matka',
     duration: 'Kesto',
   },
+  map: {
+    todaysMap: 'Päivän kartta',
+    fullScreen: 'Koko näyttö',
+    locations: 'Paikat',
+    noVisits: 'Ei vielä pysähdyksiä tänään.',
+    unknownPlace: 'Tuntematon paikka',
+  },
   gallery: {
     groupDay: 'Päivä',
     groupWeek: 'Viikko',
@@ -431,6 +438,8 @@ const fi: typeof en = {
     addCurrent: 'Tallenna nykyinen sijainti',
     atWorkNow: 'Olen nyt töissä',
     atHomeNow: 'Olen nyt kotona',
+    saveHere: 'Tallenna tämä paikka',
+    namePlaceholder: 'Paikan nimi (valinnainen)',
     work: 'Työ',
     home: 'Koti',
     detected: 'Tunnistettu: {{place}}',
@@ -450,6 +459,9 @@ const fi: typeof en = {
     checking: 'Tarkistetaan…',
     accuracy: '±{{m}} m',
     noPlaceMatch: 'Et ole missään tallennetussa paikassa',
+    placesKey: 'Google Places API -avain',
+    placesKeyPlaceholder: 'Liitä API-avain (valinnainen)',
+    placesKeyHint: 'Nimeää pysähdykset joita ei ole tallennettu paikaksi. Hakee vain paikan nimen (ilmainen Places-taso). Vaatii REST-yhteensopivan avaimen jolla Places API on käytössä.',
   },
   permissions: {
     requiredTitle: 'Lupa tarvitaan',

@@ -253,4 +253,18 @@ export const migrations: Migration[] = [
       'CREATE INDEX IF NOT EXISTS idx_diag_log_ts ON diag_log(ts)',
     ],
   },
+  {
+    version: 16,
+    up: [
+      // Places lookup cache — names for stays that don't fall inside a saved
+      // location, keyed by lat,lng rounded to ~11 m so we never re-bill Google
+      // for the same spot. Empty name = "checked, nothing nearby" (cached too).
+      `CREATE TABLE IF NOT EXISTS place_cache (
+        cell        TEXT PRIMARY KEY,
+        name        TEXT NOT NULL,
+        place_id    TEXT,
+        fetched_at  TEXT NOT NULL DEFAULT (datetime('now'))
+      )`,
+    ],
+  },
 ];
