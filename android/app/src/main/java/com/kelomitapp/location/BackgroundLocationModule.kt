@@ -7,6 +7,7 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.ReadableArray
+import com.kelomitapp.BuildConfig
 
 /**
  * JS bridge to start/stop the background-location foreground service
@@ -17,6 +18,10 @@ class BackgroundLocationModule(reactContext: ReactApplicationContext) :
   ReactContextBaseJavaModule(reactContext) {
 
   override fun getName() = "BackgroundLocation"
+
+  // Expose the build-time Google Maps key (from .maps.env) to JS so the Places
+  // lookup reuses the same key instead of storing a copy in the app database.
+  override fun getConstants(): Map<String, Any> = mapOf("mapsApiKey" to BuildConfig.MAPS_API_KEY)
 
   @ReactMethod
   fun start(promise: Promise) {

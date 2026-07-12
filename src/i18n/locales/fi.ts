@@ -459,9 +459,6 @@ const fi: typeof en = {
     checking: 'Tarkistetaan…',
     accuracy: '±{{m}} m',
     noPlaceMatch: 'Et ole missään tallennetussa paikassa',
-    placesKey: 'Google Places API -avain',
-    placesKeyPlaceholder: 'Liitä API-avain (valinnainen)',
-    placesKeyHint: 'Nimeää pysähdykset joita ei ole tallennettu paikaksi. Hakee vain paikan nimen (ilmainen Places-taso). Vaatii REST-yhteensopivan avaimen jolla Places API on käytössä.',
   },
   permissions: {
     requiredTitle: 'Lupa tarvitaan',

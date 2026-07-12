@@ -1,15 +1,13 @@
 import {getDB} from '../db/database';
-import {getSetting} from '../db/settings';
-
-export const PLACES_API_KEY_SETTING = 'places_api_key';
+import {getMapsApiKey} from '../native/backgroundLocation';
 
 // Google Places (New) lookup for naming a stay that doesn't fall inside a saved
 // location. Only the free-tier fields are requested — displayName + id via the
 // field mask, so the call bills at the Places "Pro" SKU (5,000 free/month;
 // effectively free for one user). Results are cached per ~11 m cell (empty name
-// cached too) so a spot is only ever fetched once. Needs a REST-callable key
-// (API-restricted or unrestricted — an Android-app-restricted key is rejected
-// for bare fetch); the user pastes it in Location settings.
+// cached too) so a spot is only ever fetched once. Reuses the app's build-time
+// Google Maps key (.maps.env, exposed as a native constant) — no key is stored
+// in the app database.
 
 /** lat,lng rounded to 4 decimals (~11 m) — the cache/dedup key. */
 function cellFor(lat: number, lng: number): string {
@@ -40,7 +38,7 @@ export async function resolvePlaceName(lat: number, lng: number): Promise<string
   if (cached !== undefined) {
     return cached;
   }
-  const key = (await getSetting(PLACES_API_KEY_SETTING))?.trim();
+  const key = getMapsApiKey().trim();
   if (!key) {
     return null;
   }

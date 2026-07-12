@@ -112,6 +112,12 @@ android {
         versionCode 4
         versionName "0.3.83"
         manifestPlaceholders = [MAPS_API_KEY: mapsApiKey]
+        // Same key exposed to JS (via BackgroundLocation.getConstants) so the
+        // Places lookup reuses it — no second copy stored in the app database.
+        buildConfigField "String", "MAPS_API_KEY", "\"${mapsApiKey}\""
+    }
+    buildFeatures {
+        buildConfig true
     }
     signingConfigs {
         debug {

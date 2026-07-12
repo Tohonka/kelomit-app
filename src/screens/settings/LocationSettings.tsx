@@ -7,8 +7,6 @@ import {MIN_RADIUS_M, radiusStep} from '../../db/locations';
 import {getCurrentPositionOnce, getLastPositionError} from '../../services/gpsService';
 import type {KnownPosition} from '../../services/gpsService';
 import {distanceMeters} from '../../services/locationUtils';
-import {getSetting, setSetting} from '../../db/settings';
-import {PLACES_API_KEY_SETTING} from '../../services/placesService';
 
 import {useTheme, typography, spacing, radius} from '../../theme';
 import type {Colors} from '../../theme';
@@ -111,11 +109,6 @@ export default function LocationSettings() {
   const [checkPos, setCheckPos] = useState<KnownPosition | null>(null);
   const [newName, setNewName] = useState('');
   const [newKind, setNewKind] = useState<LocationKind>('work');
-  const [placesKey, setPlacesKey] = useState('');
-
-  useEffect(() => {
-    getSetting(PLACES_API_KEY_SETTING).then(v => setPlacesKey(v ?? '')).catch(() => {});
-  }, []);
 
   const kindLabel = (k: LocationKind) =>
     k === 'work' ? t('location.work') : k === 'home' ? t('location.home') : t('location.placeOther');
@@ -291,21 +284,6 @@ export default function LocationSettings() {
           </TouchableOpacity>
         </View>
         <Text style={local.hint}>{t('location.whereAmIHint')}</Text>
-
-        <Text style={styles.sectionHeader}>{t('location.placesKey')}</Text>
-        <View style={local.formWrap}>
-          <TextInput
-            style={local.nameInput}
-            value={placesKey}
-            onChangeText={setPlacesKey}
-            onEndEditing={() => setSetting(PLACES_API_KEY_SETTING, placesKey.trim())}
-            placeholder={t('location.placesKeyPlaceholder')}
-            placeholderTextColor={colors.textMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-        </View>
-        <Text style={local.hint}>{t('location.placesKeyHint')}</Text>
       </ScrollView>
     </SafeAreaView>
   );

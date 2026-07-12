@@ -457,9 +457,6 @@ const en = {
     checking: 'Checking…',
     accuracy: '±{{m}} m',
     noPlaceMatch: 'Not inside any saved place',
-    placesKey: 'Google Places API key',
-    placesKeyPlaceholder: 'Paste API key (optional)',
-    placesKeyHint: 'Used to name stops that aren\'t a saved place. Only the place name is fetched (free Places tier). Needs a REST-callable key with the Places API enabled.',
   },
   permissions: {
     requiredTitle: 'Permission required',

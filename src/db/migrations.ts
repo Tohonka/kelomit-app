@@ -267,4 +267,12 @@ export const migrations: Migration[] = [
       )`,
     ],
   },
+  {
+    version: 17,
+    up: [
+      // The Places key now comes from the build config (.maps.env), not the DB.
+      // Purge any plain-text copy an earlier build stored in settings.
+      "DELETE FROM settings WHERE key = 'places_api_key'",
+    ],
+  },
 ];

@@ -11,9 +11,15 @@ interface BackgroundLocationNative {
   stop(): Promise<void>;
   setMode(mode: string, ms: number): Promise<void>;
   enterParked(fences: ParkFence[]): Promise<void>;
+  /** Build-time Google Maps key (from .maps.env), exposed as a native constant. */
+  mapsApiKey?: string;
 }
 
 const Native = NativeModules.BackgroundLocation as BackgroundLocationNative | undefined;
+
+/** The app's Google Maps key, reused for the Places lookup. Empty when the
+ *  key file was absent at build time, or on jest / older binaries. */
+export const getMapsApiKey = (): string => Native?.mapsApiKey ?? '';
 
 /** A saved location to fence while parked (radius already includes the
  *  exit hysteresis multiplier). */
