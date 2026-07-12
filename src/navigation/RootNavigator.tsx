@@ -3,7 +3,7 @@ import {useTranslation} from 'react-i18next';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import MainTabs from './MainTabs';
 import DayScreen from '../screens/DayScreen';
-import DayMapScreen from '../screens/DayMapScreen';
+import {DayMapOverviewScreen, DayMapFullScreen} from '../screens/MapTab';
 import EntryDetailScreen from '../screens/EntryDetailScreen';
 import AddEntryModal from '../screens/AddEntryModal';
 import QuickAddModal from '../screens/QuickAddModal';
@@ -45,7 +45,12 @@ export default function RootNavigator() {
       <Stack.Screen name="DayScreen" component={DayScreen} />
       <Stack.Screen
         name="DayMap"
-        component={DayMapScreen}
+        component={DayMapOverviewScreen}
+        options={{title: t('dayMap.title')}}
+      />
+      <Stack.Screen
+        name="DayMapFull"
+        component={DayMapFullScreen}
         options={{title: t('dayMap.title')}}
       />
 

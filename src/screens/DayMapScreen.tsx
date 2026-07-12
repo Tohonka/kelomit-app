@@ -16,9 +16,6 @@ import {formatDuration} from '../utils/dateUtils';
 import LocationMarker from '../components/map/LocationMarker';
 import MarkerNotesSheet from '../components/map/MarkerNotesSheet';
 import type {GpsPoint, Entry} from '../types';
-import type {RootStackScreenProps} from '../navigation/navigationTypes';
-
-type Props = RootStackScreenProps<'DayMap'>;
 
 export function formatDistance(m: number): string {
   return m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`;
@@ -131,19 +128,8 @@ export function DayMapCanvas({
   );
 }
 
-/** Route wrapper for the root 'DayMap' screen (a specific day). */
-export default function DayMapScreen({navigation, route}: Props) {
-  const {dayId} = route.params;
-  return (
-    <DayMapView
-      dayId={dayId}
-      onOpenEntry={entry => navigation.navigate('EntryDetailScreen', {entryId: entry.id, dayId})}
-    />
-  );
-}
-
-/** Full-bleed map for one day — the pushed DayMap route. `topInset` clears the
- *  floating top bar when a caller embeds it without a native header. */
+/** Full-bleed map for one day — the pushed DayMapFull route. `topInset` clears
+ *  the floating top bar when a caller embeds it without a native header. */
 export function DayMapView({dayId, onOpenEntry, topInset = 0}: {dayId: number; onOpenEntry: (entry: Entry) => void; topInset?: number}) {
   const {t} = useTranslation();
   const {colors} = useTheme();

@@ -7,6 +7,7 @@ export type RootStackParamList = {
   MainTabs: NavigatorScreenParams<TabParamList> | undefined;
   DayScreen: {date: string};
   DayMap: {dayId: number; date: string};
+  DayMapFull: {dayId: number; date: string};
   EntryDetailScreen: {entryId: number; dayId: number};
   AddEntryModal: {date?: string; dayId: number; entryId?: number};
   QuickAddModal: {date?: string; dayId: number; entryType: EntryType};
