@@ -20,8 +20,6 @@ export type RootStackParamList = {
   TagsScreen: undefined;
   TagsProjectsSettings: undefined;
   SearchScreen: undefined;
-  InsightsScreen: undefined;
-  GalleryScreen: undefined;
   InterfaceSettings: undefined;
   TrackingSettings: undefined;
   WorkDetailsSettings: undefined;
@@ -35,6 +33,9 @@ export type RootStackParamList = {
 
 export type TabParamList = {
   Home: NavigatorScreenParams<HomeStackParamList> | undefined;
+  Map: undefined;
+  Data: undefined;
+  Gallery: undefined;
   Calendar: undefined;
   Settings: undefined;
 };

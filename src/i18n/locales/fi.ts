@@ -86,6 +86,7 @@ const fi: typeof en = {
   navigation: {
     addEntry: 'Lisää merkintä',
     calendar: 'Kalenteri',
+    data: 'Tiedot',
     editEntry: 'Muokkaa merkintää',
     entry: 'Merkintä',
     gallery: 'Galleria',
@@ -94,6 +95,7 @@ const fi: typeof en = {
     interface: 'Käyttöliittymä',
     quickAdd: 'Pikalisäys',
     search: 'Haku',
+    soon: 'Pian',
     tracking: 'Seuranta',
   },
   dayMap: {
@@ -229,6 +231,7 @@ const fi: typeof en = {
     sortProject: 'Projektin mukaan',
     sortType: 'Tyypin mukaan',
     noProject: 'Ei projektia',
+    listTitle: 'Merkinnät',
     type: 'Tyyppi',
     activity: 'Aktiviteetti',
     title: 'Otsikko',
@@ -399,6 +402,10 @@ const fi: typeof en = {
     byProject: 'Projekteittain',
     byTag: 'Tunnisteittain',
     noProject: 'Ei projektia',
+    trackedThisWeek: 'Tällä viikolla',
+    ofTarget: 'tavoitteesta',
+    ofTargetHours: '/ {{target}} tavoite',
+    dailyHours: 'Päivittäin',
   },
   todo: {
     schedule: 'Ajasta tehtäväksi',

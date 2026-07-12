@@ -24,6 +24,17 @@ function formatDistance(m: number): string {
   return m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`;
 }
 
+/** Route wrapper for the HomeStack 'DayMap' screen (a specific day). */
+export default function DayMapScreen({navigation, route}: Props) {
+  const {dayId} = route.params;
+  return (
+    <DayMapView
+      dayId={dayId}
+      onOpenEntry={entry => navigation.navigate('EntryDetailScreen', {entryId: entry.id, dayId})}
+    />
+  );
+}
+
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
     container: {flex: 1, backgroundColor: c.bg},
@@ -46,8 +57,10 @@ const makeStyles = (c: Colors) =>
     emptyText: {color: c.textMuted, fontSize: typography.sizes.base, textAlign: 'center'},
   });
 
-export default function DayMapScreen({navigation, route}: Props) {
-  const {dayId} = route.params;
+/** Presentational map for one day — reused by the DayMap route and the Map tab.
+ *  `topInset` clears the floating top feature bar when shown as the Map tab (the
+ *  pushed DayMap route uses a native header, so it passes 0). */
+export function DayMapView({dayId, onOpenEntry, topInset = 0}: {dayId: number; onOpenEntry: (entry: Entry) => void; topInset?: number}) {
   const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -85,8 +98,7 @@ export default function DayMapScreen({navigation, route}: Props) {
   );
   const stats = useMemo(() => routeStats(points), [points]);
 
-  const openEntry = (entry: Entry) =>
-    navigation.navigate('EntryDetailScreen', {entryId: entry.id, dayId});
+  const openEntry = onOpenEntry;
 
   if (routeCoords.length === 0 && buckets.length === 0) {
     return (
@@ -100,7 +112,7 @@ export default function DayMapScreen({navigation, route}: Props) {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       {points.length > 0 && (
-        <View style={styles.stats}>
+        <View style={[styles.stats, topInset > 0 && {paddingTop: topInset}]}>
           <Text style={styles.statText}>
             {t('dayMap.distance')}: {formatDistance(stats.distanceM)}
           </Text>

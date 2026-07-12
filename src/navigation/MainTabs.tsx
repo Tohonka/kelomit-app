@@ -1,72 +1,30 @@
 import React from 'react';
-import {useTranslation} from 'react-i18next';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import CustomTabBar from './CustomTabBar';
+import NavShell from './NavShell';
 import HomeStack from './HomeStack';
-
+import MapTab from '../screens/MapTab';
+import InsightsScreen from '../screens/InsightsScreen';
+import GalleryScreen from '../screens/GalleryScreen';
 import CalendarScreen from '../screens/CalendarScreen';
 import SettingsScreen from '../screens/SettingsScreen';
-import {useSettingsStore} from '../store/settingsStore';
-import {useTheme, typography} from '../theme';
 import type {TabParamList} from './navigationTypes';
 
 const Tab = createBottomTabNavigator<TabParamList>();
 
+// Destinations of the new nav shell. The top "major features" bar surfaces
+// Home/Map/Data/Gallery; the floaty bottom pill surfaces Home/Calendar/Settings
+// plus quick-add. Both bars are drawn by NavShell (the custom tabBar).
 export default function MainTabs() {
-  const {t} = useTranslation();
-  const {colors} = useTheme();
-  const navVisibility = useSettingsStore(s => s.nav_visibility);
   return (
     <Tab.Navigator
-      tabBar={tabBarProps => {
-        // When "home only", hide the tab bar everywhere except Home. The
-        // Android hardware back button still returns to Home (firstRoute
-        // backBehavior), so non-Home tabs aren't a dead end.
-        if (navVisibility === 'home_only') {
-          const focused = tabBarProps.state.routes[tabBarProps.state.index].name;
-          if (focused !== 'Home') {
-            return null;
-          }
-        }
-        return <CustomTabBar {...tabBarProps} />;
-      }}
-      screenOptions={({route}) => ({
-        headerShown: false,
-        tabBarStyle: {
-          backgroundColor: colors.bgCard,
-          borderTopColor: colors.border,
-        },
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textMuted,
-        tabBarLabelStyle: {
-          fontSize: typography.sizes.xs,
-          fontWeight: typography.weights.medium,
-        },
-        tabBarIcon: ({color, size}) => {
-          const icons: Record<string, string> = {
-            Home: 'home-variant',
-            Calendar: 'calendar-month',
-            Settings: 'cog',
-          };
-          return <Icon name={icons[route.name] ?? 'circle'} size={size} color={color} />;
-        },
-      })}>
-      <Tab.Screen
-        name="Home"
-        component={HomeStack}
-        options={{tabBarLabel: t('navigation.home')}}
-      />
-      <Tab.Screen
-        name="Calendar"
-        component={CalendarScreen}
-        options={{tabBarLabel: t('navigation.calendar')}}
-      />
-      <Tab.Screen
-        name="Settings"
-        component={SettingsScreen}
-        options={{tabBarLabel: t('common.settings')}}
-      />
+      tabBar={props => <NavShell {...props} />}
+      screenOptions={{headerShown: false, lazy: true}}>
+      <Tab.Screen name="Home" component={HomeStack} />
+      <Tab.Screen name="Map" component={MapTab} />
+      <Tab.Screen name="Data" component={InsightsScreen} />
+      <Tab.Screen name="Gallery" component={GalleryScreen} />
+      <Tab.Screen name="Calendar" component={CalendarScreen} />
+      <Tab.Screen name="Settings" component={SettingsScreen} />
     </Tab.Navigator>
   );
 }

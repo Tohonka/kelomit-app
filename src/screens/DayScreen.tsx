@@ -185,6 +185,7 @@ export default function DayScreen({navigation, route}: Props) {
             {day && <DaySplitBar entries={allEntries} />}
             <EntryList
               inline
+              card
               entries={filteredEntries}
               onPressEntry={entry =>
                 navigation.navigate('EntryDetailScreen', {

@@ -1,7 +1,7 @@
 import React, {useEffect, useMemo} from 'react';
 import {useTranslation} from 'react-i18next';
 import {View, Text, StyleSheet, ScrollView, TouchableOpacity} from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import {useShellPadding} from '../navigation/shellMetrics';
 import {useSettingsStore} from '../store/settingsStore';
 import {useTheme, typography, spacing} from '../theme';
 import type {Colors} from '../theme';
@@ -64,6 +64,7 @@ export default function SettingsScreen({navigation}: Props) {
   const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const shellPad = useShellPadding();
   const {loaded, load} = useSettingsStore();
 
   useEffect(() => {
@@ -71,8 +72,12 @@ export default function SettingsScreen({navigation}: Props) {
   }, [loaded, load]);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.content}>
+    <View style={styles.container}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          {paddingTop: shellPad.paddingTop, paddingBottom: shellPad.paddingBottom},
+        ]}>
         <Text style={styles.sectionHeader}>{t('common.settings')}</Text>
         {SECTIONS.map(s => (
           <TouchableOpacity key={s.key} style={styles.row} onPress={() => navigation.navigate(s.key)}>
@@ -90,6 +95,6 @@ export default function SettingsScreen({navigation}: Props) {
           <Text style={styles.rowValue}>{APP_VERSION}</Text>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }

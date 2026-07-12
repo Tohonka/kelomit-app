@@ -9,8 +9,6 @@ import ProjectsScreen from '../screens/ProjectsScreen';
 import TagsScreen from '../screens/TagsScreen';
 import TagsProjectsSettings from '../screens/settings/TagsProjectsSettings';
 import SearchScreen from '../screens/SearchScreen';
-import InsightsScreen from '../screens/InsightsScreen';
-import GalleryScreen from '../screens/GalleryScreen';
 import InterfaceSettings from '../screens/settings/InterfaceSettings';
 import TrackingSettings from '../screens/settings/TrackingSettings';
 import WorkDetailsSettings from '../screens/settings/WorkDetailsSettings';
@@ -84,16 +82,6 @@ export default function RootNavigator() {
         name="SearchScreen"
         component={SearchScreen}
         options={{title: t('navigation.search')}}
-      />
-      <Stack.Screen
-        name="InsightsScreen"
-        component={InsightsScreen}
-        options={{title: t('navigation.insights')}}
-      />
-      <Stack.Screen
-        name="GalleryScreen"
-        component={GalleryScreen}
-        options={{title: t('navigation.gallery')}}
       />
       <Stack.Screen
         name="InterfaceSettings"

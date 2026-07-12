@@ -2,7 +2,6 @@ import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {View, Text, StyleSheet, ScrollView, AppState} from 'react-native';
 import {format} from 'date-fns';
-import {SafeAreaView} from 'react-native-safe-area-context';
 import {GestureDetector, Gesture} from 'react-native-gesture-handler';
 import {useDayStore} from '../store/dayStore';
 import {useEntryStore} from '../store/entryStore';
@@ -18,10 +17,8 @@ import SpecialNoteCard from '../components/day/SpecialNoteCard';
 import DaySplitBar from '../components/day/DaySplitBar';
 import DayEndConfirmBanner from '../components/day/DayEndConfirmBanner';
 import QuickTimerCard from '../components/day/QuickTimerCard';
-import FAB from '../components/ui/FAB';
-import {buildQuickAddActions} from '../components/entries/quickAddActions';
+import {useShellPadding} from '../navigation/shellMetrics';
 import {useKeyboardHeight} from '../hooks/useKeyboardHeight';
-import QuickAddSheet from '../components/quickadd/QuickAddSheet';
 import type {HomeStackScreenProps} from '../navigation/navigationTypes';
 import type {Entry} from '../types';
 import {getUpcomingTodos} from '../db/entries';
@@ -36,10 +33,7 @@ const makeStyles = (c: Colors) =>
     container: {flex: 1, backgroundColor: c.bg},
     header: {
       paddingHorizontal: spacing.lg,
-      paddingTop: spacing.lg,
       paddingBottom: spacing.md,
-      borderBottomWidth: 1,
-      borderBottomColor: c.border,
     },
     headerRow: {
       flexDirection: 'row',
@@ -53,7 +47,7 @@ const makeStyles = (c: Colors) =>
     },
     headerSub: {fontSize: typography.sizes.sm, color: c.textMuted, marginTop: 2},
     flex: {flex: 1},
-    scrollContent: {paddingTop: spacing.md, paddingBottom: 100},
+    scrollContent: {},
     comingUp: {marginTop: spacing.lg},
     comingUpHeader: {
       fontSize: typography.sizes.xs,
@@ -89,9 +83,9 @@ export default function HomeScreen({navigation}: Props) {
   const {entriesByDay, loadEntriesForDay} = useEntryStore();
   const scrollRef = useRef<ScrollView>(null);
   const kbHeight = useKeyboardHeight();
+  const shellPad = useShellPadding();
   const [noteEditing, setNoteEditing] = useState(false);
   const [upcoming, setUpcoming] = useState<Entry[]>([]);
-  const [sheetOpen, setSheetOpen] = useState(false);
   // Lightweight geofence diagnostic — passively shows where we think we are.
   const [detected, setDetected] = useState<GeofenceDetection>('unknown');
 
@@ -162,21 +156,6 @@ export default function HomeScreen({navigation}: Props) {
     return out;
   }, [upcoming]);
 
-  const openAddEntry = () => {
-    if (!today) { return; }
-    navigation.navigate('AddEntryModal', {date, dayId: today.id});
-  };
-
-  const quickActions = today
-    ? buildQuickAddActions(entryType => {
-        if (entryType === 'note') {
-          setSheetOpen(true);
-        } else {
-          navigation.navigate('QuickAddModal', {date, dayId: today.id, entryType});
-        }
-      })
-    : undefined;
-
   // Today is the end of the line: only swipe right → previous day's view.
   const swipe = useMemo(
     () =>
@@ -193,33 +172,33 @@ export default function HomeScreen({navigation}: Props) {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <GestureDetector gesture={swipe}>
         <View style={styles.flex}>
-      <View style={styles.header}>
-        <View style={styles.headerRow}>
-          <Text style={styles.headerDate}>{formatDate(date)}</Text>
-          <DayHoursReadout
-            workSecs={totalSecs}
-            personalSecs={personalSecs}
-            showPersonal={showPersonalHours}
-          />
-        </View>
-        <Text style={styles.headerSub}>
-          {format(new Date(), 'EEEE, MMMM d, yyyy', {
-            locale: getDateFnsLocale(i18n.resolvedLanguage === 'fi' ? 'fi' : 'en'),
-          })}
-        </Text>
-      </View>
       <ScrollView
         ref={scrollRef}
         style={styles.flex}
         contentContainerStyle={[
-          styles.scrollContent,
+          {paddingTop: shellPad.paddingTop, paddingBottom: shellPad.paddingBottom},
           noteEditing && kbHeight > 0 && {paddingBottom: kbHeight + spacing.lg},
         ]}
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled">
+        <View style={styles.header}>
+          <View style={styles.headerRow}>
+            <Text style={styles.headerDate}>{formatDate(date)}</Text>
+            <DayHoursReadout
+              workSecs={totalSecs}
+              personalSecs={personalSecs}
+              showPersonal={showPersonalHours}
+            />
+          </View>
+          <Text style={styles.headerSub}>
+            {format(new Date(), 'EEEE, MMMM d, yyyy', {
+              locale: getDateFnsLocale(i18n.resolvedLanguage === 'fi' ? 'fi' : 'en'),
+            })}
+          </Text>
+        </View>
         <DayEndConfirmBanner />
         <QuickTimerCard />
         {today && (
@@ -232,6 +211,7 @@ export default function HomeScreen({navigation}: Props) {
         {today && <DaySplitBar entries={entries} />}
         <EntryList
           inline
+          card
           entries={entries}
           onPressEntry={entry =>
             navigation.navigate('EntryDetailScreen', {
@@ -273,15 +253,6 @@ export default function HomeScreen({navigation}: Props) {
       </ScrollView>
         </View>
       </GestureDetector>
-      <FAB onPress={openAddEntry} actions={quickActions} />
-      {today && (
-        <QuickAddSheet
-          visible={sheetOpen}
-          dayId={today.id}
-          onClose={() => setSheetOpen(false)}
-          onSaved={() => {}}
-        />
-      )}
-    </SafeAreaView>
+    </View>
   );
 }

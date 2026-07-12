@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import {useShellPadding} from '../navigation/shellMetrics';
 import {GestureDetector, Gesture} from 'react-native-gesture-handler';
 import {useFocusEffect} from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -142,6 +142,7 @@ export default function CalendarScreen({navigation}: Props) {
   const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const shellPad = useShellPadding();
   const {show_week_numbers, language} = useSettingsStore();
   const [viewMode, setViewMode] = useState<CalendarView>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -241,10 +242,10 @@ export default function CalendarScreen({navigation}: Props) {
       : `${format(weekDays[0], 'MMM d', {locale: dateLocale})} – ${format(weekDays[6], 'MMM d, yyyy', {locale: dateLocale})}`;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <GestureDetector gesture={swipe}>
         <View style={styles.flex}>
-        <View>
+        <View style={{paddingTop: shellPad.paddingTop}}>
         {/* Header nav */}
         <View style={styles.header}>
           {viewMode !== 'range' ? (
@@ -327,7 +328,7 @@ export default function CalendarScreen({navigation}: Props) {
         </View>
       </View>
 
-      <ScrollView style={styles.flex}>
+      <ScrollView style={styles.flex} contentContainerStyle={{paddingBottom: shellPad.paddingBottom}}>
         {viewMode === 'month' ? (
           <MonthGrid
             currentDate={currentDate}
@@ -357,7 +358,7 @@ export default function CalendarScreen({navigation}: Props) {
       </ScrollView>
         </View>
       </GestureDetector>
-    </SafeAreaView>
+    </View>
   );
 }
 

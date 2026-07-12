@@ -84,6 +84,7 @@ const en = {
   navigation: {
     addEntry: 'Add Entry',
     calendar: 'Calendar',
+    data: 'Data',
     editEntry: 'Edit Entry',
     entry: 'Entry',
     gallery: 'Gallery',
@@ -92,6 +93,7 @@ const en = {
     interface: 'Interface',
     quickAdd: 'Quick add',
     search: 'Search',
+    soon: 'Soon',
     tracking: 'Tracking',
   },
   dayMap: {
@@ -227,6 +229,7 @@ const en = {
     sortProject: 'By project',
     sortType: 'By type',
     noProject: 'No project',
+    listTitle: 'Entries',
     type: 'Type',
     activity: 'Activity',
     title: 'Title',
@@ -397,6 +400,10 @@ const en = {
     byProject: 'By project',
     byTag: 'By tag',
     noProject: 'No project',
+    trackedThisWeek: 'Tracked this week',
+    ofTarget: 'of target',
+    ofTargetHours: 'of {{target}} target',
+    dailyHours: 'Daily hours',
   },
   todo: {
     schedule: 'Schedule as to-do',

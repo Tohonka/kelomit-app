@@ -9,7 +9,7 @@ import {
   SectionList,
   Dimensions,
 } from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import {useShellPadding} from '../navigation/shellMetrics';
 import {useFocusEffect} from '@react-navigation/native';
 import {useTheme, typography, spacing} from '../theme';
 import type {Colors} from '../theme';
@@ -40,25 +40,30 @@ const VIEW_MODES: {mode: ViewMode; labelKey: string}[] = [
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
     container: {flex: 1, backgroundColor: c.bg},
+    header: {paddingHorizontal: spacing.lg, paddingBottom: spacing.sm},
+    headerTitle: {fontSize: typography.sizes.xl, fontWeight: typography.weights.bold, color: c.textPrimary},
     segment: {
       flexDirection: 'row',
       backgroundColor: c.bgMuted,
       borderRadius: 999,
       padding: 3,
-      margin: spacing.md,
+      marginHorizontal: spacing.lg,
+      marginTop: spacing.sm,
     },
-    segmentTight: {marginTop: 0},
-    segBtn: {flex: 1, paddingVertical: spacing.xs, borderRadius: 999, alignItems: 'center'},
-    segBtnActive: {backgroundColor: c.bgCard},
+    segmentTight: {marginTop: spacing.sm},
+    segBtn: {flex: 1, paddingVertical: 7, borderRadius: 999, alignItems: 'center', borderWidth: 1, borderColor: 'transparent'},
+    segBtnActive: {backgroundColor: c.primary + '22', borderWidth: 1, borderColor: c.primary},
     segText: {fontSize: typography.sizes.sm, color: c.textMuted, fontWeight: typography.weights.medium},
-    segTextActive: {color: c.primary, fontWeight: typography.weights.semibold},
+    segTextActive: {color: c.primary, fontWeight: typography.weights.bold},
     sectionHeader: {
-      fontSize: typography.sizes.sm,
+      fontSize: typography.sizes.xs,
       fontWeight: typography.weights.bold,
-      color: c.textPrimary,
+      color: c.textMuted,
+      textTransform: 'uppercase',
+      letterSpacing: 0.6,
       backgroundColor: c.bg,
-      paddingHorizontal: spacing.md,
-      paddingTop: spacing.md,
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.lg,
       paddingBottom: spacing.sm,
     },
     row: {flexDirection: 'row', gap: GAP, marginBottom: GAP},
@@ -115,6 +120,7 @@ export default function GalleryScreen() {
   const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const shellPad = useShellPadding();
   const [mode, setMode] = useState<PeriodMode>('day');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [items, setItems] = useState<MediaItem[]>([]);
@@ -141,7 +147,10 @@ export default function GalleryScreen() {
   }, [items, mode]);
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <View style={styles.container}>
+      <View style={[styles.header, {paddingTop: shellPad.paddingTop}]}>
+        <Text style={styles.headerTitle}>{t('navigation.gallery')}</Text>
+      </View>
       <View style={styles.segment}>
         {VIEW_MODES.map(({mode: vm, labelKey}) => (
           <TouchableOpacity
@@ -198,6 +207,7 @@ export default function GalleryScreen() {
               ))}
             </View>
           )}
+          contentContainerStyle={{paddingBottom: shellPad.paddingBottom}}
           stickySectionHeadersEnabled
           initialNumToRender={12}
           windowSize={11}
@@ -209,6 +219,6 @@ export default function GalleryScreen() {
         uri={selected?.uri ?? null}
         onClose={() => setSelected(null)}
       />
-    </SafeAreaView>
+    </View>
   );
 }
