@@ -59,7 +59,9 @@ const makeStyles = (c: Colors) =>
     },
   });
 
-export default function QuickAddButton() {
+// `target` aims quick-add at a specific day (the day-detail screen passes the
+// viewed day); without it, quick-add targets today.
+export default function QuickAddButton({target}: {target?: {date: string; dayId: number}}) {
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -69,24 +71,29 @@ export default function QuickAddButton() {
 
   // Guarantee today's day exists so quick-add works from any tab, not just Home.
   useEffect(() => {
-    if (!today) { loadToday(); }
-  }, [today, loadToday]);
+    if (!target && !today) { loadToday(); }
+  }, [target, today, loadToday]);
+
+  const resolveDay = React.useCallback(
+    () => (target ? {dayId: target.dayId, date: target.date} : {dayId: useDayStore.getState().today?.id, date: undefined as string | undefined}),
+    [target],
+  );
 
   const go = React.useCallback(
     (entryType: EntryType) => {
       setOpen(false);
-      const dayId = useDayStore.getState().today?.id;
+      const {dayId, date} = resolveDay();
       if (dayId == null) { return; }
-      navigation.navigate('QuickAddModal', {dayId, entryType});
+      navigation.navigate('QuickAddModal', {dayId, date, entryType});
     },
-    [navigation],
+    [navigation, resolveDay],
   );
-  // Single tap = the full new-entry editor for today.
+  // Single tap = the full new-entry editor.
   const openAdd = React.useCallback(() => {
-    const dayId = useDayStore.getState().today?.id;
+    const {dayId, date} = resolveDay();
     if (dayId == null) { return; }
-    navigation.navigate('AddEntryModal', {dayId});
-  }, [navigation]);
+    navigation.navigate('AddEntryModal', {dayId, date});
+  }, [navigation, resolveDay]);
   const actions = useMemo(() => buildQuickAddActions(go), [go]);
 
   return (

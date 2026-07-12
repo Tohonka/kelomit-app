@@ -38,12 +38,11 @@ interface Props {
 
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
-    flex: {flex: 1},
+    flex: {flex: 1, backgroundColor: c.bg},
     header: {paddingHorizontal: spacing.lg, paddingBottom: spacing.md},
     headerRow: {flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between'},
     headerDate: {fontSize: typography.sizes.xxl, fontWeight: typography.weights.black, color: c.textPrimary},
     headerSub: {fontSize: typography.sizes.sm, color: c.textMuted, marginTop: 2},
-    detailTopPad: {paddingTop: spacing.md, paddingBottom: 100},
     comingUp: {marginTop: spacing.lg},
     comingUpHeader: {
       fontSize: typography.sizes.xs,
@@ -205,7 +204,7 @@ export default function DayView({date, variant, onRequestDate, onOpenEntry, onDa
           contentContainerStyle={[
             isToday
               ? {paddingTop: shellPad.paddingTop, paddingBottom: shellPad.paddingBottom}
-              : styles.detailTopPad,
+              : {paddingTop: spacing.md, paddingBottom: shellPad.paddingBottom},
             noteEditing && kbHeight > 0 && {paddingBottom: kbHeight + spacing.lg},
           ]}
           keyboardDismissMode="on-drag"

@@ -1,12 +1,10 @@
 import React, {useEffect, useMemo, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {View, StyleSheet, TouchableOpacity} from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
 import {format} from 'date-fns';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import DayView from '../components/day/DayView';
-import FAB from '../components/ui/FAB';
-import {buildQuickAddActions} from '../components/entries/quickAddActions';
+import BottomPill from '../navigation/BottomPill';
 import {useTheme, spacing} from '../theme';
 import type {Colors} from '../theme';
 import {getDateFnsLocale} from '../i18n';
@@ -49,7 +47,7 @@ export default function DayScreen({navigation, route}: Props) {
   }, [currentDate, day, navigation, colors.primary, i18n.resolvedLanguage, styles.headerRight]);
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <View style={styles.container}>
       <DayView
         variant="detail"
         date={currentDate}
@@ -57,16 +55,13 @@ export default function DayScreen({navigation, route}: Props) {
         onOpenEntry={entry => navigation.navigate('EntryDetailScreen', {entryId: entry.id, dayId: entry.day_id})}
         onDayLoaded={setDay}
       />
-      <FAB
-        onPress={() => { if (day) { navigation.navigate('AddEntryModal', {date: currentDate, dayId: day.id}); } }}
-        actions={
-          day
-            ? buildQuickAddActions(entryType =>
-                navigation.navigate('QuickAddModal', {date: currentDate, dayId: day.id, entryType}),
-              )
-            : undefined
-        }
+      {/* Keep the floating pill present on the day screen too. Its + adds to the
+          viewed day; the tabs pop back to MainTabs and switch. */}
+      <BottomPill
+        active={null}
+        onSelect={pillRoute => navigation.navigate('MainTabs', {screen: pillRoute})}
+        quickAddTarget={day ? {date: currentDate, dayId: day.id} : undefined}
       />
-    </SafeAreaView>
+    </View>
   );
 }

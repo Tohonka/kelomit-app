@@ -3,10 +3,19 @@ import {useTranslation} from 'react-i18next';
 import {View, Text, TouchableOpacity, StyleSheet} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import type {BottomTabBarProps} from '@react-navigation/bottom-tabs';
 import {useTheme, typography, radius} from '../theme';
 import type {Colors} from '../theme';
 import QuickAddButton from './QuickAddButton';
+
+export type PillRoute = 'Home' | 'Calendar' | 'Settings';
+
+interface Props {
+  // Highlighted pill route, or null when shown outside the tab bar (day detail).
+  active: PillRoute | null;
+  onSelect: (route: PillRoute) => void;
+  // Optional quick-add target day; without it the + targets today.
+  quickAddTarget?: {date: string; dayId: number};
+}
 
 // The 3 everyday destinations + quick-add. Always in reach, floats over content.
 const makeStyles = (c: Colors, bottom: number) =>
@@ -39,21 +48,17 @@ const makeStyles = (c: Colors, bottom: number) =>
     label: {fontSize: 10, fontWeight: typography.weights.semibold},
   });
 
-export default function BottomPill({state, navigation}: BottomTabBarProps) {
+export default function BottomPill({active, onSelect, quickAddTarget}: Props) {
   const {t} = useTranslation();
   const {colors} = useTheme();
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => makeStyles(colors, insets.bottom), [colors, insets.bottom]);
-  const active = state.routes[state.index].name;
 
-  const tab = (route: string, labelKey: string, icon: string) => {
+  const tab = (route: PillRoute, labelKey: string, icon: string) => {
     const isActive = active === route;
     const color = isActive ? colors.primary : colors.textMuted;
     return (
-      <TouchableOpacity
-        style={styles.tab}
-        activeOpacity={0.7}
-        onPress={() => navigation.navigate(route)}>
+      <TouchableOpacity style={styles.tab} activeOpacity={0.7} onPress={() => onSelect(route)}>
         <Icon name={icon} size={20} color={color} />
         <Text style={[styles.label, {color}]}>{t(labelKey)}</Text>
       </TouchableOpacity>
@@ -65,7 +70,7 @@ export default function BottomPill({state, navigation}: BottomTabBarProps) {
       <View style={styles.pill}>
         {tab('Home', 'navigation.home', 'home-variant')}
         {tab('Calendar', 'navigation.calendar', 'calendar-month')}
-        <QuickAddButton />
+        <QuickAddButton target={quickAddTarget} />
         {tab('Settings', 'common.settings', 'cog-outline')}
       </View>
     </View>
