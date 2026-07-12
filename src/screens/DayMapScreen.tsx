@@ -16,15 +16,15 @@ import {formatDuration} from '../utils/dateUtils';
 import LocationMarker from '../components/map/LocationMarker';
 import MarkerNotesSheet from '../components/map/MarkerNotesSheet';
 import type {GpsPoint, Entry} from '../types';
-import type {HomeStackScreenProps} from '../navigation/navigationTypes';
+import type {RootStackScreenProps} from '../navigation/navigationTypes';
 
-type Props = HomeStackScreenProps<'DayMap'>;
+type Props = RootStackScreenProps<'DayMap'>;
 
 function formatDistance(m: number): string {
   return m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`;
 }
 
-/** Route wrapper for the HomeStack 'DayMap' screen (a specific day). */
+/** Route wrapper for the root 'DayMap' screen (a specific day). */
 export default function DayMapScreen({navigation, route}: Props) {
   const {dayId} = route.params;
   return (

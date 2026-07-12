@@ -1,215 +1,64 @@
-import React, {useEffect, useState, useCallback, useMemo, useRef} from 'react';
+import React, {useEffect, useMemo, useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import {StyleSheet, ScrollView, TouchableOpacity, View} from 'react-native';
-import Animated, {FadeIn} from 'react-native-reanimated';
-import {format} from 'date-fns';
+import {View, StyleSheet, TouchableOpacity} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {GestureDetector, Gesture} from 'react-native-gesture-handler';
-import {useDayStore} from '../store/dayStore';
-import {useEntryStore} from '../store/entryStore';
-import {useTheme, spacing} from '../theme';
-import {getDateFnsLocale} from '../i18n';
-import type {Colors} from '../theme';
-import EntryList from '../components/entries/EntryList';
-import DaySummaryCard from '../components/day/DaySummaryCard';
-import DaySplitBar from '../components/day/DaySplitBar';
-import SpecialNoteCard from '../components/day/SpecialNoteCard';
-import FilterBar from '../components/day/FilterBar';
+import {format} from 'date-fns';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import DayView from '../components/day/DayView';
 import FAB from '../components/ui/FAB';
 import {buildQuickAddActions} from '../components/entries/quickAddActions';
-import {useKeyboardHeight} from '../hooks/useKeyboardHeight';
-import type {HomeStackScreenProps} from '../navigation/navigationTypes';
-import type {Entry, Project, Tag} from '../types';
-import {calcDayWorkSecs, calcHourBreakdown} from '../utils/hoursUtils';
-import {useSettingsStore} from '../store/settingsStore';
-import DayHoursReadout from '../components/day/DayHoursReadout';
-import {shiftDate} from '../utils/dateUtils';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import {useTheme, spacing} from '../theme';
+import type {Colors} from '../theme';
+import {getDateFnsLocale} from '../i18n';
+import type {Day} from '../types';
+import type {RootStackScreenProps} from '../navigation/navigationTypes';
 
-type Props = HomeStackScreenProps<'DayScreen'>;
+type Props = RootStackScreenProps<'DayScreen'>;
 
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
     container: {flex: 1, backgroundColor: c.bg},
-    flex: {flex: 1},
-    scrollContent: {paddingTop: spacing.md, paddingBottom: 100},
-    headerRight: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
+    headerRight: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginRight: spacing.md},
   });
 
 export default function DayScreen({navigation, route}: Props) {
   const {i18n} = useTranslation();
-  const [currentDate, setCurrentDate] = useState(route.params.date);
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const {loadDay, daysCache, updateDayTimes} = useDayStore();
-  const {entriesByDay, loadEntriesForDay} = useEntryStore();
-  const scrollRef = useRef<ScrollView>(null);
-  const kbHeight = useKeyboardHeight();
-  const [noteEditing, setNoteEditing] = useState(false);
-  const showPersonalHours = useSettingsStore(s => s.show_personal_hours);
+  const [currentDate, setCurrentDate] = useState(route.params.date);
+  const [day, setDay] = useState<Day | null>(null);
 
-  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
-  const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
-
-  const day = daysCache[currentDate];
-  const allEntries = useMemo(
-    () => (day ? (entriesByDay[day.id] ?? []) : []),
-    [day, entriesByDay],
-  );
-
-  // Filter chips list only the projects/tags actually used in this day's notes.
-  const dayProjects = useMemo(() => {
-    const seen = new Map<number, Project>();
-    for (const e of allEntries) {
-      if (e.project) { seen.set(e.project.id, e.project); }
-    }
-    return [...seen.values()];
-  }, [allEntries]);
-  const dayTags = useMemo(() => {
-    const seen = new Map<number, Tag>();
-    for (const e of allEntries) {
-      for (const tag of e.tags ?? []) { seen.set(tag.id, tag); }
-    }
-    return [...seen.values()];
-  }, [allEntries]);
-
-  useEffect(() => { loadDay(currentDate); }, [currentDate, loadDay]);
-  useEffect(() => { if (day) { loadEntriesForDay(day.id); } }, [day, loadEntriesForDay]);
-  // Lift the day-note card above the keyboard once it's actually shown.
-  useEffect(() => {
-    if (noteEditing && kbHeight > 0) {
-      requestAnimationFrame(() => scrollRef.current?.scrollToEnd({animated: true}));
-    }
-  }, [noteEditing, kbHeight]);
-
-  // Update navigation title and work-hours in header when day/entries change
   useEffect(() => {
     const [y, m, d] = currentDate.split('-').map(Number);
-    const dateObj = new Date(y, m - 1, d);
-    const label = format(dateObj, 'EEE d MMM', {
+    const label = format(new Date(y, m - 1, d), 'EEE d MMM', {
       locale: getDateFnsLocale(i18n.resolvedLanguage === 'fi' ? 'fi' : 'en'),
     });
-    const totalSecs = day ? calcDayWorkSecs(day, allEntries) : 0;
-    const personalSecs = day ? calcHourBreakdown(allEntries).personalSeconds : 0;
     navigation.setOptions({
       title: label,
-      headerRight: () => (
-        <View style={styles.headerRight}>
-          {day && (
+      headerRight: () =>
+        day ? (
+          <View style={styles.headerRight}>
             <TouchableOpacity
               onPress={() => navigation.navigate('DayMap', {dayId: day.id, date: currentDate})}
               hitSlop={8}>
               <Icon name="map-outline" size={22} color={colors.primary} />
             </TouchableOpacity>
-          )}
-          <DayHoursReadout
-            workSecs={totalSecs}
-            personalSecs={personalSecs}
-            showPersonal={showPersonalHours}
-            style={{marginRight: spacing.md}}
-          />
-        </View>
-      ),
+          </View>
+        ) : null,
     });
-  }, [currentDate, day, allEntries, navigation, showPersonalHours, i18n.resolvedLanguage, colors.primary, styles.headerRight]);
-
-  const goToDate = useCallback((newDate: string) => {
-    setCurrentDate(newDate);
-    setSelectedProjectId(null);
-    setSelectedTagIds([]);
-  }, []);
-
-  // Horizontal swipe = prev/next day. failOffsetY keeps vertical scrolling intact.
-  const swipe = useMemo(
-    () =>
-      Gesture.Pan()
-        .runOnJS(true)
-        .activeOffsetX([-20, 20])
-        .failOffsetY([-18, 18])
-        .onEnd(e => {
-          // Swipe left = next day, swipe right = previous day.
-          if (e.translationX <= -50) { goToDate(shiftDate(currentDate, 1)); }
-          else if (e.translationX >= 50) { goToDate(shiftDate(currentDate, -1)); }
-        }),
-    [currentDate, goToDate],
-  );
-
-  const filteredEntries: Entry[] = allEntries.filter(e => {
-    if (selectedProjectId != null && e.project?.id !== selectedProjectId) { return false; }
-    if (selectedTagIds.length > 0) {
-      const entryTagIds = (e.tags ?? []).map(t => t.id);
-      if (!selectedTagIds.every(id => entryTagIds.includes(id))) { return false; }
-    }
-    return true;
-  });
-
-  const toggleTag = useCallback((id: number) => {
-    setSelectedTagIds(prev =>
-      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id],
-    );
-  }, []);
-
-  const clearFilters = useCallback(() => {
-    setSelectedProjectId(null);
-    setSelectedTagIds([]);
-  }, []);
+  }, [currentDate, day, navigation, colors.primary, i18n.resolvedLanguage, styles.headerRight]);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <FilterBar
-        projects={dayProjects}
-        tags={dayTags}
-        selectedProjectId={selectedProjectId}
-        selectedTagIds={selectedTagIds}
-        onSelectProject={setSelectedProjectId}
-        onToggleTag={toggleTag}
-        onClear={clearFilters}
+    <SafeAreaView style={styles.container} edges={['bottom']}>
+      <DayView
+        variant="detail"
+        date={currentDate}
+        onRequestDate={setCurrentDate}
+        onOpenEntry={entry => navigation.navigate('EntryDetailScreen', {entryId: entry.id, dayId: entry.day_id})}
+        onDayLoaded={setDay}
       />
-      <GestureDetector gesture={swipe}>
-        <Animated.View key={currentDate} entering={FadeIn.duration(140)} style={styles.flex}>
-          <ScrollView
-            ref={scrollRef}
-            contentContainerStyle={[
-              styles.scrollContent,
-              noteEditing && kbHeight > 0 && {paddingBottom: kbHeight + spacing.lg},
-            ]}
-            keyboardDismissMode="on-drag"
-            keyboardShouldPersistTaps="handled">
-            {day && (
-              <DaySummaryCard
-                day={day}
-                entries={allEntries}
-                onUpdateTimes={fields => updateDayTimes(currentDate, fields)}
-              />
-            )}
-            {day && <DaySplitBar entries={allEntries} />}
-            <EntryList
-              inline
-              card
-              entries={filteredEntries}
-              onPressEntry={entry =>
-                navigation.navigate('EntryDetailScreen', {
-                  entryId: entry.id,
-                  dayId: entry.day_id,
-                })
-              }
-            />
-            {day && (
-              <SpecialNoteCard
-                note={day.notes}
-                onSave={notes => updateDayTimes(currentDate, {notes})}
-                onBeginEdit={() => setNoteEditing(true)}
-                onEndEdit={() => setNoteEditing(false)}
-              />
-            )}
-          </ScrollView>
-        </Animated.View>
-      </GestureDetector>
       <FAB
-        onPress={() => {
-          if (!day) { return; }
-          navigation.navigate('AddEntryModal', {date: currentDate, dayId: day.id});
-        }}
+        onPress={() => { if (day) { navigation.navigate('AddEntryModal', {date: currentDate, dayId: day.id}); } }}
         actions={
           day
             ? buildQuickAddActions(entryType =>

@@ -1,10 +1,9 @@
 import React from 'react';
 import DayView from '../components/day/DayView';
 import {todayDate} from '../utils/dateUtils';
-import type {HomeStackScreenProps} from '../navigation/navigationTypes';
+import type {TabScreenProps} from '../navigation/navigationTypes';
 
-// Task 2 re-types this to TabScreenProps<'Home'> once HomeStack is deleted.
-type Props = HomeStackScreenProps<'HomeMain'>;
+type Props = TabScreenProps<'Home'>;
 
 export default function HomeScreen({navigation}: Props) {
   const date = todayDate();

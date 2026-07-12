@@ -1,7 +1,7 @@
 import React from 'react';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import NavShell from './NavShell';
-import HomeStack from './HomeStack';
+import HomeScreen from '../screens/HomeScreen';
 import MapTab from '../screens/MapTab';
 import InsightsScreen from '../screens/InsightsScreen';
 import GalleryScreen from '../screens/GalleryScreen';
@@ -19,7 +19,7 @@ export default function MainTabs() {
     <Tab.Navigator
       tabBar={props => <NavShell {...props} />}
       screenOptions={{headerShown: false, lazy: true}}>
-      <Tab.Screen name="Home" component={HomeStack} />
+      <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Map" component={MapTab} />
       <Tab.Screen name="Data" component={InsightsScreen} />
       <Tab.Screen name="Gallery" component={GalleryScreen} />

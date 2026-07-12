@@ -2,17 +2,11 @@ import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import type {BottomTabScreenProps} from '@react-navigation/bottom-tabs';
 import type {CompositeScreenProps} from '@react-navigation/native';
 import type {EntryType} from '../types';
-import type {NavigatorScreenParams} from '@react-navigation/native';
-
-export type HomeStackParamList = {
-  HomeMain: undefined;
-  DayScreen: {date: string};
-  DayMap: {dayId: number; date: string};
-};
 
 export type RootStackParamList = {
   MainTabs: undefined;
   DayScreen: {date: string};
+  DayMap: {dayId: number; date: string};
   EntryDetailScreen: {entryId: number; dayId: number};
   AddEntryModal: {date?: string; dayId: number; entryId?: number};
   QuickAddModal: {date?: string; dayId: number; entryType: EntryType};
@@ -32,7 +26,7 @@ export type RootStackParamList = {
 };
 
 export type TabParamList = {
-  Home: NavigatorScreenParams<HomeStackParamList> | undefined;
+  Home: undefined;
   Map: undefined;
   Data: undefined;
   Gallery: undefined;
@@ -47,12 +41,3 @@ export type TabScreenProps<T extends keyof TabParamList> = CompositeScreenProps<
   BottomTabScreenProps<TabParamList, T>,
   NativeStackScreenProps<RootStackParamList>
 >;
-
-export type HomeStackScreenProps<T extends keyof HomeStackParamList> =
-  CompositeScreenProps<
-    NativeStackScreenProps<HomeStackParamList, T>,
-    CompositeScreenProps<
-      BottomTabScreenProps<TabParamList, 'Home'>,
-      NativeStackScreenProps<RootStackParamList>
-    >
-  >;
