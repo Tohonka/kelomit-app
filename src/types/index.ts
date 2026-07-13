@@ -26,6 +26,8 @@ export interface Day {
   ended_at: string | null;
   started_at_2: string | null;
   ended_at_2: string | null;
+  started_at_source: string | null;
+  ended_at_source: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;

@@ -16,6 +16,8 @@ function makeDay(overrides: Partial<Day>): Day {
     ended_at: null,
     started_at_2: null,
     ended_at_2: null,
+    started_at_source: null,
+    ended_at_source: null,
     notes: null,
     created_at: '2026-06-11T00:00:00.000Z',
     updated_at: '2026-06-11T00:00:00.000Z',

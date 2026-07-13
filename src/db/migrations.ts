@@ -275,4 +275,13 @@ export const migrations: Migration[] = [
       "DELETE FROM settings WHERE key = 'places_api_key'",
     ],
   },
+  {
+    version: 18,
+    up: [
+      // Provenance for auto-detected vs manually-entered day times, so the
+      // detection redesign never overwrites a value the user set by hand.
+      'ALTER TABLE days ADD COLUMN started_at_source TEXT',
+      'ALTER TABLE days ADD COLUMN ended_at_source TEXT',
+    ],
+  },
 ];

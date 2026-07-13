@@ -9,6 +9,8 @@ function rowToDay(row: Record<string, unknown>): Day {
     ended_at: (row.ended_at as string | null) ?? null,
     started_at_2: (row.started_at_2 as string | null) ?? null,
     ended_at_2: (row.ended_at_2 as string | null) ?? null,
+    started_at_source: (row.started_at_source as string | null) ?? null,
+    ended_at_source: (row.ended_at_source as string | null) ?? null,
     notes: (row.notes as string | null) ?? null,
     created_at: row.created_at as string,
     updated_at: row.updated_at as string,
@@ -54,7 +56,7 @@ export async function getDaysInRange(startDate: string, endDate: string): Promis
 }
 
 type DayTimeFields = Partial<Pick<Day,
-  'started_at' | 'ended_at' | 'started_at_2' | 'ended_at_2' | 'notes'
+  'started_at' | 'ended_at' | 'started_at_2' | 'ended_at_2' | 'started_at_source' | 'ended_at_source' | 'notes'
 >>;
 
 export async function updateDay(id: number, fields: DayTimeFields): Promise<void> {
@@ -63,7 +65,7 @@ export async function updateDay(id: number, fields: DayTimeFields): Promise<void
   const vals: unknown[] = [];
 
   const fieldKeys: (keyof DayTimeFields)[] = [
-    'started_at', 'ended_at', 'started_at_2', 'ended_at_2', 'notes',
+    'started_at', 'ended_at', 'started_at_2', 'ended_at_2', 'started_at_source', 'ended_at_source', 'notes',
   ];
   for (const key of fieldKeys) {
     if (key in fields) {
