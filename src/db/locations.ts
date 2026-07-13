@@ -94,3 +94,30 @@ export async function getGeofenceEventsForDay(dayId: number): Promise<GeofenceEv
     };
   });
 }
+
+/** Most recent crossing for a location + type, across all days (for dedup on
+ *  a cold start where the in-memory guard is empty). Null if none. */
+export async function getLastGeofenceEvent(
+  locationId: number,
+  eventType: 'enter' | 'exit',
+): Promise<GeofenceEvent | null> {
+  const db = getDB();
+  const result = await db.execute(
+    'SELECT * FROM geofence_events WHERE location_id = ? AND event_type = ? ORDER BY timestamp DESC LIMIT 1;',
+    [locationId, eventType],
+  );
+  const rows = result.rows ?? [];
+  if (rows.length === 0) {
+    return null;
+  }
+  const row = rows[0] as RawRow;
+  return {
+    id: row.id as number,
+    location_id: (row.location_id as number | null) ?? null,
+    day_id: (row.day_id as number | null) ?? null,
+    event_type: row.event_type as 'enter' | 'exit',
+    latitude: (row.latitude as number | null) ?? null,
+    longitude: (row.longitude as number | null) ?? null,
+    timestamp: row.timestamp as string,
+  };
+}
