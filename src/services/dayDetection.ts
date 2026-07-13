@@ -81,10 +81,8 @@ export async function recordAndInfer(e: CrossingEvent): Promise<void> {
   }
 }
 
-/** Register monitored places and subscribe to crossings. Call on tracking-start. */
-export async function startDayDetection(): Promise<void> {
-  await loadLocations();
-  const places = _locations
+function monitoredPlacesFromLocations() {
+  return _locations
     .filter(l => l.kind === 'work' || l.kind === 'home')
     .map(l => ({
       id: l.id,
@@ -93,7 +91,12 @@ export async function startDayDetection(): Promise<void> {
       radius: l.radius_m,
       kind: l.kind,
     }));
-  monitorPlaces(places);
+}
+
+/** Register monitored places and subscribe to crossings. Call on tracking-start. */
+export async function startDayDetection(): Promise<void> {
+  await loadLocations();
+  monitorPlaces(monitoredPlacesFromLocations());
   _sub?.remove();
   _sub = subscribeGeofenceCrossing(recordAndInfer);
 }
@@ -101,4 +104,14 @@ export async function startDayDetection(): Promise<void> {
 export function stopDayDetection(): void {
   _sub?.remove();
   _sub = null;
+}
+
+/** Reload the saved-locations cache and, if detection is active, re-register
+ *  the monitored OS geofences. Call after any saved-location create/edit/delete
+ *  so a mid-session change is picked up without a tracking restart. */
+export async function refreshMonitoredPlaces(): Promise<void> {
+  await loadLocations();
+  if (_sub !== null) {
+    monitorPlaces(monitoredPlacesFromLocations());
+  }
 }

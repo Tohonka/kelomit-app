@@ -280,7 +280,7 @@ export async function startTracking(intervalMs = 60_000): Promise<void> {
     await startBackgroundLocationService(); // starts at the native default (fast)
   }
 
-  startDayDetection();
+  startDayDetection().catch(() => {});
 }
 
 /** Native activity-recognition reported the user started moving — a sensor-hub
