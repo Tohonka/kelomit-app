@@ -25,11 +25,13 @@ import {
   startBackgroundLocationService,
   stopBackgroundLocationService,
   subscribeBackgroundLocation,
+  subscribeActivityTransition,
   setBackgroundMode,
   enterParkedNative,
   type ParkFence,
   type NativeFix,
 } from '../native/backgroundLocation';
+import {ensureActivityRecognitionPermission} from './permissionService';
 import {usualHoursForDate} from '../utils/usualHours';
 import {format} from 'date-fns';
 import type {SavedLocation, Day} from '../types';
@@ -64,6 +66,7 @@ let _watchId: number | null = null;
 let _nativeActive = false;
 let _active = false;
 let _nativeSub: {remove: () => void} | null = null;
+let _activitySub: {remove: () => void} | null = null;
 // Wall-clock ms of the last accepted fix, for cross-source dedup.
 let _lastAcceptedFixMs = 0;
 let _configured = false;
@@ -305,8 +308,28 @@ export async function startTracking(intervalMs = 60_000): Promise<void> {
   const wantsBackground = useSettingsStore.getState().background_tracking;
   if (wantsBackground && isBackgroundLocationAvailable()) {
     _nativeActive = true;
+    // Best-effort: request ACTIVITY_RECOGNITION here too, so users who already
+    // had background tracking on (before AR shipped) still get prompted once.
+    // A denial just falls back to GPS-driven movement detection.
+    ensureActivityRecognitionPermission().catch(() => {});
+    _activitySub = subscribeActivityTransition(handleActivityMoving);
     _nativeSub = subscribeBackgroundLocation(handleNativeFix);
     await startBackgroundLocationService(); // starts at the native default (fast)
+  }
+}
+
+/** Native activity-recognition reported the user started moving — a sensor-hub
+ *  signal that beats GPS to the punch. Treat it as a trusted moving fix and
+ *  upgrade to fast immediately, instead of waiting for a good GPS fix to trip
+ *  isMoving() (which, in slow mode, can be a full slow-interval away). */
+function handleActivityMoving(): void {
+  if (!_active) {
+    return;
+  }
+  _lastMovingFixMs = Date.now();
+  if (_trackingMode !== 'fast') {
+    diag('mode.upgrade', 'by=ar');
+    applyMode('fast', null);
   }
 }
 
@@ -449,6 +472,8 @@ export function stopTracking(): void {
   if (_nativeActive) {
     _nativeSub?.remove();
     _nativeSub = null;
+    _activitySub?.remove();
+    _activitySub = null;
     stopBackgroundLocationService();
   }
   _active = false;
@@ -519,12 +544,11 @@ async function handlePosition(
   }
   const recentlyMoving =
     _lastMovingFixMs > 0 && arrivedMs - _lastMovingFixMs < MOVEMENT_MEMORY_MS;
-  // ponytail: parking ("no tracking rule") disabled for now — slow mode (60 s,
-  // balanced power) is the battery floor and movement detection carries it.
-  // Leaves the native geofence-exit + activity-recognition wake code dormant;
-  // re-enable (restore the _nativeActive && _insideIds.size > 0 && pendingExit
-  // gate) when the stop-tracking widget lands. See fix/gps-tracking handoff.
-  const canPark = false;
+  // Park (zero GPS requests; woken by OS geofence-exit AND activity-recognition)
+  // when the native FGS is running, we're inside a saved place, and there's no
+  // unresolved end-of-day exit (the >1 h eod rule is tick-driven and ticks stop
+  // while parked, so defer parking until it resolves — worst case ≤1 h of slow).
+  const canPark = _nativeActive && _insideIds.size > 0 && _eod.pendingExit === null;
   const desiredMode = nextTrackingMode(
     _trackingMode,
     movingNow,

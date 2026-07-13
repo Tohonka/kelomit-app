@@ -126,6 +126,10 @@ class LocationService : Service() {
     val interval = intent?.getLongExtra(EXTRA_INTERVAL, DEFAULT_INTERVAL_MS) ?: DEFAULT_INTERVAL_MS
     DiagLog.write(this, "svc.onStart", "interval=$interval flags=$flags")
     startLocationUpdates(interval, Priority.PRIORITY_HIGH_ACCURACY)
+    // Keep activity-recognition registered for the whole service lifetime (not
+    // just while parked): it's a low-power sensor-hub signal that lets the ladder
+    // upgrade slow→fast the moment the user starts moving, before GPS can.
+    requestActivityUpdates()
     return START_STICKY
   }
 
@@ -165,23 +169,25 @@ class LocationService : Service() {
       .addGeofences(geofences)
       .build()
     geofencingClient?.addGeofences(request, geofencePendingIntent)
-    requestActivityUpdates()
     parked = true
     DiagLog.write(this, "park.enter", "fences=${fences.size}")
     updateNotification(paused = true)
   }
 
-  /** Second, lower-latency wake source while parked: the activity-recognition
-   *  engine reporting the user started moving. Best-effort — if ACTIVITY_RECOGNITION
-   *  isn't granted we simply lean on the geofence-exit fallback. */
+  /** Lower-latency movement signal: the activity-recognition engine reporting
+   *  the user started moving. Registered for the whole service lifetime.
+   *  Best-effort — if ACTIVITY_RECOGNITION isn't granted we simply lean on GPS
+   *  (and, while parked, the geofence-exit fallback). */
   @SuppressLint("MissingPermission")
   private fun requestActivityUpdates() {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
       ActivityCompat.checkSelfPermission(this, Manifest.permission.ACTIVITY_RECOGNITION)
       != PackageManager.PERMISSION_GRANTED
     ) {
+      DiagLog.write(this, "activity.skip", "no-permission")
       return
     }
+    DiagLog.write(this, "activity.register", "")
     // Register ENTER transitions for every "moving" activity, so any event the
     // receiver sees means "started moving" (see ActivityTransitionReceiver).
     val moving = listOf(
@@ -213,16 +219,16 @@ class LocationService : Service() {
   }
 
   /** Activity-recognition wake (from ActivityTransitionReceiver): the user
-   *  started moving while parked. Ignore stray transitions when not parked. */
+   *  started moving. Always tell JS so the ladder can upgrade slow→fast now; and
+   *  if we were parked, resume location updates too. */
   fun onActivityMoveWake() {
-    if (!parked) return
-    DiagLog.write(this, "wake.activity", "")
-    exitParked(restart = true)
+    DiagLog.write(this, "wake.activity", "parked=$parked")
+    emitActivityMoving()
+    if (parked) exitParked(restart = true)
   }
 
   private fun exitParked(restart: Boolean) {
     geofencingClient?.removeGeofences(geofencePendingIntent)
-    removeActivityUpdates()
     parked = false
     DiagLog.write(this, "park.exit", "restart=$restart")
     updateNotification(paused = false)
@@ -278,6 +284,19 @@ class LocationService : Service() {
     }
     lastFixAt = now
     reactContext?.emitDeviceEvent("onBackgroundLocation", map)
+  }
+
+  /** Tell JS the activity engine reports the user started moving, so the ladder
+   *  can upgrade slow→fast immediately without waiting for a good GPS fix. Uses
+   *  the same reactHost path as emitLocation (New Arch: reactHost, not
+   *  reactNativeHost, which throws). */
+  private fun emitActivityMoving() {
+    val reactContext = (application as? ReactApplication)?.reactHost?.currentReactContext
+    val map = Arguments.createMap().apply {
+      putBoolean("moving", true)
+      putDouble("timestamp", System.currentTimeMillis().toDouble())
+    }
+    reactContext?.emitDeviceEvent("onActivityTransition", map)
   }
 
   override fun onDestroy() {

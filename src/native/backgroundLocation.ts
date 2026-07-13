@@ -84,3 +84,16 @@ export function subscribeBackgroundLocation(
 ): {remove: () => void} {
   return DeviceEventEmitter.addListener('onBackgroundLocation', cb);
 }
+
+export interface ActivityEvent {
+  moving: boolean; // always true today — we only register ENTER-moving transitions
+  timestamp: number;
+}
+
+/** Subscribe to native activity-recognition "started moving" events (sensor-hub
+ *  signal, faster than a GPS fix). Returns a remover. */
+export function subscribeActivityTransition(
+  cb: (e: ActivityEvent) => void,
+): {remove: () => void} {
+  return DeviceEventEmitter.addListener('onActivityTransition', cb);
+}
