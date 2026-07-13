@@ -99,6 +99,11 @@
         android:name=".location.GeofenceExitReceiver"
         android:exported="false" />
 
+      <!-- Always-on saved-place monitoring for work arrive/leave detection. -->
+      <receiver
+        android:name=".location.GeofenceCrossingReceiver"
+        android:exported="false" />
+
       <!-- Wakes the parked location service the moment activity-recognition
            reports the user started moving (faster than the geofence exit). -->
       <receiver

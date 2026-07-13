@@ -80,4 +80,23 @@ class BackgroundLocationModule(reactContext: ReactApplicationContext) :
       promise.reject("enter_parked_failed", e)
     }
   }
+
+  @ReactMethod
+  fun monitorPlaces(places: ReadableArray, promise: Promise) {
+    try {
+      val parsed = (0 until places.size()).mapNotNull { i ->
+        val f = places.getMap(i) ?: return@mapNotNull null
+        LocationService.ParkFence(
+          id = f.getDouble("id").toLong(),
+          latitude = f.getDouble("latitude"),
+          longitude = f.getDouble("longitude"),
+          radiusM = f.getDouble("radius").toFloat(),
+        )
+      }
+      LocationService.instance?.monitorPlaces(parsed)
+      promise.resolve(null)
+    } catch (e: Exception) {
+      promise.reject("monitor_places_failed", e)
+    }
+  }
 }
