@@ -3,7 +3,7 @@ module.exports = {
   setupFilesAfterEnv: ['./jest.setup.js'],
   // Allow babel-jest to transform reanimated + worklets (both ship ESM)
   transformIgnorePatterns: [
-    'node_modules/(?!((jest-)?react-native|@react-native(-community)?|react-native-reanimated|react-native-worklets)/)',
+    'node_modules/(?!((jest-)?react-native|@react-native(-community)?|react-native-reanimated|react-native-worklets|@op-engineering)/)',
   ],
   // Route both packages to their pre-built mocks so native modules are never loaded
   moduleNameMapper: {
@@ -11,5 +11,6 @@ module.exports = {
       '<rootDir>/node_modules/react-native-reanimated/lib/module/mock.js',
     '^react-native-worklets$':
       '<rootDir>/node_modules/react-native-worklets/lib/module/mock.js',
+    '^@op-engineering/op-sqlite$': '<rootDir>/__mocks__/@op-engineering/op-sqlite.js',
   },
 };

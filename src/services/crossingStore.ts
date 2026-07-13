@@ -31,9 +31,13 @@ export async function recordCrossing(p: {
 }): Promise<void> {
   const key = `${p.locationId}:${p.type}`;
   const nowMs = new Date(p.time).getTime();
-  let lastMs = _lastSeen.get(key) ?? null;
-  if (lastMs === null) {
-    // Cold-start fallback: consult the DB once.
+  const inMem = _lastSeen.get(key) ?? null;
+  let lastMs = inMem;
+  if (inMem === null) {
+    // Claim the slot synchronously (before the async DB lookup) so a
+    // near-simultaneous second producer for the same key dedups against this
+    // attempt instead of racing the same cold-start read and double-writing.
+    _lastSeen.set(key, nowMs);
     const last = await getLastGeofenceEvent(p.locationId, p.type);
     lastMs = last ? new Date(last.timestamp).getTime() : null;
   }
