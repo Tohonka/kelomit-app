@@ -47,3 +47,4 @@ deploy.config.json
 .DS_Store
 /redesign
 /ui-references
+/docs
