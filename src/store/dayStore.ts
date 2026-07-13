@@ -7,7 +7,7 @@ import {usualHoursForDate} from '../utils/usualHours';
 import type {Day} from '../types';
 
 type DayTimeFields = Partial<Pick<Day,
-  'started_at' | 'ended_at' | 'started_at_2' | 'ended_at_2' | 'notes'
+  'started_at' | 'ended_at' | 'started_at_2' | 'ended_at_2' | 'started_at_source' | 'ended_at_source' | 'notes'
 >>;
 
 /** Prefill params for a brand-new day, when the user has opted in and set both
@@ -80,7 +80,14 @@ export const useDayStore = create<DayState>((set, get) => ({
   updateDayTimes: async (date, fields) => {
     const existing = get().daysCache[date];
     if (!existing) { return; }
-    await updateDay(existing.id, fields);
+    const stamped = {...fields};
+    if ('started_at' in fields) {
+      stamped.started_at_source = 'manual';
+    }
+    if ('ended_at' in fields) {
+      stamped.ended_at_source = 'manual';
+    }
+    await updateDay(existing.id, stamped);
     const updated = await getDayByDate(date);
     if (!updated) { return; }
     set(state => ({
