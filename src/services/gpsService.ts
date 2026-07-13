@@ -14,11 +14,10 @@ import {
   type TrackingMode,
 } from './trackingMode';
 import {insertGpsPoint} from '../db/gps';
-import {getOrCreateDay, updateDay} from '../db/days';
-import {getLocations, insertGeofenceEvent} from '../db/locations';
-import {evaluateEndOfDay, initialEodState, type EodEvent, type EodState} from './endOfDay';
-import {createDayEndConfirmation} from '../db/dayConfirmations';
-import {displayDayEndConfirmation} from './notificationService';
+import {getOrCreateDay} from '../db/days';
+import {getLocations} from '../db/locations';
+import {recordCrossing} from './crossingStore';
+import {startDayDetection, stopDayDetection, runDayDetection} from './dayDetection';
 import {useSettingsStore} from '../store/settingsStore';
 import {
   isBackgroundLocationAvailable,
@@ -32,7 +31,6 @@ import {
   type NativeFix,
 } from '../native/backgroundLocation';
 import {ensureActivityRecognitionPermission} from './permissionService';
-import {usualHoursForDate} from '../utils/usualHours';
 import {format} from 'date-fns';
 import type {SavedLocation, Day} from '../types';
 
@@ -114,41 +112,6 @@ function ensureConfigured(): void {
 // Geofencing state
 let _geofences: SavedLocation[] = [];
 const _insideIds = new Set<number>();
-
-// End-of-day inference state (reset per day). See endOfDay.ts.
-let _eod: EodState = initialEodState();
-let _eodDay: string | null = null;
-
-/** Feed a geofence event to the end-of-day reducer and apply its decision.
- *  Auto-fills the day's end only when empty (never overwrites a user value). */
-async function applyEndOfDay(event: EodEvent, iso: string, day: Day): Promise<void> {
-  const s = useSettingsStore.getState();
-  const usualEnd = usualHoursForDate(day.date, s.usual_start, s.usual_end, s.weekday_hours).end;
-  const {state, action} = evaluateEndOfDay(_eod, {
-    event,
-    now: iso,
-    dayDate: day.date,
-    usualEnd,
-    endedAtSet: !!day.ended_at,
-    dayStarted: !!day.started_at,
-  });
-  _eod = state;
-  if (action.type === 'commit' && !day.ended_at) {
-    await updateDay(day.id, {ended_at: action.time});
-    day.ended_at = action.time;
-    // When the inferred end is > 1 h off the usual time, ask the user to
-    // confirm — log a pending row + post a Yes/No notification. The in-app
-    // banner mirrors the same row for when the notification is missed.
-    if (action.confirm) {
-      try {
-        const confirmationId = await createDayEndConfirmation(day.id, action.time);
-        await displayDayEndConfirmation(day.id, action.time, confirmationId);
-      } catch {
-        // Confirmation is best-effort; never break tracking over it.
-      }
-    }
-  }
-}
 
 export function getLastKnownPosition(): KnownPosition | null {
   return _lastPosition;
@@ -316,6 +279,8 @@ export async function startTracking(intervalMs = 60_000): Promise<void> {
     _nativeSub = subscribeBackgroundLocation(handleNativeFix);
     await startBackgroundLocationService(); // starts at the native default (fast)
   }
+
+  startDayDetection();
 }
 
 /** Native activity-recognition reported the user started moving — a sensor-hub
@@ -382,6 +347,9 @@ function hookAppState(): void {
   _appStateHooked = true;
   AppState.addEventListener('change', (s: AppStateStatus) => {
     diag('app.state', s, {active: _active, mode: _trackingMode, watchId: _watchId});
+    if (s === 'active') {
+      runDayDetection();
+    }
   });
 }
 
@@ -461,6 +429,7 @@ function applyMode(mode: TrackingMode, speed: number | null): void {
 
 export function stopTracking(): void {
   diag('track.stop', '');
+  stopDayDetection();
   if (_watchdog !== null) {
     clearInterval(_watchdog);
     _watchdog = null;
@@ -544,11 +513,11 @@ async function handlePosition(
   }
   const recentlyMoving =
     _lastMovingFixMs > 0 && arrivedMs - _lastMovingFixMs < MOVEMENT_MEMORY_MS;
-  // Park (zero GPS requests; woken by OS geofence-exit AND activity-recognition)
-  // when the native FGS is running, we're inside a saved place, and there's no
-  // unresolved end-of-day exit (the >1 h eod rule is tick-driven and ticks stop
-  // while parked, so defer parking until it resolves — worst case ≤1 h of slow).
-  const canPark = _nativeActive && _insideIds.size > 0 && _eod.pendingExit === null;
+  // Park (zero GPS requests; woken by OS geofence-exit + activity-recognition)
+  // when the native FGS is running and we're inside a saved place. End-of-day
+  // detection no longer depends on live ticks (OS geofence + re-derive), so the
+  // old pendingExit guard is gone.
+  const canPark = _nativeActive && _insideIds.size > 0;
   const desiredMode = nextTrackingMode(
     _trackingMode,
     movingNow,
@@ -609,10 +578,10 @@ async function handlePosition(
 }
 
 /**
- * Detect enter/leave transitions for saved locations (with hysteresis to avoid
- * flapping). Every crossing is logged. For 'work' locations, the day's start time
- * is auto-filled on arrival and end time on leaving — but only when empty, so a
- * user-entered value is never overwritten.
+ * Secondary crossing producer: detect saved-place enter/exit from the live fix
+ * (hysteresis to avoid flapping) and hand each crossing to the store. The store
+ * dedups against the OS-geofence producer. NO end-of-day logic here — that lives
+ * in dayDetection/endOfDay, re-derived from the persisted crossings.
  */
 async function processGeofences(
   lat: number,
@@ -620,12 +589,6 @@ async function processGeofences(
   day: Day,
   iso: string,
 ): Promise<void> {
-  // Reset end-of-day state when the day rolls over.
-  if (_eodDay !== day.date) {
-    _eod = initialEodState();
-    _eodDay = day.date;
-  }
-
   for (const loc of _geofences) {
     const dist = distanceMeters(lat, lon, loc.latitude, loc.longitude);
     const wasInside = _insideIds.has(loc.id);
@@ -638,45 +601,19 @@ async function processGeofences(
     if (nowInside === wasInside) {
       continue;
     }
-
     if (nowInside) {
       _insideIds.add(loc.id);
-      await insertGeofenceEvent({
-        location_id: loc.id,
-        day_id: day.id,
-        event_type: 'enter',
-        latitude: lat,
-        longitude: lon,
-        timestamp: iso,
-      });
-      if (loc.kind === 'work') {
-        // Arrival at work still auto-fills the day start (only when empty).
-        if (!day.started_at) {
-          await updateDay(day.id, {started_at: iso});
-          day.started_at = iso;
-        }
-        await applyEndOfDay('work_enter', iso, day);
-      } else if (loc.kind === 'home') {
-        await applyEndOfDay('home_enter', iso, day);
-      }
     } else {
       _insideIds.delete(loc.id);
-      await insertGeofenceEvent({
-        location_id: loc.id,
-        day_id: day.id,
-        event_type: 'exit',
-        latitude: lat,
-        longitude: lon,
-        timestamp: iso,
-      });
-      if (loc.kind === 'work') {
-        // End-of-day is now inferred (usual-time / 1 h / home rules), not
-        // stamped blindly on every work exit. See endOfDay.ts.
-        await applyEndOfDay('work_exit', iso, day);
-      }
     }
+    await recordCrossing({
+      locationId: loc.id,
+      dayId: day.id,
+      type: nowInside ? 'enter' : 'exit',
+      latitude: lat,
+      longitude: lon,
+      time: iso,
+    });
+    await runDayDetection();
   }
-
-  // Resolve the "still away > 1 h" rule on every fix (timestamp-driven, no timer).
-  await applyEndOfDay('tick', iso, day);
 }
