@@ -11,6 +11,7 @@ interface BackgroundLocationNative {
   stop(): Promise<void>;
   setMode(mode: string, ms: number): Promise<void>;
   enterParked(fences: ParkFence[]): Promise<void>;
+  monitorPlaces(places: MonitoredPlace[]): Promise<void>;
   /** Build-time Google Maps key (from .maps.env), exposed as a native constant. */
   mapsApiKey?: string;
 }
@@ -96,4 +97,37 @@ export function subscribeActivityTransition(
   cb: (e: ActivityEvent) => void,
 ): {remove: () => void} {
   return DeviceEventEmitter.addListener('onActivityTransition', cb);
+}
+
+export interface MonitoredPlace {
+  id: number;
+  latitude: number;
+  longitude: number;
+  radius: number; // metres (native floors this to >=100 for OS reliability)
+  kind: string;
+}
+
+export interface CrossingEvent {
+  locationId: number;
+  type: 'enter' | 'exit';
+  latitude: number | null;
+  longitude: number | null;
+  timestamp: number; // ms since epoch
+}
+
+/** (Re)register always-on OS geofences for saved places (work + home). No-op on
+ *  binaries without the native method. */
+export function monitorPlaces(places: MonitoredPlace[]): void {
+  try {
+    Native?.monitorPlaces?.(places)?.catch(() => {});
+  } catch {
+    // ignore
+  }
+}
+
+/** Subscribe to OS geofence crossings (enter/exit of a saved place). */
+export function subscribeGeofenceCrossing(
+  cb: (e: CrossingEvent) => void,
+): {remove: () => void} {
+  return DeviceEventEmitter.addListener('onGeofenceCrossing', cb);
 }
