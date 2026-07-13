@@ -1,97 +1,89 @@
-import {hhmmToIsoOn} from '../utils/dateUtils';
-
 /**
- * End-of-day inference (Iteration 3 Phase 8.1).
+ * End-of-day inference (redesign 2026-07-13).
  *
- * Pure, timestamp-driven reducer — NO timers. The "still away for > 1 h" rule is
- * resolved by feeding a `tick` on each incoming GPS fix and comparing timestamps,
- * so it survives Android doze (a setTimeout would not). Kept separate from
- * gpsService so it can be unit-tested with synthetic event sequences.
+ * Pure, re-runnable function over a day's persisted geofence crossings — no
+ * timers, no I/O, no module state. Crossings come from the crossing store
+ * (OS geofencing + live-fix backstop), so this survives parked/doze windows.
  *
- * Rules:
- *  - Leave work within ±30 min of the usual end time → that exit is the end.
- *  - No usual end set → arrival home is the end (if the day had a start).
- *  - Otherwise an off-time exit is "pending": if the user is still away > 1 h it
- *    commits the *original exit* time; re-entering work cancels it (a coffee run).
- *  - When a committed end differs from the usual time by > 1 h, `confirm` is set
- *    so the caller can ask the user (Phase 8.2). The end is still committed.
- *  - Never proposes an end when one is already set (auto-fill only).
+ * Rules (single-block day; out-of-office counts as work):
+ *  - start = first work arrival of the day.
+ *  - A work departure opens a pending end at that departure time. It resolves:
+ *      home arrival        -> commit that departure time, silent (no confirm);
+ *      re-enter any work   -> cancel (stepped out / switched offices);
+ *      away > 1h, no home  -> commit that departure time, ask the user.
+ *  - Commute home is never counted (end = the departure, not the home arrival).
+ *  - Never proposes a value that is already set.
  */
 
-export type EodEvent = 'work_exit' | 'work_enter' | 'home_enter' | 'tick';
+const AWAY_THRESHOLD_MS = 3_600_000; // 1 h
 
-export interface EodState {
-  /** ISO time of an unresolved work departure, or null. */
-  pendingExit: string | null;
+export interface Crossing {
+  locationId: number;
+  kind: 'work' | 'home' | 'other';
+  type: 'enter' | 'exit';
+  time: string; // ISO
 }
 
-export interface EodInput {
-  event: EodEvent;
-  now: string; // ISO of the current fix
-  dayDate: string; // YYYY-MM-DD of the day being evaluated
-  usualEnd: string | null; // "HH:mm" or null
-  endedAtSet: boolean; // is day.ended_at already set?
-  dayStarted: boolean; // is day.started_at set?
+export interface DetectionInput {
+  crossings: Crossing[]; // ordered ascending by time
+  now: string; // ISO — for resolving the away>1h rule
+  startedAtSet: boolean; // day.started_at already set?
+  endedAtSet: boolean; // day.ended_at already set?
 }
 
-export type EodAction =
-  | {type: 'none'}
-  | {type: 'commit'; time: string; confirm: boolean};
-
-const HALF_HOUR_S = 30 * 60;
-const HOUR_S = 60 * 60;
-
-function epochS(iso: string): number {
-  return Math.round(new Date(iso).getTime() / 1000);
+export interface DetectionResult {
+  startedAt: string | null; // propose this start (only when !startedAtSet)
+  endedAt: string | null; // propose this end (only when !endedAtSet)
+  confirmEnd: boolean; // ask the user to confirm the proposed end
 }
 
-export function initialEodState(): EodState {
-  return {pendingExit: null};
+function ms(iso: string): number {
+  return new Date(iso).getTime();
 }
 
-export function evaluateEndOfDay(
-  state: EodState,
-  input: EodInput,
-): {state: EodState; action: EodAction} {
-  const {event, now, dayDate, usualEnd, endedAtSet, dayStarted} = input;
-  const keep = {state, action: {type: 'none'} as EodAction};
+export function inferDay(input: DetectionInput): DetectionResult {
+  const {crossings, now, startedAtSet, endedAtSet} = input;
+  const result: DetectionResult = {startedAt: null, endedAt: null, confirmEnd: false};
 
-  // Re-entering work always clears a pending exit, even if the end is set.
-  if (event === 'work_enter') {
-    return {state: {pendingExit: null}, action: {type: 'none'}};
+  // START — first work arrival.
+  if (!startedAtSet) {
+    const firstWorkEnter = crossings.find(c => c.kind === 'work' && c.type === 'enter');
+    result.startedAt = firstWorkEnter ? firstWorkEnter.time : null;
   }
-  // Never overwrite an existing end (manual or already auto-filled).
+
   if (endedAtSet) {
-    return keep;
+    return result;
   }
 
-  const usualEndIso = usualEnd ? hhmmToIsoOn(dayDate, usualEnd) : null;
+  // END — fold crossings into "inside any work location" + a pending departure.
+  const workInside = new Set<number>();
+  let pendingExit: string | null = null;
 
-  switch (event) {
-    case 'work_exit': {
-      if (usualEndIso && Math.abs(epochS(now) - epochS(usualEndIso)) <= HALF_HOUR_S) {
-        // On-time departure → confident end, no confirmation needed.
-        return {state: {pendingExit: null}, action: {type: 'commit', time: now, confirm: false}};
+  for (const c of crossings) {
+    if (c.kind === 'work') {
+      if (c.type === 'enter') {
+        workInside.add(c.locationId);
+        pendingExit = null; // re-entering work cancels a pending departure
+      } else {
+        workInside.delete(c.locationId);
+        if (workInside.size === 0) {
+          pendingExit = c.time; // left all work — open a pending end
+        }
       }
-      // Off-time or no usual time → wait for the 1 h rule / home arrival.
-      return {state: {pendingExit: now}, action: {type: 'none'}};
+    } else if (c.kind === 'home' && c.type === 'enter' && pendingExit !== null) {
+      // work -> home: commit the departure time, no confirmation needed.
+      result.endedAt = pendingExit;
+      result.confirmEnd = false;
+      return result;
     }
-    case 'home_enter': {
-      // Home arrival is the fallback end only when no usual time is configured.
-      if (!usualEndIso && dayStarted) {
-        return {state: {pendingExit: null}, action: {type: 'commit', time: now, confirm: false}};
-      }
-      return keep;
-    }
-    case 'tick': {
-      const pending = state.pendingExit;
-      if (pending && epochS(now) - epochS(pending) > HOUR_S) {
-        const confirm = !!usualEndIso && Math.abs(epochS(pending) - epochS(usualEndIso)) > HOUR_S;
-        return {state: {pendingExit: null}, action: {type: 'commit', time: pending, confirm}};
-      }
-      return keep;
-    }
-    default:
-      return keep;
+    // 'other' places are ignored for day boundaries.
   }
+
+  // Still away and no home arrival — commit once past the away threshold, and ask.
+  if (pendingExit !== null && ms(now) - ms(pendingExit) > AWAY_THRESHOLD_MS) {
+    result.endedAt = pendingExit;
+    result.confirmEnd = true;
+  }
+
+  return result;
 }
