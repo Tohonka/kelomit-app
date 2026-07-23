@@ -7,6 +7,7 @@ interface WorkReportNative {
 
 const Native = NativeModules.WorkReport as WorkReportNative | undefined;
 
+/** Renders a report and returns Android's absolute output path, not a file URI. */
 export async function createNativeWorkReport(
   report: WorkReportModel,
   fileName: string,

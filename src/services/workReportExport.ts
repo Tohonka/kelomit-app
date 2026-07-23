@@ -23,10 +23,11 @@ export async function exportWorkReport(
   const days = await getDaysInRange(options.startDate, options.endDate);
   const entries = await getEntriesForDays(days.map(day => day.id));
   const fileName = `work-report-${options.startDate}-to-${options.endDate}.pdf`;
-  const sourceUri = await createNativeWorkReport(
+  const outputPath = await createNativeWorkReport(
     buildWorkReport({...options, days, entries}),
     fileName,
   );
+  const sourceUri = outputPath.startsWith('file://') ? outputPath : `file://${outputPath}`;
 
   try {
     await saveDocuments({

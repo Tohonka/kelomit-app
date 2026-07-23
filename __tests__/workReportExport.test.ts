@@ -61,7 +61,7 @@ beforeEach(() => {
   jest.resetAllMocks();
   getDaysInRangeMock.mockResolvedValue(days);
   getEntriesForDaysMock.mockResolvedValue([]);
-  createNativeWorkReportMock.mockResolvedValue('file:///cache/work-report.pdf');
+  createNativeWorkReportMock.mockResolvedValue('/cache/work-report.pdf');
 });
 
 describe('exportWorkReport', () => {
@@ -86,5 +86,12 @@ describe('exportWorkReport', () => {
     saveDocumentsMock.mockRejectedValue({code: errorCodes.OPERATION_CANCELED});
 
     await expect(exportWorkReport(options)).resolves.toBe('cancelled');
+  });
+
+  it('propagates a Save As failure that is not cancellation', async () => {
+    const failure = new Error('Save failed');
+    saveDocumentsMock.mockRejectedValue(failure);
+
+    await expect(exportWorkReport(options)).rejects.toBe(failure);
   });
 });
