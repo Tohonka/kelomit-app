@@ -50,6 +50,16 @@ const REPORT_TYPES: Array<{
   },
 ];
 
+const REPORT_ERROR_KEYS = {
+  report_person_required: 'reporting.errorPersonRequired',
+  report_company_required: 'reporting.errorCompanyRequired',
+  report_invalid_range: 'reporting.errorInvalidRange',
+  report_empty: 'reporting.errorEmpty',
+  report_read_failed: 'reporting.errorReadFailed',
+  report_render_failed: 'reporting.errorRenderFailed',
+  report_save_failed: 'reporting.errorSaveFailed',
+} as const;
+
 const makeLocalStyles = (c: Colors) =>
   StyleSheet.create({
     field: {
@@ -149,20 +159,34 @@ export default function ReportingSettings() {
   const [picker, setPicker] = useState<Picker>(null);
   const [busy, setBusy] = useState(false);
   const identityDirty = useRef({person: false, company: false});
+  const mounted = useRef(true);
 
   useEffect(() => {
+    mounted.current = true;
+    let active = true;
     Promise.all([
       getSetting('report_person_name'),
       getSetting('report_company_name'),
     ]).then(([savedPersonName, savedCompanyName]) => {
+      if (!active) {
+        return;
+      }
       if (!identityDirty.current.person) {
         setPersonName(savedPersonName ?? '');
       }
       if (!identityDirty.current.company) {
         setCompanyName(savedCompanyName ?? '');
       }
+    }).catch(() => {
+      if (active) {
+        Alert.alert(t('common.error'), t('reporting.errorLoadIdentity'));
+      }
     });
-  }, []);
+    return () => {
+      active = false;
+      mounted.current = false;
+    };
+  }, [t]);
 
   const saveIdentity = async (
     key: 'report_person_name' | 'report_company_name',
@@ -170,16 +194,28 @@ export default function ReportingSettings() {
     update: (trimmed: string) => void,
   ) => {
     const trimmed = value.trim();
-    update(trimmed);
-    await setSetting(key, trimmed);
+    try {
+      await setSetting(key, trimmed);
+      if (mounted.current) {
+        update(trimmed);
+      }
+    } catch {
+      if (mounted.current) {
+        Alert.alert(t('common.error'), t('reporting.errorSaveIdentity'));
+      }
+    }
   };
 
   const handleExport = async () => {
     if (busy) {
       return;
     }
+    const reportT = i18n.getFixedT(language);
     if (startDate > endDate) {
-      Alert.alert(t('common.error'), t('reporting.errorInvalidRange'));
+      Alert.alert(
+        reportT('common.error'),
+        reportT('reporting.errorInvalidRange'),
+      );
       return;
     }
     setBusy(true);
@@ -193,18 +229,15 @@ export default function ReportingSettings() {
         type,
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      const localizedMessage =
-        message === 'report_person_required'
-          ? t('reporting.errorPersonRequired')
-          : message === 'report_invalid_range'
-          ? t('reporting.errorInvalidRange')
-          : message.includes('Report must contain at least one day')
-          ? t('reporting.errorEmpty')
-          : `${t('settings.exportFailed')}: ${message}`;
-      Alert.alert(t('common.error'), localizedMessage);
+      const code = error instanceof Error ? error.message : '';
+      const errorKey =
+        REPORT_ERROR_KEYS[code as keyof typeof REPORT_ERROR_KEYS]
+        ?? 'settings.exportFailed';
+      Alert.alert(reportT('common.error'), reportT(errorKey));
     } finally {
-      setBusy(false);
+      if (mounted.current) {
+        setBusy(false);
+      }
     }
   };
 

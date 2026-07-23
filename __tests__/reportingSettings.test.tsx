@@ -2,6 +2,8 @@ import React from 'react';
 import {Alert, TextInput, TouchableOpacity} from 'react-native';
 import {act, create, type ReactTestInstance, type ReactTestRenderer} from 'react-test-renderer';
 
+let mockUiLanguage = 'en';
+
 jest.mock('../src/db/settings', () => ({
   getSetting: jest.fn(),
   setSetting: jest.fn(),
@@ -9,9 +11,9 @@ jest.mock('../src/db/settings', () => ({
 jest.mock('../src/services/workReportExport', () => ({
   exportWorkReport: jest.fn(),
 }));
-jest.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => ({
+jest.mock('react-i18next', () => {
+  const messages: Record<string, Record<string, string>> = {
+    en: {
       'reporting.personName': 'Your name',
       'reporting.companyName': 'Company name',
       'reporting.startDateAccessibility': 'Select start date',
@@ -24,11 +26,48 @@ jest.mock('react-i18next', () => ({
       'reporting.export': 'Export PDF',
       'reporting.exporting': 'Exporting…',
       'reporting.errorInvalidRange': 'The start date must be on or before the end date.',
+      'reporting.errorReadFailed': 'The report data could not be read.',
+      'reporting.errorSaveFailed': 'The report could not be saved.',
+      'reporting.errorLoadIdentity': 'The saved report details could not be loaded.',
+      'reporting.errorSaveIdentity': 'The report details could not be saved.',
+      'settings.exportFailed': 'Export failed',
       'common.error': 'Error',
-    }[key] ?? key),
-    i18n: {resolvedLanguage: 'en'},
-  }),
-}));
+    },
+    fi: {
+      'reporting.personName': 'Oma nimi',
+      'reporting.companyName': 'Yrityksen nimi',
+      'reporting.startDateAccessibility': 'Valitse raportin alkupäivä',
+      'reporting.endDateAccessibility': 'Valitse raportin loppupäivä',
+      'reporting.languageFiAccessibility': 'Raportin kieli suomi',
+      'reporting.languageEnAccessibility': 'Raportin kieli englanti',
+      'reporting.typeHoursAccessibility': 'Raportin tyyppi Päivittäiset tunnit',
+      'reporting.typeHeadlinesAccessibility': 'Raportin tyyppi Tunnit ja otsikot',
+      'reporting.typeStatisticsAccessibility': 'Raportin tyyppi Tunnit ja tilastot',
+      'reporting.export': 'Vie PDF',
+      'reporting.exporting': 'Viedään…',
+      'reporting.errorInvalidRange': 'Alkupäivän tulee olla sama tai ennen loppupäivää.',
+      'reporting.errorReadFailed': 'Raportin tietoja ei voitu lukea.',
+      'reporting.errorSaveFailed': 'Raporttia ei voitu tallentaa.',
+      'reporting.errorLoadIdentity': 'Tallennettuja raportin tietoja ei voitu ladata.',
+      'reporting.errorSaveIdentity': 'Raportin tietoja ei voitu tallentaa.',
+      'settings.exportFailed': 'Vienti epäonnistui',
+      'common.error': 'Virhe',
+    },
+  };
+  const translators: Record<string, (key: string) => string> = {
+    en: key => messages.en[key] ?? key,
+    fi: key => messages.fi[key] ?? key,
+  };
+  return {
+    useTranslation: () => ({
+      t: translators[mockUiLanguage],
+      i18n: {
+        resolvedLanguage: mockUiLanguage,
+        getFixedT: (language: string) => translators[language],
+      },
+    }),
+  };
+});
 jest.mock('../src/i18n', () => ({
   getDateFnsLocale: () => jest.requireActual('date-fns/locale').enUS,
 }));
@@ -63,10 +102,12 @@ const alertMock = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>(done => {
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((done, fail) => {
     resolve = done;
+    reject = fail;
   });
-  return {promise, resolve};
+  return {promise, resolve, reject};
 }
 
 function button(root: ReactTestInstance, label: string): ReactTestInstance {
@@ -85,6 +126,7 @@ async function renderScreen(): Promise<ReactTestRenderer> {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockUiLanguage = 'en';
   getSettingMock.mockResolvedValue(null);
   setSettingMock.mockResolvedValue();
   exportWorkReportMock.mockResolvedValue('saved');
@@ -205,8 +247,8 @@ it('disables export and defensively rejects an invalid date range', async () => 
 
   expect(exportWorkReport).not.toHaveBeenCalled();
   expect(alertMock).toHaveBeenCalledWith(
-    'Error',
-    'The start date must be on or before the end date.',
+    'Virhe',
+    'Alkupäivän tulee olla sama tai ennen loppupäivää.',
   );
 });
 
@@ -247,4 +289,127 @@ it('exports selected options once and exposes the busy state accessibly', async 
     pendingExport.resolve('saved');
     await pendingExport.promise;
   });
+});
+
+it('shows Finnish report errors under an English UI', async () => {
+  getSettingMock
+    .mockResolvedValueOnce('Matti Meikäläinen')
+    .mockResolvedValueOnce('Kelo Design Oy');
+  exportWorkReportMock.mockRejectedValue(new Error('report_read_failed'));
+  const renderer = await renderScreen();
+
+  await act(async () => {
+    button(renderer.root, 'Export PDF').props.onPress();
+  });
+
+  expect(alertMock).toHaveBeenCalledWith(
+    'Virhe',
+    'Raportin tietoja ei voitu lukea.',
+  );
+});
+
+it('shows English report errors under a Finnish UI', async () => {
+  mockUiLanguage = 'fi';
+  getSettingMock
+    .mockResolvedValueOnce('Matti Meikäläinen')
+    .mockResolvedValueOnce('Kelo Design Oy');
+  exportWorkReportMock.mockRejectedValue(new Error('report_save_failed'));
+  const renderer = await renderScreen();
+
+  act(() => {
+    button(renderer.root, 'Raportin kieli englanti').props.onPress();
+  });
+  await act(async () => {
+    button(renderer.root, 'Vie PDF').props.onPress();
+  });
+
+  expect(alertMock).toHaveBeenCalledWith(
+    'Error',
+    'The report could not be saved.',
+  );
+});
+
+it('shows a localized identity load failure', async () => {
+  getSettingMock.mockRejectedValue(new Error('SQLite unavailable'));
+
+  await renderScreen();
+
+  expect(alertMock).toHaveBeenCalledWith(
+    'Error',
+    'The saved report details could not be loaded.',
+  );
+});
+
+it('shows a localized identity save failure without trimming the field', async () => {
+  setSettingMock.mockRejectedValue(new Error('SQLite unavailable'));
+  const renderer = await renderScreen();
+  const personInput = renderer.root.findAllByType(TextInput)[0];
+
+  act(() => {
+    personInput.props.onChangeText('  New person  ');
+  });
+  await act(async () => {
+    await personInput.props.onBlur();
+  });
+
+  expect(renderer.root.findAllByType(TextInput)[0].props.value)
+    .toBe('  New person  ');
+  expect(alertMock).toHaveBeenCalledWith(
+    'Error',
+    'The report details could not be saved.',
+  );
+});
+
+it('does not update or alert after an identity save finishes post-unmount', async () => {
+  const pendingSave = deferred<void>();
+  setSettingMock.mockReturnValue(pendingSave.promise);
+  const renderer = await renderScreen();
+  const personInput = renderer.root.findAllByType(TextInput)[0];
+
+  act(() => {
+    personInput.props.onChangeText('New person');
+  });
+  let savePromise!: Promise<void>;
+  act(() => {
+    savePromise = personInput.props.onBlur();
+    renderer.unmount();
+  });
+
+  pendingSave.reject(new Error('SQLite unavailable'));
+  await expect(savePromise).resolves.toBeUndefined();
+  expect(alertMock).not.toHaveBeenCalled();
+});
+
+it('does not alert when identity loading fails after unmount', async () => {
+  const pendingLoad = deferred<string | null>();
+  getSettingMock.mockReturnValue(pendingLoad.promise);
+  const renderer = await renderScreen();
+
+  act(() => {
+    renderer.unmount();
+  });
+  const ignoredRejection = pendingLoad.promise.catch(() => undefined);
+  pendingLoad.reject(new Error('SQLite unavailable'));
+  await ignoredRejection;
+  await Promise.resolve();
+
+  expect(alertMock).not.toHaveBeenCalled();
+});
+
+it('never exposes an unexpected technical export error', async () => {
+  getSettingMock
+    .mockResolvedValueOnce('Matti Meikäläinen')
+    .mockResolvedValueOnce('Kelo Design Oy');
+  exportWorkReportMock.mockRejectedValue(new Error('SQLite password leaked'));
+  const renderer = await renderScreen();
+
+  await act(async () => {
+    button(renderer.root, 'Export PDF').props.onPress();
+  });
+
+  expect(alertMock).toHaveBeenCalledWith('Virhe', 'Vienti epäonnistui');
+  expect(alertMock).not.toHaveBeenCalledWith(
+    expect.anything(),
+    expect.stringContaining('SQLite'),
+  );
 });
