@@ -62,6 +62,11 @@ beforeEach(() => {
   getDaysInRangeMock.mockResolvedValue(days);
   getEntriesForDaysMock.mockResolvedValue([]);
   createNativeWorkReportMock.mockResolvedValue('/cache/work-report.pdf');
+  saveDocumentsMock.mockResolvedValue([{
+    uri: 'content://saved/work-report.pdf',
+    name: 'work-report.pdf',
+    error: null,
+  }]);
 });
 
 describe('exportWorkReport', () => {
@@ -88,10 +93,53 @@ describe('exportWorkReport', () => {
     await expect(exportWorkReport(options)).resolves.toBe('cancelled');
   });
 
-  it('propagates a Save As failure that is not cancellation', async () => {
+  it.each([
+    'Could not open output stream',
+    'No data was copied to the destination file',
+  ])('rejects a resolved Save As error: %s', async error => {
+    saveDocumentsMock.mockResolvedValue([{
+      uri: 'content://saved/work-report.pdf',
+      name: 'work-report.pdf',
+      error,
+    }]);
+
+    await expect(exportWorkReport(options)).rejects.toThrow('report_save_failed');
+  });
+
+  it('wraps a rejected Save As failure with a stable code', async () => {
     const failure = new Error('Save failed');
     saveDocumentsMock.mockRejectedValue(failure);
 
-    await expect(exportWorkReport(options)).rejects.toBe(failure);
+    await expect(exportWorkReport(options)).rejects.toThrow('report_save_failed');
+  });
+
+  it('wraps database read failures and stops before rendering', async () => {
+    getDaysInRangeMock.mockRejectedValue(new Error('SQLite unavailable'));
+
+    await expect(exportWorkReport(options)).rejects.toThrow('report_read_failed');
+    expect(createNativeWorkReport).not.toHaveBeenCalled();
+    expect(saveDocuments).not.toHaveBeenCalled();
+  });
+
+  it('wraps native render failures and stops before Save As', async () => {
+    createNativeWorkReportMock.mockRejectedValue(new Error('Native renderer failed'));
+
+    await expect(exportWorkReport(options)).rejects.toThrow('report_render_failed');
+    expect(saveDocuments).not.toHaveBeenCalled();
+  });
+
+  it('does not render or save a report with a blank company', async () => {
+    await expect(exportWorkReport({...options, companyName: ' '}))
+      .rejects.toThrow('report_company_required');
+    expect(createNativeWorkReport).not.toHaveBeenCalled();
+    expect(saveDocuments).not.toHaveBeenCalled();
+  });
+
+  it('does not render or save a report without positive day rows', async () => {
+    getDaysInRangeMock.mockResolvedValue([days[0]]);
+
+    await expect(exportWorkReport(options)).rejects.toThrow('report_empty');
+    expect(createNativeWorkReport).not.toHaveBeenCalled();
+    expect(saveDocuments).not.toHaveBeenCalled();
   });
 });
