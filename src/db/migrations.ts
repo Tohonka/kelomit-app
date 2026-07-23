@@ -284,4 +284,13 @@ export const migrations: Migration[] = [
       'ALTER TABLE days ADD COLUMN ended_at_source TEXT',
     ],
   },
+  {
+    version: 19,
+    up: [
+      // Native workday decisions carry a stable token so replaying the durable
+      // Android journal cannot create duplicate prompts or apply stale answers.
+      'ALTER TABLE day_end_confirmations ADD COLUMN native_token TEXT',
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_day_end_confirmations_native_token ON day_end_confirmations(native_token)',
+    ],
+  },
 ];

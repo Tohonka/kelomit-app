@@ -8,6 +8,8 @@ import {
   type PendingDayEnd,
 } from '../../db/dayConfirmations';
 import {cancelDayEndConfirmation} from '../../services/notificationService';
+import {respondToDayEnd} from '../../native/backgroundLocation';
+import {reconcileNativeEvents} from '../../services/nativeEventSync';
 import {formatTime} from '../../utils/dateUtils';
 import {useTheme, typography, spacing, radius} from '../../theme';
 import type {Colors} from '../../theme';
@@ -66,8 +68,18 @@ export default function DayEndConfirmBanner() {
   const answer = async (confirmed: boolean) => {
     const current = pending;
     setPending(null); // optimistic hide
-    await applyDayEndResponse(current.id, current.dayId, current.proposedEnd, confirmed);
-    cancelDayEndConfirmation(current.dayId).catch(() => {});
+    try {
+      if (current.token) {
+        await respondToDayEnd(current.token, confirmed);
+        await reconcileNativeEvents();
+      } else {
+        // Upgrade-only fallback for a prompt created by the retired JS engine.
+        await applyDayEndResponse(current.id, current.dayId, current.proposedEnd, confirmed);
+        cancelDayEndConfirmation(current.dayId).catch(() => {});
+      }
+    } finally {
+      load();
+    }
   };
 
   return (

@@ -121,6 +121,7 @@ export interface DayEndConfirmation {
   id: number;
   day_id: number;
   proposed_end: string;
+  native_token: string | null;
   /** null = unanswered, 1 = kept (yes), 0 = cleared (no). */
   confirmed: number | null;
   responded_at: string | null;
