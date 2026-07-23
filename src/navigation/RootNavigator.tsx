@@ -14,6 +14,7 @@ import SearchScreen from '../screens/SearchScreen';
 import InterfaceSettings from '../screens/settings/InterfaceSettings';
 import TrackingSettings from '../screens/settings/TrackingSettings';
 import WorkDetailsSettings from '../screens/settings/WorkDetailsSettings';
+import ReportingSettings from '../screens/settings/ReportingSettings';
 import DataSettings from '../screens/settings/DataSettings';
 import QuickAddSettings from '../screens/settings/QuickAddSettings';
 import LocationSettings from '../screens/settings/LocationSettings';
@@ -111,6 +112,11 @@ export default function RootNavigator() {
         name="WorkDetailsSettings"
         component={WorkDetailsSettings}
         options={{title: t('settings.workDetailsTitle')}}
+      />
+      <Stack.Screen
+        name="ReportingSettings"
+        component={ReportingSettings}
+        options={{title: t('reporting.title')}}
       />
       <Stack.Screen
         name="DataSettings"

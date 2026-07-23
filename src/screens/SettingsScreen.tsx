@@ -11,7 +11,7 @@ import {APP_VERSION} from '../version';
 type Props = TabScreenProps<'Settings'>;
 
 type Section = {
-  key: 'InterfaceSettings' | 'TrackingSettings' | 'WorkDetailsSettings' | 'TagsProjectsSettings' | 'DataSettings' | 'QuickAddSettings' | 'LocationSettings' | 'WidgetSettings' | 'TranscriptionSettings' | 'DiagnosticsSettings';
+  key: 'InterfaceSettings' | 'TrackingSettings' | 'WorkDetailsSettings' | 'TagsProjectsSettings' | 'ReportingSettings' | 'DataSettings' | 'QuickAddSettings' | 'LocationSettings' | 'WidgetSettings' | 'TranscriptionSettings' | 'DiagnosticsSettings';
   titleKey: string;
   subtitleKey: string;
 };
@@ -25,6 +25,7 @@ const SECTIONS: Section[] = [
   {key: 'TrackingSettings', titleKey: 'settings.trackingTitle', subtitleKey: 'settings.trackingSubtitle'},
   {key: 'LocationSettings', titleKey: 'location.title', subtitleKey: 'location.settingsSubtitle'},
   {key: 'TagsProjectsSettings', titleKey: 'manager.tagsProjectsTitle', subtitleKey: 'manager.tagsProjectsSubtitle'},
+  {key: 'ReportingSettings', titleKey: 'reporting.title', subtitleKey: 'reporting.subtitle'},
   {key: 'DataSettings', titleKey: 'settings.dataTitle', subtitleKey: 'settings.dataSubtitle'},
   {key: 'DiagnosticsSettings', titleKey: 'diagnostics.title', subtitleKey: 'diagnostics.subtitle'},
 ];
