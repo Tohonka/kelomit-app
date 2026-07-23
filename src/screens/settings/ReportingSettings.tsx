@@ -191,13 +191,13 @@ export default function ReportingSettings() {
   const saveIdentity = async (
     key: 'report_person_name' | 'report_company_name',
     value: string,
-    update: (trimmed: string) => void,
+    update: React.Dispatch<React.SetStateAction<string>>,
   ) => {
     const trimmed = value.trim();
     try {
       await setSetting(key, trimmed);
       if (mounted.current) {
-        update(trimmed);
+        update(current => current === value ? trimmed : current);
       }
     } catch {
       if (mounted.current) {

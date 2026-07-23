@@ -331,6 +331,32 @@ it('shows a localized identity save failure without trimming the field', async (
   );
 });
 
+it('does not overwrite newer input when an earlier identity save finishes', async () => {
+  const pendingSave = deferred<void>();
+  setSettingMock.mockReturnValue(pendingSave.promise);
+  const renderer = await renderScreen();
+  const personInput = renderer.root.findAllByType(TextInput)[0];
+
+  act(() => {
+    personInput.props.onChangeText('  Earlier person  ');
+  });
+  const savePromise = personInput.props.onBlur();
+  act(() => {
+    renderer.root.findAllByType(TextInput)[0].props.onChangeText('Newer person');
+  });
+  await act(async () => {
+    pendingSave.resolve();
+    await savePromise;
+  });
+
+  expect(setSetting).toHaveBeenCalledWith(
+    'report_person_name',
+    'Earlier person',
+  );
+  expect(renderer.root.findAllByType(TextInput)[0].props.value)
+    .toBe('Newer person');
+});
+
 it('does not update or alert after an identity save finishes post-unmount', async () => {
   const pendingSave = deferred<void>();
   setSettingMock.mockReturnValue(pendingSave.promise);
