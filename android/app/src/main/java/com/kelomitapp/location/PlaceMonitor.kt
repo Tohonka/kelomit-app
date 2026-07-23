@@ -143,6 +143,14 @@ object PlaceMonitor {
         "crossing.accept",
         "id=${crossing.place.id} kind=${crossing.place.kind} type=${crossing.direction}",
       )
+      if (crossing.place.kind == "work") {
+        WorkdayCoordinator.onCrossing(
+          context,
+          crossing.place.id,
+          crossing.direction,
+          timestamp,
+        )
+      }
     }
     store.setInsideIds(reduced.insideIds)
     context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)

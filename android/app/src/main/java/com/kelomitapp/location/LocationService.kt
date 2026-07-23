@@ -169,6 +169,7 @@ class LocationService : Service() {
     // just while parked): it's a low-power sensor-hub signal that lets the ladder
     // upgrade slow→fast the moment the user starts moving, before GPS can.
     requestActivityUpdates()
+    WorkdayCoordinator.restoreDeadlines(this)
     return START_STICKY
   }
 

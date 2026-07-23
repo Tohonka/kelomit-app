@@ -114,6 +114,14 @@
         </intent-filter>
       </receiver>
 
+      <receiver
+        android:name=".location.DayEndAlarmReceiver"
+        android:exported="false" />
+
+      <receiver
+        android:name=".location.DayEndActionReceiver"
+        android:exported="false" />
+
       <!-- Wakes the parked location service the moment activity-recognition
            reports the user started moving (faster than the geofence exit). -->
       <receiver

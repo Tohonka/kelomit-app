@@ -14,6 +14,7 @@ interface BackgroundLocationNative {
   syncPlaces(places: MonitoredPlace[]): Promise<void>;
   readNativeEvents(): Promise<string[]>;
   ackNativeEvents(sequence: number): Promise<void>;
+  respondToDayEnd(token: string, confirmed: boolean): Promise<void>;
   drainFixBuffer(): Promise<string[]>;
   /** Build-time Google Maps key (from .maps.env), exposed as a native constant. */
   mapsApiKey?: string;
@@ -228,6 +229,13 @@ export async function readNativeEvents(): Promise<string[]> {
 
 export async function ackNativeEvents(sequence: number): Promise<void> {
   await Native?.ackNativeEvents?.(sequence);
+}
+
+export async function respondToDayEnd(
+  token: string,
+  confirmed: boolean,
+): Promise<void> {
+  await Native?.respondToDayEnd?.(token, confirmed);
 }
 
 export function subscribeNativeEventAvailable(

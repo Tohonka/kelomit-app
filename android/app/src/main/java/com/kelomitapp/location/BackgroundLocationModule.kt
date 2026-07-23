@@ -154,4 +154,14 @@ class BackgroundLocationModule(reactContext: ReactApplicationContext) :
       promise.reject("ack_native_events_failed", e)
     }
   }
+
+  @ReactMethod
+  fun respondToDayEnd(token: String, confirmed: Boolean, promise: Promise) {
+    try {
+      WorkdayCoordinator.respond(reactApplicationContext, token, confirmed)
+      promise.resolve(null)
+    } catch (e: Exception) {
+      promise.reject("respond_day_end_failed", e)
+    }
+  }
 }

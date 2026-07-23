@@ -1,0 +1,7 @@
+<resources>
+    <string name="day_end_channel_name">Työpäivän vahvistus</string>
+    <string name="day_end_title">Päättyikö työpäivä?</string>
+    <string name="day_end_question">Päättyikö työpäiväsi klo %1$s?</string>
+    <string name="day_end_yes">Kyllä</string>
+    <string name="day_end_no">Ei</string>
+</resources>

@@ -14,4 +14,9 @@
     <string name="location_service_title">Kelomit is tracking location</string>
     <string name="location_service_text">Logging your location in the background.</string>
     <string name="location_service_paused_text">Paused at a saved place — resumes when you leave.</string>
+    <string name="day_end_channel_name">Workday confirmation</string>
+    <string name="day_end_title">Workday finished?</string>
+    <string name="day_end_question">Did your day end at %1$s?</string>
+    <string name="day_end_yes">Yes</string>
+    <string name="day_end_no">No</string>
 </resources>
