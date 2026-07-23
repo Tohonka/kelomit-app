@@ -36,8 +36,8 @@ interface DayState {
   daysCache: Record<string, Day>;
   isLoading: boolean;
   error: string | null;
-  loadToday: () => Promise<void>;
-  loadDay: (date: string) => Promise<Day>;
+  loadToday: () => Promise<Day>;
+  loadDay: (date: string, options?: {refresh?: boolean}) => Promise<Day>;
   updateDayTimes: (date: string, fields: DayTimeFields) => Promise<void>;
 }
 
@@ -58,20 +58,28 @@ export const useDayStore = create<DayState>((set, get) => ({
         daysCache: {...state.daysCache, [todayDate]: day},
         isLoading: false,
       }));
+      return day;
     } catch (e) {
       set({error: String(e), isLoading: false});
+      throw e;
     }
   },
 
-  loadDay: async (date: string) => {
-    const cached = get().daysCache[date];
-    if (cached) {
-      set({selectedDay: cached});
-      return cached;
+  loadDay: async (date: string, options?: {refresh?: boolean}) => {
+    if (!options?.refresh) {
+      const cached = get().daysCache[date];
+      if (cached) {
+        set({selectedDay: cached});
+        return cached;
+      }
     }
-    const day = await getOrCreateDay(date);
+    let day = options?.refresh ? await getDayByDate(date) : null;
+    if (!day) {
+      day = await getOrCreateDay(date);
+    }
     set(state => ({
       selectedDay: day,
+      today: state.today?.date === date ? day : state.today,
       daysCache: {...state.daysCache, [date]: day},
     }));
     return day;
