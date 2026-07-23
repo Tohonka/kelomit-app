@@ -46,6 +46,7 @@ deploy.config.json
 .DS_Store
 .DS_Store
 /redesign
+/.worktrees
 /ui-references
 /docs
 AGENTS.md
