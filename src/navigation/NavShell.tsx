@@ -10,10 +10,22 @@ import BottomPill, {type PillRoute} from './BottomPill';
 export default function NavShell(props: BottomTabBarProps) {
   const {state, navigation} = props;
   const active = state.routes[state.index].name as PillRoute;
+  const select = (name: PillRoute) => {
+    const route = state.routes.find(candidate => candidate.name === name);
+    if (!route) return;
+    const event = navigation.emit({
+      type: 'tabPress',
+      target: route.key,
+      canPreventDefault: true,
+    });
+    if (!event.defaultPrevented) {
+      navigation.navigate(name);
+    }
+  };
   return (
     <>
       <TopFeatureBar {...props} />
-      <BottomPill active={active} onSelect={route => navigation.navigate(route)} />
+      <BottomPill active={active} onSelect={select} />
     </>
   );
 }

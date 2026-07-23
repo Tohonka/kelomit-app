@@ -1,4 +1,4 @@
-import React, {useEffect, useMemo, useState} from 'react';
+import React, {useMemo, useState} from 'react';
 import {View, Text, TouchableOpacity, Pressable, StyleSheet, Modal} from 'react-native';
 import Animated, {FadeInDown} from 'react-native-reanimated';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -8,13 +8,22 @@ import {useDayStore} from '../store/dayStore';
 import {buildQuickAddActions} from '../components/entries/quickAddActions';
 import {useTheme, typography, radius, spacing} from '../theme';
 import type {Colors} from '../theme';
-import type {EntryType} from '../types';
+import type {Day, EntryType} from '../types';
 import type {RootStackParamList} from './navigationTypes';
 
 // Center button of the floaty pill. Tap = full new-entry editor (AddEntryModal);
 // long-press = the quick-add speed dial (note / photo / video / voice → QuickAddModal).
 // Both target today's day, so it works from any tab.
 const SIZE = 54;
+
+export async function resolveQuickAddDay(
+  target: {date: string; dayId: number} | undefined,
+  loadToday: () => Promise<Day>,
+): Promise<{date: string; dayId: number}> {
+  if (target) return target;
+  const day = await loadToday();
+  return {date: day.date, dayId: day.id};
+}
 
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
@@ -65,35 +74,35 @@ export default function QuickAddButton({target}: {target?: {date: string; dayId:
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const today = useDayStore(s => s.today);
   const loadToday = useDayStore(s => s.loadToday);
   const [open, setOpen] = useState(false);
-
-  // Guarantee today's day exists so quick-add works from any tab, not just Home.
-  useEffect(() => {
-    if (!target && !today) { loadToday(); }
-  }, [target, today, loadToday]);
-
-  const resolveDay = React.useCallback(
-    () => (target ? {dayId: target.dayId, date: target.date} : {dayId: useDayStore.getState().today?.id, date: undefined as string | undefined}),
-    [target],
-  );
+  const [resolving, setResolving] = useState(false);
 
   const go = React.useCallback(
-    (entryType: EntryType) => {
+    async (entryType: EntryType) => {
+      if (resolving) return;
+      setResolving(true);
       setOpen(false);
-      const {dayId, date} = resolveDay();
-      if (dayId == null) { return; }
-      navigation.navigate('QuickAddModal', {dayId, date, entryType});
+      try {
+        const {dayId, date} = await resolveQuickAddDay(target, loadToday);
+        navigation.navigate('QuickAddModal', {dayId, date, entryType});
+      } finally {
+        setResolving(false);
+      }
     },
-    [navigation, resolveDay],
+    [navigation, target, loadToday, resolving],
   );
   // Single tap = the full new-entry editor.
-  const openAdd = React.useCallback(() => {
-    const {dayId, date} = resolveDay();
-    if (dayId == null) { return; }
-    navigation.navigate('AddEntryModal', {dayId, date});
-  }, [navigation, resolveDay]);
+  const openAdd = React.useCallback(async () => {
+    if (resolving) return;
+    setResolving(true);
+    try {
+      const {dayId, date} = await resolveQuickAddDay(target, loadToday);
+      navigation.navigate('AddEntryModal', {dayId, date});
+    } finally {
+      setResolving(false);
+    }
+  }, [navigation, target, loadToday, resolving]);
   const actions = useMemo(() => buildQuickAddActions(go), [go]);
 
   return (
@@ -118,6 +127,7 @@ export default function QuickAddButton({target}: {target?: {date: string; dayId:
       <TouchableOpacity
         style={styles.button}
         activeOpacity={0.85}
+        disabled={resolving}
         accessibilityRole="button"
         onPress={() => (open ? setOpen(false) : openAdd())}
         onLongPress={() => setOpen(true)}

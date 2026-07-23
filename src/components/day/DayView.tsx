@@ -1,6 +1,6 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import {View, Text, StyleSheet, ScrollView, AppState} from 'react-native';
+import {View, Text, StyleSheet, ScrollView} from 'react-native';
 import {format} from 'date-fns';
 import {GestureDetector, Gesture} from 'react-native-gesture-handler';
 import Animated, {FadeIn} from 'react-native-reanimated';
@@ -110,19 +110,13 @@ export default function DayView({date, variant, onRequestDate, onOpenEntry, onDa
     getUpcomingTodos(nextDayDates()).then(setUpcoming).catch(() => {});
   }, []);
 
-  // Refresh today's day + upcoming on focus (post-add, tab switch).
+  // Home owns today's current-date/SQLite refresh. This view only refreshes the
+  // upcoming list on focus.
   useFocusEffect(
     useCallback(() => {
-      if (isToday) { loadDay(date); loadUpcoming(); }
-    }, [isToday, loadDay, date, loadUpcoming]),
+      if (isToday) { loadUpcoming(); }
+    }, [isToday, loadUpcoming]),
   );
-
-  // Re-read today on foreground: midnight rollover / background geofence stamps.
-  useEffect(() => {
-    if (!isToday) { return; }
-    const sub = AppState.addEventListener('change', s => { if (s === 'active') { loadDay(date); } });
-    return () => sub.remove();
-  }, [isToday, date, loadDay]);
 
   // Poll geofence membership for the "where am I" line.
   useEffect(() => {

@@ -1,7 +1,7 @@
 import React, {useEffect, useMemo, useState} from 'react';
 import {View, Text, ScrollView, TouchableOpacity, ActivityIndicator, StyleSheet} from 'react-native';
 import {useTranslation} from 'react-i18next';
-import {useNavigation} from '@react-navigation/native';
+import {useFocusEffect, useNavigation} from '@react-navigation/native';
 import {format} from 'date-fns';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useDayStore} from '../store/dayStore';
@@ -94,7 +94,11 @@ export default function MapTab() {
   const today = useDayStore(s => s.today);
   const loadToday = useDayStore(s => s.loadToday);
 
-  useEffect(() => { if (!today) { loadToday(); } }, [today, loadToday]);
+  useFocusEffect(
+    React.useCallback(() => {
+      loadToday().catch(() => {});
+    }, [loadToday]),
+  );
 
   if (!today) {
     return (

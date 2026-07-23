@@ -1,12 +1,46 @@
-import React from 'react';
+import React, {useCallback, useEffect, useState} from 'react';
+import {AppState} from 'react-native';
+import {useFocusEffect} from '@react-navigation/native';
 import DayView from '../components/day/DayView';
+import {useDayStore} from '../store/dayStore';
+import {useEntryStore} from '../store/entryStore';
 import {todayDate} from '../utils/dateUtils';
 import type {TabScreenProps} from '../navigation/navigationTypes';
 
 type Props = TabScreenProps<'Home'>;
 
 export default function HomeScreen({navigation}: Props) {
-  const date = todayDate();
+  const [date, setDate] = useState(todayDate());
+  const loadToday = useDayStore(s => s.loadToday);
+  const loadEntriesForDay = useEntryStore(s => s.loadEntriesForDay);
+
+  const refreshToday = useCallback(async () => {
+    const day = await loadToday();
+    setDate(day.date);
+    await loadEntriesForDay(day.id);
+  }, [loadToday, loadEntriesForDay]);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshToday().catch(() => {});
+    }, [refreshToday]),
+  );
+
+  useEffect(() => navigation.addListener('tabPress', () => {
+    if (navigation.isFocused()) {
+      refreshToday().catch(() => {});
+    }
+  }), [navigation, refreshToday]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', state => {
+      if (state === 'active') {
+        refreshToday().catch(() => {});
+      }
+    });
+    return () => sub.remove();
+  }, [refreshToday]);
+
   return (
     <DayView
       variant="today"
