@@ -6,7 +6,6 @@ import {
   STATIONARY_STREAK_TO_SLOW,
   fastIntervalForSpeed,
   dedupGapMs,
-  STREAK_TO_PARK,
   SPRINT_INTERVAL_MS,
   FAST_INTERVAL_MS,
 } from '../src/services/trackingMode';
@@ -61,36 +60,20 @@ describe('nextTrackingMode', () => {
     // recentlyMoving guard must keep us in fast so the chip re-acquires instead
     // of powering down to balanced-power slow (the scooter death spiral).
     expect(
-      nextTrackingMode('fast', false, STATIONARY_STREAK_TO_SLOW, false, true),
+      nextTrackingMode('fast', false, STATIONARY_STREAK_TO_SLOW, true),
     ).toBe('fast');
   });
 
   it('relaxes to slow once movement memory has expired', () => {
     expect(
-      nextTrackingMode('fast', false, STATIONARY_STREAK_TO_SLOW, false, false),
+      nextTrackingMode('fast', false, STATIONARY_STREAK_TO_SLOW, false),
     ).toBe('slow');
   });
 });
 
-describe('nextTrackingMode – parked', () => {
-  it('parks when still long enough inside a saved fence (canPark)', () => {
-    expect(nextTrackingMode('slow', false, STREAK_TO_PARK, true)).toBe('parked');
-  });
-
-  it('does not park without canPark (bg tracking off / outside fences)', () => {
-    expect(nextTrackingMode('slow', false, STREAK_TO_PARK, false)).toBe('slow');
-  });
-
-  it('does not park before the park streak even inside a fence', () => {
-    expect(nextTrackingMode('slow', false, STREAK_TO_PARK - 1, true)).toBe('slow');
-  });
-
-  it('wakes straight to fast from parked on movement', () => {
-    expect(nextTrackingMode('parked', true, 0, true)).toBe('fast');
-  });
-
-  it('stays parked while still inside the fence', () => {
-    expect(nextTrackingMode('parked', false, STREAK_TO_PARK + 5, true)).toBe('parked');
+describe('nextTrackingMode – saved-place independence', () => {
+  it('has no saved-place-dependent background mode', () => {
+    expect(nextTrackingMode('slow', false, 99)).toBe('slow');
   });
 });
 

@@ -2,6 +2,7 @@ package com.kelomitapp.location
 
 import android.content.Intent
 import android.os.Build
+import android.util.AtomicFile
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -25,10 +26,15 @@ class BackgroundLocationModule(reactContext: ReactApplicationContext) :
   override fun getConstants(): Map<String, Any> = mapOf("mapsApiKey" to BuildConfig.MAPS_API_KEY)
 
   @ReactMethod
-  fun start(promise: Promise) {
+  fun start(slowIntervalMs: Double, promise: Promise) {
     try {
+      require(slowIntervalMs.isFinite() && slowIntervalMs > 0.0)
       val ctx = reactApplicationContext
+      val settings = NativeTrackingSettings(ctx)
+      settings.slowIntervalMs = slowIntervalMs.toLong()
+      settings.enabled = true
       val intent = Intent(ctx, LocationService::class.java)
+        .putExtra(LocationService.EXTRA_SLOW_INTERVAL, slowIntervalMs.toLong())
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
         ctx.startForegroundService(intent)
       } else {
@@ -44,6 +50,9 @@ class BackgroundLocationModule(reactContext: ReactApplicationContext) :
   fun stop(promise: Promise) {
     try {
       val ctx = reactApplicationContext
+      NativeTrackingSettings(ctx).enabled = false
+      LocationService.removeActivityUpdates(ctx)
+      PlaceMonitor.unregister(ctx)
       ctx.stopService(Intent(ctx, LocationService::class.java))
       promise.resolve(null)
     } catch (e: Exception) {
@@ -52,51 +61,46 @@ class BackgroundLocationModule(reactContext: ReactApplicationContext) :
   }
 
   @ReactMethod
-  fun setMode(mode: String, ms: Double, promise: Promise) {
+  fun readFixBuffer(promise: Promise) {
     try {
-      // Talk to the already-running service in-process; do NOT startForegroundService
-      // here (forbidden from background on Android 12+).
-      LocationService.instance?.updateMode(mode, ms.toLong())
-      promise.resolve(null)
-    } catch (e: Exception) {
-      promise.reject("set_mode_failed", e)
-    }
-  }
-
-  @ReactMethod
-  fun enterParked(fences: ReadableArray, promise: Promise) {
-    try {
-      val parsed = (0 until fences.size()).mapNotNull { i ->
-        val f = fences.getMap(i) ?: return@mapNotNull null
-        LocationService.ParkFence(
-          id = f.getDouble("id").toLong(),
-          latitude = f.getDouble("latitude"),
-          longitude = f.getDouble("longitude"),
-          radiusM = f.getDouble("radius").toFloat(),
-        )
-      }
-      LocationService.instance?.enterParked(parsed)
-      promise.resolve(null)
-    } catch (e: Exception) {
-      promise.reject("enter_parked_failed", e)
-    }
-  }
-
-  /** Drain fixes buffered while the React context was dead (see
-   *  [LocationService.FIX_BUFFER_FILE]): return the JSONL lines and delete the
-   *  file. JS feeds them through its normal persistence pipeline. */
-  @ReactMethod
-  fun drainFixBuffer(promise: Promise) {
-    try {
-      val file = java.io.File(reactApplicationContext.filesDir, LocationService.FIX_BUFFER_FILE)
       val out = com.facebook.react.bridge.Arguments.createArray()
-      if (file.exists()) {
-        file.readLines().forEach { line -> if (line.isNotBlank()) out.pushString(line) }
-        file.delete()
+      synchronized(LocationService.FIX_BUFFER_LOCK) {
+        val file = java.io.File(reactApplicationContext.filesDir, LocationService.FIX_BUFFER_FILE)
+        if (file.exists()) {
+          file.readLines().forEach { line -> if (line.isNotBlank()) out.pushString(line) }
+        }
       }
       promise.resolve(out)
     } catch (e: Exception) {
-      promise.reject("drain_fix_buffer_failed", e)
+      promise.reject("read_fix_buffer_failed", e)
+    }
+  }
+
+  @ReactMethod
+  fun ackFixBuffer(count: Double, promise: Promise) {
+    try {
+      require(count.isFinite() && count >= 0.0 && count % 1.0 == 0.0)
+      synchronized(LocationService.FIX_BUFFER_LOCK) {
+        val file = java.io.File(reactApplicationContext.filesDir, LocationService.FIX_BUFFER_FILE)
+        if (file.exists()) {
+          val remaining = file.readLines().drop(count.toInt())
+          val atomic = AtomicFile(file)
+          val stream = atomic.startWrite()
+          try {
+            stream.write(
+              if (remaining.isEmpty()) byteArrayOf()
+              else (remaining.joinToString("\n") + "\n").toByteArray(),
+            )
+            atomic.finishWrite(stream)
+          } catch (error: Exception) {
+            atomic.failWrite(stream)
+            throw error
+          }
+        }
+      }
+      promise.resolve(null)
+    } catch (e: Exception) {
+      promise.reject("ack_fix_buffer_failed", e)
     }
   }
 
@@ -123,7 +127,12 @@ class BackgroundLocationModule(reactContext: ReactApplicationContext) :
         parsedPlace
       }
       NativePlaceStore(reactApplicationContext).replace(parsed)
-      PlaceMonitor.sync(reactApplicationContext)
+      val registration = if (NativeTrackingSettings(reactApplicationContext).enabled) {
+        PlaceMonitor.sync(reactApplicationContext)
+      } else {
+        PlaceMonitor.unregister(reactApplicationContext)
+      }
+      registration
         .addOnSuccessListener { promise.resolve(null) }
         .addOnFailureListener { promise.reject("sync_places_failed", it) }
     } catch (e: Exception) {

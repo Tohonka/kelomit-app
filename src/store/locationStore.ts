@@ -7,8 +7,7 @@ import {
   clampRadius,
   type CreateLocationParams,
 } from '../db/locations';
-import {refreshGeofences} from '../services/gpsService';
-import {refreshMonitoredPlaces} from '../services/dayDetection';
+import {syncSavedPlaces} from '../services/trackingOrchestrator';
 import type {SavedLocation} from '../types';
 
 interface LocationState {
@@ -32,16 +31,14 @@ export const useLocationStore = create<LocationState>(set => ({
   add: async params => {
     const loc = await createLocation(params);
     set(state => ({locations: [...state.locations, loc]}));
-    await refreshGeofences();
-    await refreshMonitoredPlaces();
+    await syncSavedPlaces(await getLocations());
     return loc;
   },
 
   remove: async id => {
     await deleteLocation(id);
     set(state => ({locations: state.locations.filter(l => l.id !== id)}));
-    await refreshGeofences();
-    await refreshMonitoredPlaces();
+    await syncSavedPlaces(await getLocations());
   },
 
   setRadius: async (id, radiusM) => {
@@ -52,7 +49,6 @@ export const useLocationStore = create<LocationState>(set => ({
         l.id === id ? {...l, radius_m: clamped} : l,
       ),
     }));
-    await refreshGeofences();
-    await refreshMonitoredPlaces();
+    await syncSavedPlaces(await getLocations());
   },
 }));

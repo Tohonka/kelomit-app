@@ -1,9 +1,7 @@
 import {
   insertGeofenceEvent,
-  getGeofenceEventsForDay,
   getLastGeofenceEvent,
 } from '../db/locations';
-import type {Crossing} from './endOfDay';
 
 const DEDUP_WINDOW_MS = 60_000;
 
@@ -53,21 +51,4 @@ export async function recordCrossing(p: {
     longitude: p.longitude,
     timestamp: p.time,
   });
-}
-
-/** Read a day's crossings as ordered inference input. `kindOf` maps a location
- *  id to its saved kind (caller supplies it from the in-memory locations list). */
-export async function crossingsForDay(
-  dayId: number,
-  kindOf: (locationId: number) => 'work' | 'home' | 'other',
-): Promise<Crossing[]> {
-  const events = await getGeofenceEventsForDay(dayId);
-  return events
-    .filter(e => e.location_id != null)
-    .map(e => ({
-      locationId: e.location_id as number,
-      kind: kindOf(e.location_id as number),
-      type: e.event_type,
-      time: e.timestamp,
-    }));
 }

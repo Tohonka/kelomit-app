@@ -1,19 +1,13 @@
 import notifee, {
   AndroidImportance,
   AuthorizationStatus,
-  EventType,
   TriggerType,
-  type Event,
   type TimestampTrigger,
 } from '@notifee/react-native';
 import i18n from '../i18n';
-import {ensureDBReady} from '../db/database';
-import {applyDayEndResponse} from '../db/dayConfirmations';
-import {formatTime} from '../utils/dateUtils';
 import type {Entry} from '../types';
 
 const CHANNEL_ID = 'todo-reminders';
-const DAY_END_CHANNEL_ID = 'day-end';
 
 /** Create the Android notification channels. Safe to call repeatedly. */
 export async function ensureNotificationChannel(): Promise<void> {
@@ -22,79 +16,10 @@ export async function ensureNotificationChannel(): Promise<void> {
     name: i18n.t('todo.channelName'),
     importance: AndroidImportance.HIGH,
   });
-  await notifee.createChannel({
-    id: DAY_END_CHANNEL_ID,
-    name: i18n.t('dayEnd.channelName'),
-    importance: AndroidImportance.HIGH,
-  });
 }
 
 function dayEndNotifId(dayId: number): string {
   return `dayend-${dayId}`;
-}
-
-/** Post a "was this the end of your workday?" Yes/No notification. */
-export async function displayDayEndConfirmation(
-  dayId: number,
-  proposedEnd: string,
-  confirmationId: number,
-): Promise<void> {
-  await ensureNotificationChannel();
-  await notifee.displayNotification({
-    id: dayEndNotifId(dayId),
-    title: i18n.t('dayEnd.notificationTitle'),
-    body: i18n.t('dayEnd.question', {time: formatTime(proposedEnd)}),
-    data: {
-      type: 'dayend',
-      dayId: String(dayId),
-      proposedEnd,
-      confirmationId: String(confirmationId),
-    },
-    android: {
-      channelId: DAY_END_CHANNEL_ID,
-      pressAction: {id: 'default'},
-      smallIcon: 'ic_launcher',
-      actions: [
-        {title: i18n.t('common.yes'), pressAction: {id: 'dayend-yes'}},
-        {title: i18n.t('common.no'), pressAction: {id: 'dayend-no'}},
-      ],
-    },
-  });
-}
-
-/**
- * Shared notifee event handler for the day-end Yes/No actions. Registered for
- * both foreground and background (index.js) so it works whether the app is open
- * or killed. Returns true if it handled a day-end action.
- */
-export async function handleNotifeeEvent({type, detail}: Event): Promise<boolean> {
-  if (type !== EventType.ACTION_PRESS) {
-    return false;
-  }
-  const {pressAction, notification} = detail;
-  const data = notification?.data;
-  if (!pressAction || !data || data.type !== 'dayend') {
-    return false;
-  }
-  if (pressAction.id !== 'dayend-yes' && pressAction.id !== 'dayend-no') {
-    return false;
-  }
-  await ensureDBReady();
-  await applyDayEndResponse(
-    Number(data.confirmationId),
-    Number(data.dayId),
-    String(data.proposedEnd),
-    pressAction.id === 'dayend-yes',
-  );
-  if (notification?.id) {
-    await notifee.cancelNotification(notification.id);
-  }
-  return true;
-}
-
-/** Register the foreground notifee handler. Returns an unsubscribe fn. */
-export function registerForegroundNotifeeHandler(): () => void {
-  return notifee.onForegroundEvent(handleNotifeeEvent);
 }
 
 /** Dismiss a day-end notification (e.g. after answering via the in-app banner). */

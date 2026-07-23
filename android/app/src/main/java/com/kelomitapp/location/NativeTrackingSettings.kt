@@ -7,6 +7,10 @@ class NativeTrackingSettings(context: Context) {
     private const val PREFS = "native-location-settings"
     private const val KEY_ENABLED = "enabled"
     private const val KEY_SLOW_INTERVAL_MS = "slow_interval_ms"
+    private const val KEY_MODE = "mode"
+    private const val KEY_POLICY_INTERVAL_MS = "policy_interval_ms"
+    private const val KEY_MOVING_UNTIL_MS = "moving_until_ms"
+    private const val KEY_STILL_FIXES = "still_fixes"
   }
 
   private val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -27,4 +31,43 @@ class NativeTrackingSettings(context: Context) {
         "Could not persist native slow interval"
       }
     }
+
+  var movingUntilMs: Long
+    get() = prefs.getLong(KEY_MOVING_UNTIL_MS, 0L)
+    set(value) {
+      check(prefs.edit().putLong(KEY_MOVING_UNTIL_MS, value).commit())
+    }
+
+  fun policyState(slowIntervalMs: Long = this.slowIntervalMs): TrackingPolicy.State {
+    val mode = runCatching {
+      TrackingPolicy.Mode.valueOf(
+        prefs.getString(KEY_MODE, TrackingPolicy.Mode.FAST.name)
+          ?: TrackingPolicy.Mode.FAST.name,
+      )
+    }.getOrDefault(TrackingPolicy.Mode.FAST)
+    val interval = when (mode) {
+      TrackingPolicy.Mode.FAST -> prefs.getLong(KEY_POLICY_INTERVAL_MS, TrackingPolicy.FAST_MS)
+      TrackingPolicy.Mode.SLOW -> slowIntervalMs
+      TrackingPolicy.Mode.IDLE -> slowIntervalMs
+    }
+    return TrackingPolicy.State(
+      mode = mode,
+      intervalMs = interval,
+      movingUntilMs = movingUntilMs,
+      stillFixes = prefs.getInt(KEY_STILL_FIXES, 0),
+    )
+  }
+
+  fun savePolicyState(state: TrackingPolicy.State) {
+    check(
+      prefs.edit()
+        .putString(KEY_MODE, state.mode.name)
+        .putLong(KEY_POLICY_INTERVAL_MS, state.intervalMs)
+        .putLong(KEY_MOVING_UNTIL_MS, state.movingUntilMs)
+        .putInt(KEY_STILL_FIXES, state.stillFixes)
+        .commit(),
+    ) {
+      "Could not persist native tracking policy"
+    }
+  }
 }

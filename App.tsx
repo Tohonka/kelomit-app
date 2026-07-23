@@ -10,8 +10,14 @@ import {initDB} from './src/db/database';
 import {pruneGpsTracksOlderThan} from './src/db/gps';
 import {pruneDiagLog, diag} from './src/services/diag';
 import {getAllSettings} from './src/db/settings';
-import {startTracking, stopTracking} from './src/services/gpsService';
-import {ensureNotificationChannel, registerForegroundNotifeeHandler, requestNotificationPermission} from './src/services/notificationService';
+import {getLocations} from './src/db/locations';
+import {stopTracking} from './src/services/gpsService';
+import {ensureNotificationChannel, requestNotificationPermission} from './src/services/notificationService';
+import {
+  reconcileTrackingJournal,
+  subscribeTrackingJournal,
+  syncTrackingState,
+} from './src/services/trackingOrchestrator';
 import {useSettingsStore} from './src/store/settingsStore';
 import {useSessionStore} from './src/store/sessionStore';
 import {useTheme, lightColors, typography} from './src/theme';
@@ -32,9 +38,10 @@ function AppContent() {
 
   useEffect(() => {
     initDB()
-      .then(() => {
+      .then(async () => {
+        await reconcileTrackingJournal();
+        await load();
         setDbReady(true);
-        load();
         ensureNotificationChannel().catch(() => {});
         // Log any sessions a home-screen widget finished while we were closed.
         useSessionStore.getState().reconcile().catch(() => {});
@@ -47,39 +54,45 @@ function AppContent() {
       .catch(e => setError(String(e)));
   }, [load]);
 
-  // Handle day-end Yes/No notification actions while the app is in the foreground.
-  useEffect(() => registerForegroundNotifeeHandler(), []);
-
   useEffect(() => {
     if (!dbReady || !loaded) {
       return;
     }
 
-    const startGpsIfEnabled = async () => {
+    const syncGps = async () => {
       const settings = await getAllSettings().catch(() => null);
-      if (settings?.gps_enabled) {
+      if (!settings) return;
+      const backgroundTracking = useSettingsStore.getState().background_tracking;
+      if (settings.gps_enabled) {
         // The background foreground service posts an ongoing notification; on
         // Android 13+ it stays hidden without POST_NOTIFICATIONS, so request it
         // when background tracking is on. Idempotent — no repeat dialogs.
-        if (useSettingsStore.getState().background_tracking) {
+        if (backgroundTracking) {
           requestNotificationPermission().catch(() => {});
         }
-        // startTracking starts the native foreground service itself when
-        // background tracking is on (and must run while foreground — Android 12+
-        // forbids starting an FGS from the background). Called on launch + resume.
-        startTracking(settings.gps_interval_ms);
       }
+      const locations = await getLocations();
+      await syncTrackingState({
+        gps_enabled: settings.gps_enabled,
+        gps_interval_ms: settings.gps_interval_ms,
+        background_tracking: backgroundTracking,
+      }, locations);
     };
 
     // Initial start is delayed; resume-from-background (below) starts immediately.
-    const startTimer = setTimeout(startGpsIfEnabled, GPS_START_DELAY_MS);
+    const startTimer = setTimeout(() => {
+      syncGps().catch(syncError => diag('track.sync.fail', String(syncError)));
+    }, GPS_START_DELAY_MS);
+    const journalSub = subscribeTrackingJournal();
 
     const sub = AppState.addEventListener('change', (nextState: AppStateStatus) => {
       if (
         appState.current.match(/inactive|background/) &&
         nextState === 'active'
       ) {
-        startGpsIfEnabled();
+        reconcileTrackingJournal()
+          .then(syncGps)
+          .catch(resumeError => diag('track.resume.fail', String(resumeError)));
         // A widget may have started/stopped a session while we were backgrounded.
         useSessionStore.getState().reconcile().catch(() => {});
       } else if (
@@ -99,7 +112,10 @@ function AppContent() {
     return () => {
       clearTimeout(startTimer);
       sub.remove();
-      stopTracking();
+      journalSub.remove();
+      if (!useSettingsStore.getState().background_tracking) {
+        stopTracking();
+      }
     };
   }, [dbReady, loaded]);
 

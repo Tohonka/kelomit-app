@@ -94,12 +94,6 @@
         android:exported="false"
         android:foregroundServiceType="location" />
 
-      <!-- Wakes the parked location service when the OS reports a saved-place
-           exit (GeofencingClient PendingIntent target). -->
-      <receiver
-        android:name=".location.GeofenceExitReceiver"
-        android:exported="false" />
-
       <!-- Always-on saved-place monitoring for work arrive/leave detection. -->
       <receiver
         android:name=".location.GeofenceCrossingReceiver"
@@ -122,7 +116,7 @@
         android:name=".location.DayEndActionReceiver"
         android:exported="false" />
 
-      <!-- Wakes the parked location service the moment activity-recognition
+      <!-- Wakes the idle location service the moment activity-recognition
            reports the user started moving (faster than the geofence exit). -->
       <receiver
         android:name=".location.ActivityTransitionReceiver"

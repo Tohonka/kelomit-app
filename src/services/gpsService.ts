@@ -1,5 +1,5 @@
 import Geolocation, {type GeolocationResponse} from '@react-native-community/geolocation';
-import {Platform, AppState, type AppStateStatus} from 'react-native';
+import {Platform} from 'react-native';
 import {diag} from './diag';
 import {check, request, PERMISSIONS, RESULTS} from 'react-native-permissions';
 import {isOutlier, distanceMeters, isStationaryJitter} from './locationUtils';
@@ -17,19 +17,15 @@ import {insertGpsPoint} from '../db/gps';
 import {getOrCreateDay} from '../db/days';
 import {getLocations} from '../db/locations';
 import {recordCrossing} from './crossingStore';
-import {startDayDetection, stopDayDetection, runDayDetection} from './dayDetection';
 import {useSettingsStore} from '../store/settingsStore';
 import {
   isBackgroundLocationAvailable,
   startBackgroundLocationService,
   stopBackgroundLocationService,
   subscribeBackgroundLocation,
-  subscribeActivityTransition,
-  setBackgroundMode,
-  enterParkedNative,
-  drainNativeFixBuffer,
+  readNativeFixBuffer,
+  ackNativeFixBuffer,
   parseFixLine,
-  type ParkFence,
   type NativeFix,
 } from '../native/backgroundLocation';
 import {ensureActivityRecognitionPermission} from './permissionService';
@@ -66,7 +62,6 @@ let _watchId: number | null = null;
 let _nativeActive = false;
 let _active = false;
 let _nativeSub: {remove: () => void} | null = null;
-let _activitySub: {remove: () => void} | null = null;
 // Wall-clock ms of the last accepted fix, for cross-source dedup.
 let _lastAcceptedFixMs = 0;
 let _configured = false;
@@ -76,7 +71,6 @@ let _lastError: string | null = null;
 // JS watch silently dying (no error callback, no fixes). ponytail: tune on device.
 let _lastFixArrivedMs = 0;
 let _watchdog: ReturnType<typeof setInterval> | null = null;
-let _appStateHooked = false;
 const WATCHDOG_MS = 60_000;
 const STALL_MS = 3 * 60_000; // no fix for 3 min while actively (non-parked) tracking
 
@@ -241,11 +235,6 @@ export async function getCurrentPositionOnce(): Promise<KnownPosition | null> {
 
 export async function startTracking(intervalMs = 60_000): Promise<void> {
   if (_active) {
-    if (_trackingMode === 'parked') {
-      // Resume-from-background while parked: re-arm immediately; the ladder
-      // will settle back to slow/parked if we're in fact still.
-      applyMode('fast', null);
-    }
     return; // already running
   }
   const ok = await requestLocationPermission();
@@ -262,14 +251,7 @@ export async function startTracking(intervalMs = 60_000): Promise<void> {
   _active = true;
   diag('track.start', `interval=${intervalMs}`);
   startWatchdog();
-  hookAppState();
 
-  // JS watch is the always-on baseline — never worse than the pre-5.7 build.
-  armWatch(FAST_INTERVAL_MS, true);
-
-  // Native fused location in the foreground service is an ADDITIONAL,
-  // Doze-resistant source when background tracking is on. Both feed handlePosition;
-  // the dedup gate collapses overlap.
   const wantsBackground = useSettingsStore.getState().background_tracking;
   if (wantsBackground && isBackgroundLocationAvailable()) {
     _nativeActive = true;
@@ -277,29 +259,13 @@ export async function startTracking(intervalMs = 60_000): Promise<void> {
     // had background tracking on (before AR shipped) still get prompted once.
     // A denial just falls back to GPS-driven movement detection.
     ensureActivityRecognitionPermission().catch(() => {});
-    _activitySub = subscribeActivityTransition(handleActivityMoving);
     _nativeSub = subscribeBackgroundLocation(handleNativeFix);
-    await startBackgroundLocationService(); // starts at the native default (fast)
+    await startBackgroundLocationService(intervalMs);
     // Import fixes captured while the React context was dead (process restart,
     // app swiped away) — they'd otherwise be a straight line in the trail.
-    drainBufferedFixes().catch(() => {});
-  }
-
-  startDayDetection().catch(() => {});
-}
-
-/** Native activity-recognition reported the user started moving — a sensor-hub
- *  signal that beats GPS to the punch. Treat it as a trusted moving fix and
- *  upgrade to fast immediately, instead of waiting for a good GPS fix to trip
- *  isMoving() (which, in slow mode, can be a full slow-interval away). */
-function handleActivityMoving(): void {
-  if (!_active) {
-    return;
-  }
-  _lastMovingFixMs = Date.now();
-  if (_trackingMode !== 'fast') {
-    diag('mode.upgrade', 'by=ar');
-    applyMode('fast', null);
+    importBufferedFixes().catch(() => {});
+  } else {
+    armWatch(FAST_INTERVAL_MS, true);
   }
 }
 
@@ -317,7 +283,7 @@ function handleNativeFix(fix: NativeFix): void {
       heading: null,
     },
     timestamp: fix.timestamp,
-  } as unknown as GeolocationResponse);
+  } as unknown as GeolocationResponse, true);
 }
 
 /** (Re)create the position watch with the given cadence and power level.
@@ -333,7 +299,7 @@ function startWatchdog(): void {
     return;
   }
   _watchdog = setInterval(() => {
-    if (!_active || _trackingMode === 'parked') {
+    if (!_active) {
       return;
     }
     const sinceFix = _lastFixArrivedMs === 0 ? -1 : Date.now() - _lastFixArrivedMs;
@@ -341,21 +307,6 @@ function startWatchdog(): void {
       diag('watch.stall', `sinceFixMs=${sinceFix} mode=${_trackingMode} watchId=${_watchId}`);
     }
   }, WATCHDOG_MS);
-}
-
-/** Log app foreground/background transitions once — a lens on whether listeners
- *  survive lifecycle events (a stall right after 'active' = re-register bug). */
-function hookAppState(): void {
-  if (_appStateHooked) {
-    return;
-  }
-  _appStateHooked = true;
-  AppState.addEventListener('change', (s: AppStateStatus) => {
-    diag('app.state', s, {active: _active, mode: _trackingMode, watchId: _watchId});
-    if (s === 'active') {
-      runDayDetection();
-    }
-  });
 }
 
 function armWatch(intervalMs: number, highAccuracy: boolean): void {
@@ -393,27 +344,6 @@ function armWatch(intervalMs: number, highAccuracy: boolean): void {
 /** Apply the desired mode to both sources. Re-arms only when the effective
  *  watch config actually changes (mode change OR sprint↔walk tier change). */
 function applyMode(mode: TrackingMode, speed: number | null): void {
-  if (mode === 'parked') {
-    if (_trackingMode !== 'parked') {
-      _trackingMode = 'parked';
-      if (_watchId !== null) {
-        Geolocation.clearWatch(_watchId);
-        _watchId = null;
-      }
-      // Fence every saved place we're currently inside; 1.25× matches the JS
-      // exit hysteresis so the OS wake and processGeofences agree.
-      const fences: ParkFence[] = _geofences
-        .filter(loc => _insideIds.has(loc.id))
-        .map(loc => ({
-          id: loc.id,
-          latitude: loc.latitude,
-          longitude: loc.longitude,
-          radius: loc.radius_m * 1.25,
-        }));
-      enterParkedNative(fences);
-    }
-    return;
-  }
   const interval = mode === 'fast' ? fastIntervalForSpeed(speed, _currentIntervalMs) : _slowIntervalMs;
   // Always high accuracy: low-accuracy slow fixes report speed=null + huge
   // accuracy, so JS can't detect movement resuming and never upgrades back to
@@ -426,15 +356,11 @@ function applyMode(mode: TrackingMode, speed: number | null): void {
   ) {
     _trackingMode = mode;
     armWatch(interval, highAccuracy);
-    if (_nativeActive) {
-      setBackgroundMode(mode, interval); // also exits native parked state
-    }
   }
 }
 
 export function stopTracking(): void {
   diag('track.stop', '');
-  stopDayDetection();
   if (_watchdog !== null) {
     clearInterval(_watchdog);
     _watchdog = null;
@@ -446,8 +372,6 @@ export function stopTracking(): void {
   if (_nativeActive) {
     _nativeSub?.remove();
     _nativeSub = null;
-    _activitySub?.remove();
-    _activitySub = null;
     stopBackgroundLocationService();
   }
   _active = false;
@@ -464,6 +388,7 @@ export function stopTracking(): void {
 
 async function handlePosition(
   pos: GeolocationResponse,
+  nativeOwned: boolean = false,
 ): Promise<void> {
   // Two sources (JS watch + native FGS) can both deliver fixes; collapse
   // near-simultaneous duplicates so points/geofences aren't double-counted.
@@ -505,9 +430,8 @@ async function handlePosition(
 
   _lastPosition = {latitude, longitude, accuracy: accuracy ?? null, timestamp: now};
 
-  // Power ladder: fast (speed-tiered) while moving, slow+balanced while still,
-  // parked (zero requests, OS geofence wake) when still inside a saved place
-  // with the native FGS running. See trackingMode.ts + spec 5.9.
+  // JS owns this ladder only for foreground-only tracking. Android owns it when
+  // the native background service is enabled.
   _stationaryStreak = movingNow ? 0 : _stationaryStreak + 1;
   // Movement memory: only a trustworthy (good-accuracy) moving fix refreshes it.
   // Poor network fixes (acc > MAX_TRAIL_ACCURACY_M) carry no reliable movement
@@ -518,16 +442,10 @@ async function handlePosition(
   }
   const recentlyMoving =
     _lastMovingFixMs > 0 && arrivedMs - _lastMovingFixMs < MOVEMENT_MEMORY_MS;
-  // Park (zero GPS requests; woken by OS geofence-exit + activity-recognition)
-  // when the native FGS is running and we're inside a saved place. End-of-day
-  // detection no longer depends on live ticks (OS geofence + re-derive), so the
-  // old pendingExit guard is gone.
-  const canPark = _nativeActive && _insideIds.size > 0;
   const desiredMode = nextTrackingMode(
     _trackingMode,
     movingNow,
     _stationaryStreak,
-    canPark,
     recentlyMoving,
   );
   // Confirms the guard on the next device capture: fires only when a would-be
@@ -543,7 +461,9 @@ async function handlePosition(
       acc: accuracy,
     });
   }
-  applyMode(desiredMode, speed);
+  if (!nativeOwned) {
+    applyMode(desiredMode, speed);
+  }
 
   await persistFix(
     latitude,
@@ -552,6 +472,7 @@ async function handlePosition(
     pos.coords.altitude ?? null,
     pos.coords.speed ?? null,
     now,
+    nativeOwned,
   );
 }
 
@@ -564,7 +485,8 @@ async function persistFix(
   altitude: number | null,
   speed: number | null,
   tsMs: number,
-): Promise<void> {
+  nativeOwned: boolean = false,
+): Promise<boolean> {
   try {
     const iso = new Date(tsMs).toISOString();
     const dayStr = format(new Date(tsMs), 'yyyy-MM-dd');
@@ -589,26 +511,45 @@ async function persistFix(
       });
       _lastRecordedPosition = {latitude, longitude, accuracy, timestamp: tsMs};
     }
-    await processGeofences(latitude, longitude, day, iso);
+    if (!nativeOwned) {
+      await processGeofences(latitude, longitude, day, iso);
+    }
+    return true;
   } catch {
-    // Don't crash the app on DB write failure
+    return false;
   }
 }
 
 /** Import fixes the native service buffered while the React context was dead:
  *  same persistence pipeline as live fixes (trail + geofences + day inference),
  *  but no ladder/dedup — these are historical, not a movement signal. */
-async function drainBufferedFixes(): Promise<void> {
-  const lines = await drainNativeFixBuffer();
+async function importBufferedFixes(): Promise<void> {
+  const lines = await readNativeFixBuffer();
   if (lines.length === 0) {
     return;
   }
-  diag('buffer.drain', `lines=${lines.length}`);
+  diag('buffer.import', `lines=${lines.length}`);
+  let processed = 0;
   for (const line of lines) {
     const fix = parseFixLine(line);
     if (fix) {
-      await persistFix(fix.latitude, fix.longitude, fix.accuracy, fix.altitude, fix.speed, fix.timestamp);
+      const ok = await persistFix(
+        fix.latitude,
+        fix.longitude,
+        fix.accuracy,
+        fix.altitude,
+        fix.speed,
+        fix.timestamp,
+        true,
+      );
+      if (!ok) {
+        break;
+      }
     }
+    processed += 1;
+  }
+  if (processed > 0) {
+    await ackNativeFixBuffer(processed);
   }
 }
 
@@ -649,6 +590,5 @@ async function processGeofences(
       longitude: lon,
       time: iso,
     });
-    await runDayDetection();
   }
 }

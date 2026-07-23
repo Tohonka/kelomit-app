@@ -7,15 +7,14 @@ import {NativeModules, DeviceEventEmitter} from 'react-native';
  * binaries / jest, where the calls are no-ops.
  */
 interface BackgroundLocationNative {
-  start(): Promise<void>;
+  start(slowIntervalMs: number): Promise<void>;
   stop(): Promise<void>;
-  setMode(mode: string, ms: number): Promise<void>;
-  enterParked(fences: ParkFence[]): Promise<void>;
   syncPlaces(places: MonitoredPlace[]): Promise<void>;
   readNativeEvents(): Promise<string[]>;
   ackNativeEvents(sequence: number): Promise<void>;
   respondToDayEnd(token: string, confirmed: boolean): Promise<void>;
-  drainFixBuffer(): Promise<string[]>;
+  readFixBuffer(): Promise<string[]>;
+  ackFixBuffer(count: number): Promise<void>;
   /** Build-time Google Maps key (from .maps.env), exposed as a native constant. */
   mapsApiKey?: string;
 }
@@ -26,20 +25,11 @@ const Native = NativeModules.BackgroundLocation as BackgroundLocationNative | un
  *  key file was absent at build time, or on jest / older binaries. */
 export const getMapsApiKey = (): string => Native?.mapsApiKey ?? '';
 
-/** A saved location to fence while parked (radius already includes the
- *  exit hysteresis multiplier). */
-export interface ParkFence {
-  id: number;
-  latitude: number;
-  longitude: number;
-  radius: number; // metres
-}
-
 export const isBackgroundLocationAvailable = (): boolean => Native != null;
 
-export async function startBackgroundLocationService(): Promise<void> {
+export async function startBackgroundLocationService(slowIntervalMs: number): Promise<void> {
   try {
-    await Native?.start();
+    await Native?.start(slowIntervalMs);
   } catch {
     // Best-effort; never crash over the keep-alive service.
   }
@@ -60,27 +50,6 @@ export interface NativeFix {
   altitude: number | null;
   speed: number | null;
   timestamp: number; // ms since epoch
-}
-
-/** Retune the running service: cadence + power priority (fast = high accuracy,
- *  slow = balanced power). Also exits native parked state if active. No-op on
- *  binaries without the native method. */
-export function setBackgroundMode(mode: 'fast' | 'slow', ms: number): void {
-  try {
-    Native?.setMode?.(mode, ms)?.catch(() => {});
-  } catch {
-    // ignore
-  }
-}
-
-/** Park: native drops its location request and arms OS geofence-exit wakes on
- *  the given fences. The FGS stays alive (idle) to receive the wake. */
-export function enterParkedNative(fences: ParkFence[]): void {
-  try {
-    Native?.enterParked?.(fences)?.catch(() => {});
-  } catch {
-    // ignore
-  }
 }
 
 /** Parse one native buffer JSONL line (see LocationService.bufferFix) into a
@@ -105,15 +74,18 @@ export function parseFixLine(line: string): NativeFix | null {
   }
 }
 
-/** Fixes buffered natively while the React context was dead (JSONL lines, in
- *  arrival order; the native file is deleted on drain). Empty on jest / older
- *  binaries / no buffer. */
-export async function drainNativeFixBuffer(): Promise<string[]> {
+/** Fixes buffered while React was dead. Read is non-destructive; acknowledge
+ * only after SQLite persistence succeeds. */
+export async function readNativeFixBuffer(): Promise<string[]> {
   try {
-    return (await Native?.drainFixBuffer?.()) ?? [];
+    return (await Native?.readFixBuffer?.()) ?? [];
   } catch {
     return [];
   }
+}
+
+export async function ackNativeFixBuffer(count: number): Promise<void> {
+  await Native?.ackFixBuffer?.(count);
 }
 
 /** Subscribe to native background fixes. Returns a remover. */
@@ -121,19 +93,6 @@ export function subscribeBackgroundLocation(
   cb: (fix: NativeFix) => void,
 ): {remove: () => void} {
   return DeviceEventEmitter.addListener('onBackgroundLocation', cb);
-}
-
-export interface ActivityEvent {
-  moving: boolean; // always true today — we only register ENTER-moving transitions
-  timestamp: number;
-}
-
-/** Subscribe to native activity-recognition "started moving" events (sensor-hub
- *  signal, faster than a GPS fix). Returns a remover. */
-export function subscribeActivityTransition(
-  cb: (e: ActivityEvent) => void,
-): {remove: () => void} {
-  return DeviceEventEmitter.addListener('onActivityTransition', cb);
 }
 
 export interface MonitoredPlace {
@@ -207,21 +166,10 @@ export function parseNativeEvent(line: string): NativeJournalEvent | null {
   }
 }
 
-export interface CrossingEvent {
-  locationId: number;
-  type: 'enter' | 'exit';
-  latitude: number | null;
-  longitude: number | null;
-  timestamp: number; // ms since epoch
-}
-
 /** Persist the complete native saved-place set. Task 3 adds OS registration. */
 export async function syncPlaces(places: MonitoredPlace[]): Promise<void> {
   await Native?.syncPlaces?.(places);
 }
-
-/** Temporary name retained until the old JS workday engine is deleted. */
-export const monitorPlaces = syncPlaces;
 
 export async function readNativeEvents(): Promise<string[]> {
   return (await Native?.readNativeEvents?.()) ?? [];
@@ -242,11 +190,4 @@ export function subscribeNativeEventAvailable(
   cb: () => void,
 ): {remove: () => void} {
   return DeviceEventEmitter.addListener('onNativeEventAvailable', cb);
-}
-
-/** Subscribe to OS geofence crossings (enter/exit of a saved place). */
-export function subscribeGeofenceCrossing(
-  cb: (e: CrossingEvent) => void,
-): {remove: () => void} {
-  return DeviceEventEmitter.addListener('onGeofenceCrossing', cb);
 }

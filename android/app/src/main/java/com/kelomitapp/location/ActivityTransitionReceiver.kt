@@ -3,7 +3,9 @@ package com.kelomitapp.location
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.util.Log
+import androidx.core.content.ContextCompat
 import com.google.android.gms.location.ActivityRecognitionResult
 import com.google.android.gms.location.ActivityTransition
 import com.google.android.gms.location.ActivityTransitionResult
@@ -41,7 +43,7 @@ class ActivityTransitionReceiver : BroadcastReceiver() {
       }
       if (startedMoving) {
         Log.d("KelomitLoc", "activity-transition wake")
-        LocationService.instance?.onActivityMoveWake()
+        wakeTracking(context)
       }
       return
     }
@@ -50,7 +52,33 @@ class ActivityTransitionReceiver : BroadcastReceiver() {
       val top = result.mostProbableActivity
       if (top.type in MOVING_TYPES && top.confidence >= MIN_CONFIDENCE) {
         Log.d("KelomitLoc", "activity-sample wake type=${top.type} conf=${top.confidence}")
-        LocationService.instance?.onActivityMoveWake()
+        wakeTracking(context)
+      }
+    }
+  }
+
+  private fun wakeTracking(context: Context) {
+    val settings = NativeTrackingSettings(context)
+    if (!settings.enabled) return
+    val now = System.currentTimeMillis()
+    settings.movingUntilMs = now + TrackingPolicy.MOVING_LEASE_MS
+    val live = LocationService.instance
+    if (live != null) {
+      live.onActivityMoveWake(now)
+      return
+    }
+    try {
+      val intent = Intent(context, LocationService::class.java)
+        .putExtra(LocationService.EXTRA_SLOW_INTERVAL, settings.slowIntervalMs)
+      ContextCompat.startForegroundService(context, intent)
+    } catch (error: Exception) {
+      // The persisted lease is retained for the next system/permitted start.
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+        error is android.app.ForegroundServiceStartNotAllowedException
+      ) {
+        DiagLog.write(context, "wake.activity.defer", error.javaClass.simpleName)
+      } else {
+        DiagLog.write(context, "wake.activity.fail", error.javaClass.simpleName)
       }
     }
   }

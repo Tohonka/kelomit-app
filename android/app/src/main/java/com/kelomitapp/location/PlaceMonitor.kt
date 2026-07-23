@@ -76,6 +76,9 @@ object PlaceMonitor {
     }
   }
 
+  fun unregister(context: Context): Task<Void> =
+    LocationServices.getGeofencingClient(context).removeGeofences(pendingIntent(context))
+
   fun onCandidate(context: Context) {
     val persisted = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
       .edit()

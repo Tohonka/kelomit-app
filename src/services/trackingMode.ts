@@ -1,4 +1,4 @@
-export type TrackingMode = 'fast' | 'slow' | 'parked';
+export type TrackingMode = 'fast' | 'slow';
 
 // ponytail: movement thresholds are field-tuning knobs; adjust on device.
 export const MOVE_SPEED_MS = 1.0; // m/s (~3.6 km/h) at/above which we treat as moving
@@ -13,11 +13,6 @@ export const SPRINT_ENTER_MS = 3.5; // m/s (~13 km/h) — cross UP into sprint
 export const SPRINT_EXIT_MS = 2.5; // m/s (~9 km/h) — drop back to normal fast
 export const SPRINT_INTERVAL_MS = 2_000;
 export const FAST_INTERVAL_MS = 4_000;
-
-// Still fixes before fully parking (only inside a saved geofence with the
-// native FGS running): STATIONARY_STREAK_TO_SLOW to reach slow, then 2 more
-// slow-cadence fixes (~2 min). ponytail: tune on device.
-export const STREAK_TO_PARK = STATIONARY_STREAK_TO_SLOW + 2;
 
 /**
  * Whether the device is moving: either signal clears the bar. Speed alone is
@@ -58,9 +53,8 @@ export function fastIntervalForSpeed(
 
 /**
  * Desired sampling mode. Tighten to 'fast' immediately on movement; relax to
- * 'slow' after a sustained still streak; fully park (no location requests,
- * OS geofence wake) after STREAK_TO_PARK when `canPark` (still inside a saved
- * geofence AND the native FGS is running to receive the wake).
+ * 'slow' after a sustained still streak. Native Android code owns the deeper
+ * idle state when background tracking is enabled.
  *
  * `recentlyMoving` blocks the power-DOWN to slow: a GPS-lock drought during
  * movement produces poor network fixes that read as "stationary" (speed 0/null),
@@ -72,14 +66,10 @@ export function nextTrackingMode(
   prev: TrackingMode,
   movingNow: boolean,
   stationaryStreak: number,
-  canPark: boolean = false,
   recentlyMoving: boolean = false,
 ): TrackingMode {
   if (movingNow) {
     return 'fast';
-  }
-  if (canPark && stationaryStreak >= STREAK_TO_PARK) {
-    return 'parked';
   }
   if (!recentlyMoving && stationaryStreak >= STATIONARY_STREAK_TO_SLOW) {
     return 'slow';
