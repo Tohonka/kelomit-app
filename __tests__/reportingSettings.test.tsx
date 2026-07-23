@@ -1,5 +1,5 @@
 import React from 'react';
-import {TextInput, TouchableOpacity} from 'react-native';
+import {Alert, TextInput, TouchableOpacity} from 'react-native';
 import {act, create, type ReactTestInstance, type ReactTestRenderer} from 'react-test-renderer';
 
 jest.mock('../src/db/settings', () => ({
@@ -23,6 +23,8 @@ jest.mock('react-i18next', () => ({
       'reporting.typeStatisticsAccessibility': 'Report type Hours and statistics',
       'reporting.export': 'Export PDF',
       'reporting.exporting': 'Exporting…',
+      'reporting.errorInvalidRange': 'The start date must be on or before the end date.',
+      'common.error': 'Error',
     }[key] ?? key),
     i18n: {resolvedLanguage: 'en'},
   }),
@@ -57,6 +59,15 @@ import ReportingSettings from '../src/screens/settings/ReportingSettings';
 const getSettingMock = getSetting as jest.MockedFunction<typeof getSetting>;
 const setSettingMock = setSetting as jest.MockedFunction<typeof setSetting>;
 const exportWorkReportMock = exportWorkReport as jest.MockedFunction<typeof exportWorkReport>;
+const alertMock = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>(done => {
+    resolve = done;
+  });
+  return {promise, resolve};
+}
 
 function button(root: ReactTestInstance, label: string): ReactTestInstance {
   return root.findAllByType(TouchableOpacity).find(
@@ -118,6 +129,12 @@ it('loads two identity fields and exports the selected inclusive date range', as
       new Date(2026, 6, 25),
     );
   });
+  expect(button(root, 'Select start date').props.accessibilityValue).toEqual({
+    text: 'Jun 26, 2026',
+  });
+  expect(button(root, 'Select end date').props.accessibilityValue).toEqual({
+    text: 'Jul 25, 2026',
+  });
   await act(async () => {
     button(root, 'Export PDF').props.onPress();
   });
@@ -137,5 +154,97 @@ it('loads two identity fields and exports the selected inclusive date range', as
     endDate: '2026-07-25',
     language: 'fi',
     type: 'hours',
+  });
+});
+
+it('does not replace identity fields edited before persisted values load', async () => {
+  const savedPerson = deferred<string | null>();
+  const savedCompany = deferred<string | null>();
+  getSettingMock.mockImplementation(key => (
+    key === 'report_person_name' ? savedPerson.promise : savedCompany.promise
+  ));
+
+  const renderer = await renderScreen();
+  const textInputs = renderer.root.findAllByType(TextInput);
+
+  act(() => {
+    textInputs[0].props.onChangeText('New person');
+    textInputs[1].props.onChangeText('New company');
+  });
+  await act(async () => {
+    savedPerson.resolve('Old person');
+    savedCompany.resolve('Old company');
+    await Promise.resolve();
+  });
+
+  expect(renderer.root.findAllByType(TextInput).map(input => input.props.value))
+    .toEqual(['New person', 'New company']);
+});
+
+it('disables export and defensively rejects an invalid date range', async () => {
+  getSettingMock
+    .mockResolvedValueOnce('Matti Meikäläinen')
+    .mockResolvedValueOnce('Kelo Design Oy');
+  const renderer = await renderScreen();
+  const root = renderer.root;
+
+  act(() => {
+    button(root, 'Select start date').props.onPress();
+  });
+  act(() => {
+    root.findByProps({testID: 'date-picker'}).props.onChange(
+      {type: 'set'},
+      new Date(2026, 7, 1),
+    );
+  });
+
+  expect(button(root, 'Export PDF').props.disabled).toBe(true);
+  await act(async () => {
+    button(root, 'Export PDF').props.onPress();
+  });
+
+  expect(exportWorkReport).not.toHaveBeenCalled();
+  expect(alertMock).toHaveBeenCalledWith(
+    'Error',
+    'The start date must be on or before the end date.',
+  );
+});
+
+it('exports selected options once and exposes the busy state accessibly', async () => {
+  getSettingMock
+    .mockResolvedValueOnce('Matti Meikäläinen')
+    .mockResolvedValueOnce('Kelo Design Oy');
+  const pendingExport = deferred<'saved'>();
+  exportWorkReportMock.mockReturnValue(pendingExport.promise);
+  const renderer = await renderScreen();
+  const root = renderer.root;
+
+  act(() => {
+    button(root, 'Report language English').props.onPress();
+    button(root, 'Report type Hours and statistics').props.onPress();
+  });
+  await act(async () => {
+    button(root, 'Export PDF').props.onPress();
+    await Promise.resolve();
+  });
+
+  const exportingButton = button(root, 'Exporting…');
+  expect(exportingButton.props.disabled).toBe(true);
+  expect(exportingButton.props.accessibilityState).toEqual({
+    disabled: true,
+    busy: true,
+  });
+  act(() => {
+    exportingButton.props.onPress();
+  });
+  expect(exportWorkReport).toHaveBeenCalledTimes(1);
+  expect(exportWorkReport).toHaveBeenCalledWith(expect.objectContaining({
+    language: 'en',
+    type: 'statistics',
+  }));
+
+  await act(async () => {
+    pendingExport.resolve('saved');
+    await pendingExport.promise;
   });
 });

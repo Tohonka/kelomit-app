@@ -1,4 +1,4 @@
-import React, {useEffect, useMemo, useState} from 'react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {
   Alert,
@@ -148,14 +148,19 @@ export default function ReportingSettings() {
   const [type, setType] = useState<WorkReportType>('hours');
   const [picker, setPicker] = useState<Picker>(null);
   const [busy, setBusy] = useState(false);
+  const identityDirty = useRef({person: false, company: false});
 
   useEffect(() => {
     Promise.all([
       getSetting('report_person_name'),
       getSetting('report_company_name'),
     ]).then(([savedPersonName, savedCompanyName]) => {
-      setPersonName(savedPersonName ?? '');
-      setCompanyName(savedCompanyName ?? '');
+      if (!identityDirty.current.person) {
+        setPersonName(savedPersonName ?? '');
+      }
+      if (!identityDirty.current.company) {
+        setCompanyName(savedCompanyName ?? '');
+      }
     });
   }, []);
 
@@ -171,6 +176,10 @@ export default function ReportingSettings() {
 
   const handleExport = async () => {
     if (busy) {
+      return;
+    }
+    if (startDate > endDate) {
+      Alert.alert(t('common.error'), t('reporting.errorInvalidRange'));
       return;
     }
     setBusy(true);
@@ -202,8 +211,10 @@ export default function ReportingSettings() {
   const dateLocale = getDateFnsLocale(
     i18n.resolvedLanguage === 'fi' ? 'fi' : 'en',
   );
+  const startDateValue = format(startDate, 'PP', {locale: dateLocale});
+  const endDateValue = format(endDate, 'PP', {locale: dateLocale});
   const exportDisabled =
-    busy || !personName.trim() || !companyName.trim();
+    busy || startDate > endDate || !personName.trim() || !companyName.trim();
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -216,7 +227,10 @@ export default function ReportingSettings() {
           <TextInput
             style={local.input}
             value={personName}
-            onChangeText={setPersonName}
+            onChangeText={value => {
+              identityDirty.current.person = true;
+              setPersonName(value);
+            }}
             onBlur={() =>
               saveIdentity(
                 'report_person_name',
@@ -235,7 +249,10 @@ export default function ReportingSettings() {
           <TextInput
             style={local.input}
             value={companyName}
-            onChangeText={setCompanyName}
+            onChangeText={value => {
+              identityDirty.current.company = true;
+              setCompanyName(value);
+            }}
             onBlur={() =>
               saveIdentity(
                 'report_company_name',
@@ -256,22 +273,20 @@ export default function ReportingSettings() {
             style={local.dateButton}
             onPress={() => setPicker('start')}
             accessibilityRole="button"
-            accessibilityLabel={t('reporting.startDateAccessibility')}>
+            accessibilityLabel={t('reporting.startDateAccessibility')}
+            accessibilityValue={{text: startDateValue}}>
             <Text style={local.dateLabel}>{t('common.from')}</Text>
-            <Text style={local.dateValue}>
-              {format(startDate, 'PP', {locale: dateLocale})}
-            </Text>
+            <Text style={local.dateValue}>{startDateValue}</Text>
           </TouchableOpacity>
           <Text style={local.dateSeparator}>→</Text>
           <TouchableOpacity
             style={local.dateButton}
             onPress={() => setPicker('end')}
             accessibilityRole="button"
-            accessibilityLabel={t('reporting.endDateAccessibility')}>
+            accessibilityLabel={t('reporting.endDateAccessibility')}
+            accessibilityValue={{text: endDateValue}}>
             <Text style={local.dateLabel}>{t('common.to')}</Text>
-            <Text style={local.dateValue}>
-              {format(endDate, 'PP', {locale: dateLocale})}
-            </Text>
+            <Text style={local.dateValue}>{endDateValue}</Text>
           </TouchableOpacity>
         </View>
 
@@ -334,8 +349,10 @@ export default function ReportingSettings() {
           onPress={handleExport}
           disabled={exportDisabled}
           accessibilityRole="button"
-          accessibilityState={{disabled: exportDisabled}}
-          accessibilityLabel={t('reporting.export')}>
+          accessibilityState={{disabled: exportDisabled, busy}}
+          accessibilityLabel={t(
+            busy ? 'reporting.exporting' : 'reporting.export',
+          )}>
           <Text style={local.exportButtonText}>
             {busy ? t('reporting.exporting') : t('reporting.export')}
           </Text>
