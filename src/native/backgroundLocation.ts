@@ -12,6 +12,7 @@ interface BackgroundLocationNative {
   setMode(mode: string, ms: number): Promise<void>;
   enterParked(fences: ParkFence[]): Promise<void>;
   monitorPlaces(places: MonitoredPlace[]): Promise<void>;
+  drainFixBuffer(): Promise<string[]>;
   /** Build-time Google Maps key (from .maps.env), exposed as a native constant. */
   mapsApiKey?: string;
 }
@@ -76,6 +77,39 @@ export function enterParkedNative(fences: ParkFence[]): void {
     Native?.enterParked?.(fences)?.catch(() => {});
   } catch {
     // ignore
+  }
+}
+
+/** Parse one native buffer JSONL line (see LocationService.bufferFix) into a
+ *  fix; null when malformed. */
+export function parseFixLine(line: string): NativeFix | null {
+  try {
+    const v = JSON.parse(line);
+    if (typeof v?.latitude !== 'number' || typeof v?.longitude !== 'number' ||
+        typeof v?.timestamp !== 'number') {
+      return null;
+    }
+    return {
+      latitude: v.latitude,
+      longitude: v.longitude,
+      accuracy: typeof v.accuracy === 'number' ? v.accuracy : null,
+      altitude: typeof v.altitude === 'number' ? v.altitude : null,
+      speed: typeof v.speed === 'number' ? v.speed : null,
+      timestamp: v.timestamp,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Fixes buffered natively while the React context was dead (JSONL lines, in
+ *  arrival order; the native file is deleted on drain). Empty on jest / older
+ *  binaries / no buffer. */
+export async function drainNativeFixBuffer(): Promise<string[]> {
+  try {
+    return (await Native?.drainFixBuffer?.()) ?? [];
+  } catch {
+    return [];
   }
 }
 

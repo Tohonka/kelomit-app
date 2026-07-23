@@ -27,6 +27,8 @@ import {
   subscribeActivityTransition,
   setBackgroundMode,
   enterParkedNative,
+  drainNativeFixBuffer,
+  parseFixLine,
   type ParkFence,
   type NativeFix,
 } from '../native/backgroundLocation';
@@ -278,6 +280,9 @@ export async function startTracking(intervalMs = 60_000): Promise<void> {
     _activitySub = subscribeActivityTransition(handleActivityMoving);
     _nativeSub = subscribeBackgroundLocation(handleNativeFix);
     await startBackgroundLocationService(); // starts at the native default (fast)
+    // Import fixes captured while the React context was dead (process restart,
+    // app swiped away) — they'd otherwise be a straight line in the trail.
+    drainBufferedFixes().catch(() => {});
   }
 
   startDayDetection().catch(() => {});
@@ -540,22 +545,35 @@ async function handlePosition(
   }
   applyMode(desiredMode, speed);
 
-  // Persist to DB + run geofence detection
+  await persistFix(
+    latitude,
+    longitude,
+    accuracy ?? null,
+    pos.coords.altitude ?? null,
+    pos.coords.speed ?? null,
+    now,
+  );
+}
+
+/** Persist one fix: trail write (jitter + accuracy gated) + geofence/day logic.
+ *  Shared by the live pipeline and the native buffer drain. */
+async function persistFix(
+  latitude: number,
+  longitude: number,
+  accuracy: number | null,
+  altitude: number | null,
+  speed: number | null,
+  tsMs: number,
+): Promise<void> {
   try {
-    const iso = new Date(now).toISOString();
-    const todayStr = format(new Date(now), 'yyyy-MM-dd');
-    const day = await getOrCreateDay(todayStr);
+    const iso = new Date(tsMs).toISOString();
+    const dayStr = format(new Date(tsMs), 'yyyy-MM-dd');
+    const day = await getOrCreateDay(dayStr);
     // Skip the trail write for stationary GPS drift; keep geofence/day logic
     // running on every accepted fix so start/end inference stays responsive.
     const jitter =
       _lastRecordedPosition != null &&
-      isStationaryJitter(
-        _lastRecordedPosition,
-        latitude,
-        longitude,
-        accuracy ?? null,
-        pos.coords.speed ?? null,
-      );
+      isStationaryJitter(_lastRecordedPosition, latitude, longitude, accuracy, speed);
     // Drop imprecise fixes from the trail: indoor network fixes wander tens of
     // metres and read as fake movement. Geofence/day logic still uses every fix.
     const lowQuality = accuracy != null && accuracy > MAX_TRAIL_ACCURACY_M;
@@ -564,16 +582,33 @@ async function handlePosition(
         day_id: day.id,
         latitude,
         longitude,
-        accuracy: accuracy ?? null,
-        altitude: pos.coords.altitude ?? null,
-        speed: pos.coords.speed ?? null,
+        accuracy,
+        altitude,
+        speed,
         timestamp: iso,
       });
-      _lastRecordedPosition = {latitude, longitude, accuracy: accuracy ?? null, timestamp: now};
+      _lastRecordedPosition = {latitude, longitude, accuracy, timestamp: tsMs};
     }
     await processGeofences(latitude, longitude, day, iso);
   } catch {
     // Don't crash the app on DB write failure
+  }
+}
+
+/** Import fixes the native service buffered while the React context was dead:
+ *  same persistence pipeline as live fixes (trail + geofences + day inference),
+ *  but no ladder/dedup — these are historical, not a movement signal. */
+async function drainBufferedFixes(): Promise<void> {
+  const lines = await drainNativeFixBuffer();
+  if (lines.length === 0) {
+    return;
+  }
+  diag('buffer.drain', `lines=${lines.length}`);
+  for (const line of lines) {
+    const fix = parseFixLine(line);
+    if (fix) {
+      await persistFix(fix.latitude, fix.longitude, fix.accuracy, fix.altitude, fix.speed, fix.timestamp);
+    }
   }
 }
 

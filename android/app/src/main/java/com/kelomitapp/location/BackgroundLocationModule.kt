@@ -81,6 +81,24 @@ class BackgroundLocationModule(reactContext: ReactApplicationContext) :
     }
   }
 
+  /** Drain fixes buffered while the React context was dead (see
+   *  [LocationService.FIX_BUFFER_FILE]): return the JSONL lines and delete the
+   *  file. JS feeds them through its normal persistence pipeline. */
+  @ReactMethod
+  fun drainFixBuffer(promise: Promise) {
+    try {
+      val file = java.io.File(reactApplicationContext.filesDir, LocationService.FIX_BUFFER_FILE)
+      val out = com.facebook.react.bridge.Arguments.createArray()
+      if (file.exists()) {
+        file.readLines().forEach { line -> if (line.isNotBlank()) out.pushString(line) }
+        file.delete()
+      }
+      promise.resolve(out)
+    } catch (e: Exception) {
+      promise.reject("drain_fix_buffer_failed", e)
+    }
+  }
+
   @ReactMethod
   fun monitorPlaces(places: ReadableArray, promise: Promise) {
     try {
