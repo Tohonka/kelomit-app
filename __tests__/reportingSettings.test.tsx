@@ -12,51 +12,22 @@ jest.mock('../src/services/workReportExport', () => ({
   exportWorkReport: jest.fn(),
 }));
 jest.mock('react-i18next', () => {
-  const messages: Record<string, Record<string, string>> = {
-    en: {
-      'reporting.personName': 'Your name',
-      'reporting.companyName': 'Company name',
-      'reporting.startDateAccessibility': 'Select start date',
-      'reporting.endDateAccessibility': 'Select end date',
-      'reporting.languageFiAccessibility': 'Report language Finnish',
-      'reporting.languageEnAccessibility': 'Report language English',
-      'reporting.typeHoursAccessibility': 'Report type Daily hours',
-      'reporting.typeHeadlinesAccessibility': 'Report type Hours and headlines',
-      'reporting.typeStatisticsAccessibility': 'Report type Hours and statistics',
-      'reporting.export': 'Export PDF',
-      'reporting.exporting': 'Exporting…',
-      'reporting.errorInvalidRange': 'The start date must be on or before the end date.',
-      'reporting.errorReadFailed': 'The report data could not be read.',
-      'reporting.errorSaveFailed': 'The report could not be saved.',
-      'reporting.errorLoadIdentity': 'The saved report details could not be loaded.',
-      'reporting.errorSaveIdentity': 'The report details could not be saved.',
-      'settings.exportFailed': 'Export failed',
-      'common.error': 'Error',
-    },
-    fi: {
-      'reporting.personName': 'Oma nimi',
-      'reporting.companyName': 'Yrityksen nimi',
-      'reporting.startDateAccessibility': 'Valitse raportin alkupäivä',
-      'reporting.endDateAccessibility': 'Valitse raportin loppupäivä',
-      'reporting.languageFiAccessibility': 'Raportin kieli suomi',
-      'reporting.languageEnAccessibility': 'Raportin kieli englanti',
-      'reporting.typeHoursAccessibility': 'Raportin tyyppi Päivittäiset tunnit',
-      'reporting.typeHeadlinesAccessibility': 'Raportin tyyppi Tunnit ja otsikot',
-      'reporting.typeStatisticsAccessibility': 'Raportin tyyppi Tunnit ja tilastot',
-      'reporting.export': 'Vie PDF',
-      'reporting.exporting': 'Viedään…',
-      'reporting.errorInvalidRange': 'Alkupäivän tulee olla sama tai ennen loppupäivää.',
-      'reporting.errorReadFailed': 'Raportin tietoja ei voitu lukea.',
-      'reporting.errorSaveFailed': 'Raporttia ei voitu tallentaa.',
-      'reporting.errorLoadIdentity': 'Tallennettuja raportin tietoja ei voitu ladata.',
-      'reporting.errorSaveIdentity': 'Raportin tietoja ei voitu tallentaa.',
-      'settings.exportFailed': 'Vienti epäonnistui',
-      'common.error': 'Virhe',
-    },
+  const messages: Record<string, Record<string, unknown>> = {
+    en: jest.requireActual('../src/i18n/locales/en').default,
+    fi: jest.requireActual('../src/i18n/locales/fi').default,
+  };
+  const translate = (language: string, key: string) => {
+    let value: unknown = messages[language];
+    for (const part of key.split('.')) {
+      value = typeof value === 'object' && value !== null
+        ? (value as Record<string, unknown>)[part]
+        : undefined;
+    }
+    return typeof value === 'string' ? value : key;
   };
   const translators: Record<string, (key: string) => string> = {
-    en: key => messages.en[key] ?? key,
-    fi: key => messages.fi[key] ?? key,
+    en: key => translate('en', key),
+    fi: key => translate('fi', key),
   };
   return {
     useTranslation: () => ({
