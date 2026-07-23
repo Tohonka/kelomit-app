@@ -7,6 +7,7 @@ import com.facebook.react.ReactHost
 import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.kelomitapp.location.BackgroundLocationPackage
+import com.kelomitapp.reporting.WorkReportPackage
 import com.kelomitapp.widget.WidgetSessionPackage
 
 class MainApplication : Application(), ReactApplication {
@@ -20,6 +21,8 @@ class MainApplication : Application(), ReactApplication {
           add(WidgetSessionPackage())
           // Background-location foreground service bridge — not autolinked.
           add(BackgroundLocationPackage())
+          // Native work-report PDF renderer — not autolinked.
+          add(WorkReportPackage())
         },
     )
   }
