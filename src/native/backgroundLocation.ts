@@ -151,6 +151,8 @@ export type NativeJournalEvent =
       kind: 'work' | 'home' | 'other';
       direction: 'enter' | 'exit';
       timestamp: number;
+      localDate: string;
+      generation: number;
       latitude: number | null;
       longitude: number | null;
     }
@@ -184,6 +186,9 @@ export function parseNativeEvent(line: string): NativeJournalEvent | null {
       if (!Number.isSafeInteger(event.locationId) ||
           !['work', 'home', 'other'].includes(String(event.kind)) ||
           !['enter', 'exit'].includes(String(event.direction)) ||
+          typeof event.localDate !== 'string' ||
+          !/^\d{4}-\d{2}-\d{2}$/.test(event.localDate) ||
+          !Number.isSafeInteger(event.generation) ||
           !(event.latitude === null || typeof event.latitude === 'number') ||
           !(event.longitude === null || typeof event.longitude === 'number')) {
         return null;

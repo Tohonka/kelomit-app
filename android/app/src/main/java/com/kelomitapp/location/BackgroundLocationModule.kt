@@ -123,7 +123,9 @@ class BackgroundLocationModule(reactContext: ReactApplicationContext) :
         parsedPlace
       }
       NativePlaceStore(reactApplicationContext).replace(parsed)
-      promise.resolve(null)
+      PlaceMonitor.sync(reactApplicationContext)
+        .addOnSuccessListener { promise.resolve(null) }
+        .addOnFailureListener { promise.reject("sync_places_failed", it) }
     } catch (e: Exception) {
       promise.reject("sync_places_failed", e)
     }

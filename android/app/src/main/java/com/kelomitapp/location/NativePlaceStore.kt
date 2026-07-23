@@ -67,6 +67,8 @@ class NativePlaceStore(context: Context) {
 
   fun byId(id: Long): NativePlace? = all().firstOrNull { it.id == id }
 
+  fun generation(): Long = prefs.getLong(KEY_GENERATION, 0L)
+
   fun insideIds(): Set<Long> {
     val raw = prefs.getString(KEY_INSIDE_IDS, null) ?: return emptySet()
     val array = runCatching { JSONArray(raw) }.getOrNull() ?: return emptySet()

@@ -34,6 +34,7 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import com.google.android.gms.tasks.CancellationTokenSource
 import com.kelomitapp.MainActivity
 import com.kelomitapp.R
 
@@ -49,7 +50,6 @@ class LocationService : Service() {
   companion object {
     private const val CHANNEL_ID = "location-tracking"
     private const val NOTIF_ID = 4711
-    const val CROSSING_REQUEST_CODE = 4712
     const val EXTRA_INTERVAL = "interval_ms"
     const val DEFAULT_INTERVAL_MS = 4000L
 
@@ -103,13 +103,6 @@ class LocationService : Service() {
     // FLAG_MUTABLE: the geofencing API fills in the triggering event (API 31+).
     PendingIntent.getBroadcast(
       this, 0, intent,
-      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
-    )
-  }
-  private val crossingPendingIntent: PendingIntent by lazy {
-    val intent = Intent(this, GeofenceCrossingReceiver::class.java)
-    PendingIntent.getBroadcast(
-      this, CROSSING_REQUEST_CODE, intent,
       PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
     )
   }
@@ -263,48 +256,6 @@ class LocationService : Service() {
     }
   }
 
-  /** Register always-on ENTER+EXIT geofences for the given saved places (all
-   *  work + home). Coarser radius floor for OS reliability; precise timing isn't
-   *  needed for a workday boundary. Re-callable to replace the set. */
-  @SuppressLint("MissingPermission")
-  fun monitorPlaces(places: List<ParkFence>) {
-    if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-      != PackageManager.PERMISSION_GRANTED
-    ) return
-    geofencingClient?.removeGeofences(crossingPendingIntent)
-    if (places.isEmpty()) return
-    val fences = places.map {
-      Geofence.Builder()
-        .setRequestId(it.id.toString())
-        .setCircularRegion(it.latitude, it.longitude, maxOf(it.radiusM, 100f))
-        .setExpirationDuration(Geofence.NEVER_EXPIRE)
-        .setTransitionTypes(
-          Geofence.GEOFENCE_TRANSITION_ENTER or Geofence.GEOFENCE_TRANSITION_EXIT,
-        )
-        .build()
-    }
-    val request = GeofencingRequest.Builder()
-      .setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER)
-      .addGeofences(fences)
-      .build()
-    geofencingClient?.addGeofences(request, crossingPendingIntent)
-    DiagLog.write(this, "crossing.monitor", "places=${places.size}")
-  }
-
-  /** Forward an OS geofence crossing to JS (persist + infer happen there). */
-  fun onGeofenceCrossing(requestId: String, type: String, lat: Double?, lon: Double?) {
-    val reactContext = (application as? ReactApplication)?.reactHost?.currentReactContext
-    val map = Arguments.createMap().apply {
-      putInt("locationId", requestId.toIntOrNull() ?: -1)
-      putString("type", type)
-      if (lat != null) putDouble("latitude", lat) else putNull("latitude")
-      if (lon != null) putDouble("longitude", lon) else putNull("longitude")
-      putDouble("timestamp", System.currentTimeMillis().toDouble())
-    }
-    DiagLog.write(this, "crossing.emit", "id=$requestId type=$type ctx=${reactContext != null}")
-    reactContext?.emitDeviceEvent("onGeofenceCrossing", map)
-  }
-
   /** Geofence-exit wake (from GeofenceExitReceiver). */
   fun onGeofenceExitWake() {
     DiagLog.write(this, "wake.geofence", "parked=$parked")
@@ -386,6 +337,11 @@ class LocationService : Service() {
   }
 
   private fun emitLocation(loc: Location) {
+    try {
+      PlaceMonitor.onFix(this, loc)
+    } catch (error: Exception) {
+      DiagLog.write(this, "crossing.confirm.fail", error.javaClass.simpleName)
+    }
     val map = Arguments.createMap().apply {
       putDouble("latitude", loc.latitude)
       putDouble("longitude", loc.longitude)
@@ -419,6 +375,20 @@ class LocationService : Service() {
       DiagLog.write(this, "ctx.change", "alive=$ctxAlive")
       lastCtxAlive = ctxAlive
     }
+  }
+
+  @SuppressLint("MissingPermission")
+  fun requestPlaceConfirmation() {
+    if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+      != PackageManager.PERMISSION_GRANTED
+    ) return
+    val token = CancellationTokenSource()
+    fusedClient
+      ?.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, token.token)
+      ?.addOnSuccessListener { location -> if (location != null) emitLocation(location) }
+      ?.addOnFailureListener {
+        DiagLog.write(this, "crossing.confirm.fail", it.javaClass.simpleName)
+      }
   }
 
   /** Native fallback ladder, independent of JS liveness. Upgrade slow→fast the
@@ -487,7 +457,6 @@ class LocationService : Service() {
     DiagLog.write(this, "svc.onDestroy", "parked=$parked")
     fusedClient?.removeLocationUpdates(callback)
     geofencingClient?.removeGeofences(geofencePendingIntent)
-    geofencingClient?.removeGeofences(crossingPendingIntent)
     removeActivityUpdates()
     instance = null
     stopForeground(STOP_FOREGROUND_REMOVE)

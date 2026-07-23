@@ -39,12 +39,15 @@ class NativeEventJournal(context: Context) {
       }
       next
     }
+    DiagLog.write(context, "journal.append", "sequence=$sequence type=$type")
     notifyLiveJs(sequence)
     return sequence
   }
 
-  fun readLines(): List<String> = synchronized(LOCK) {
-    readLinesLocked()
+  fun readLines(): List<String> {
+    val lines = synchronized(LOCK) { readLinesLocked() }
+    DiagLog.write(context, "journal.read", "count=${lines.size}")
+    return lines
   }
 
   fun ackThrough(sequence: Long) {
@@ -57,6 +60,7 @@ class NativeEventJournal(context: Context) {
       }
       writeLinesLocked(remaining)
     }
+    DiagLog.write(context, "journal.ack", "through=$sequence")
   }
 
   private fun readLinesLocked(): List<String> {

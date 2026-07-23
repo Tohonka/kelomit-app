@@ -8,6 +8,8 @@ test('parses a persisted crossing with its native sequence', () => {
     kind: 'work',
     direction: 'exit',
     timestamp: 1784810000000,
+    localDate: '2026-07-23',
+    generation: 3,
     latitude: null,
     longitude: null,
   }))).toEqual({
@@ -17,6 +19,8 @@ test('parses a persisted crossing with its native sequence', () => {
     kind: 'work',
     direction: 'exit',
     timestamp: 1784810000000,
+    localDate: '2026-07-23',
+    generation: 3,
     latitude: null,
     longitude: null,
   });
@@ -25,6 +29,16 @@ test('parses a persisted crossing with its native sequence', () => {
 test('rejects malformed native events', () => {
   expect(parseNativeEvent('{"type":"crossing"}')).toBeNull();
   expect(parseNativeEvent('not json')).toBeNull();
+  expect(parseNativeEvent(JSON.stringify({
+    sequence: 7,
+    type: 'crossing',
+    locationId: 4,
+    kind: 'work',
+    direction: 'exit',
+    timestamp: 1784810000000,
+    latitude: null,
+    longitude: null,
+  }))).toBeNull();
   expect(parseNativeEvent(JSON.stringify({
     sequence: 8,
     type: 'crossing',
