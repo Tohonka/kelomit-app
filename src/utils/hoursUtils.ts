@@ -126,6 +126,10 @@ function entryInterval(e: Entry): Interval | null {
   return null;
 }
 
+function dayWorkActivity(entry: Entry): Entry['activity_type'] {
+  return entry.project?.type === 'personal' ? 'personal' : entry.activity_type;
+}
+
 export interface DayWorkBreakdown {
   /** Sum of the day's leg durations — the work-day baseline. */
   baselineSeconds: number;
@@ -150,8 +154,9 @@ export interface DayWorkBreakdown {
  * Duration-only entries (no `time_to`) can't be located, so they count in
  * full: `work` adds, `personal` deducts, `personal_work` is ignored. A duration
  * that really overlaps the legs will double-count — use from–to for exact
- * placement. When no leg is set, we fall back to summing `work` entry seconds
- * (duration-only included), since the entries are then the only signal.
+ * placement. When no leg is set, we fall back to summing `work` and
+ * `personal_work` entry seconds (duration-only included), since the entries are
+ * then the only signal. Personal-project entries remain personal in both paths.
  */
 export function calcDayWorkBreakdown(day: Day, entries: Entry[]): DayWorkBreakdown {
   const legs: Interval[] = [];
@@ -160,12 +165,18 @@ export function calcDayWorkBreakdown(day: Day, entries: Entry[]): DayWorkBreakdo
   const legUnion = merge(legs);
 
   if (legUnion.length === 0) {
-    const tracked = calcHourBreakdown(entries);
+    let workSeconds = 0;
+    for (const entry of entries) {
+      const activity = dayWorkActivity(entry);
+      if (activity === 'work' || activity === 'personal_work') {
+        workSeconds += entryTrackedSeconds(entry);
+      }
+    }
     return {
       baselineSeconds: 0,
       addedWorkSeconds: 0,
       deductedPersonalSeconds: 0,
-      workSeconds: tracked.workSeconds + tracked.personalWorkSeconds,
+      workSeconds,
       hasDayLegs: false,
     };
   }
@@ -182,7 +193,7 @@ export function calcDayWorkBreakdown(day: Day, entries: Entry[]): DayWorkBreakdo
   let deductedDurationPersonal = 0;
 
   for (const e of entries) {
-    const activity = e.project?.type === 'personal' ? 'personal' : e.activity_type;
+    const activity = dayWorkActivity(e);
     const iv = entryInterval(e);
     if (iv) {
       if (activity === 'work') {

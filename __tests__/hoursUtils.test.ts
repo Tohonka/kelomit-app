@@ -146,6 +146,25 @@ describe('calcDayWorkBreakdown (work-day model)', () => {
     expect(calcDayWorkSecs(day, entries)).toBe(3 * H);
   });
 
+  it('treats a Personal-project entry as personal when no legs are set', () => {
+    const day = makeDay({});
+    const entries = [
+      makeEntry({
+        activity_type: 'work',
+        duration_sec: H,
+        project: {
+          id: 9,
+          name: 'Private',
+          type: 'personal',
+          archived: false,
+          created_at: at(0),
+          updated_at: at(0),
+        },
+      }),
+    ];
+    expect(calcDayWorkSecs(day, entries)).toBe(0);
+  });
+
   it('treats a Personal-project interval as personal regardless of marker', () => {
     const day = makeDay({started_at: at(8), ended_at: at(16)});
     const entries = [
