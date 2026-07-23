@@ -8,8 +8,45 @@ import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import java.io.File
 import java.io.FileOutputStream
+import java.math.BigDecimal
+import java.math.BigInteger
 import org.json.JSONArray
 import org.json.JSONObject
+
+internal fun parseNonNegativeSeconds(raw: Any): Long {
+  val value = try {
+    when (raw) {
+      is Byte, is Short, is Int, is Long -> (raw as Number).toLong()
+      is BigInteger -> raw.longValueExact()
+      is BigDecimal -> raw.longValueExact()
+      else -> throw IllegalArgumentException("seconds must be an exact integer")
+    }
+  } catch (error: ArithmeticException) {
+    throw IllegalArgumentException("seconds must fit in a Long", error)
+  }
+  require(value >= 0L) { "seconds must be non-negative" }
+  return value
+}
+
+internal fun runCleanupsPreserving(
+  primary: Throwable?,
+  vararg cleanups: () -> Unit,
+) {
+  var failure = primary
+  cleanups.forEach { cleanup ->
+    try {
+      cleanup()
+    } catch (error: Throwable) {
+      val existing = failure
+      if (existing == null) {
+        failure = error
+      } else if (existing !== error) {
+        existing.addSuppressed(error)
+      }
+    }
+  }
+  if (primary == null && failure != null) throw failure
+}
 
 object WorkReportRenderer {
   private val safeFileName = Regex("""[A-Za-z0-9][A-Za-z0-9._-]*\.pdf""")
@@ -23,6 +60,7 @@ object WorkReportRenderer {
     val temporary = File.createTempFile(".$fileName-", ".tmp", context.cacheDir)
     val document = PdfDocument()
     var stream: FileOutputStream? = null
+    var failure: Throwable? = null
 
     try {
       ReportPainter(document, model).render()
@@ -33,16 +71,16 @@ object WorkReportRenderer {
       stream = null
       require(temporary.renameTo(output)) { "Could not publish report PDF" }
       return output
+    } catch (error: Throwable) {
+      failure = error
+      throw error
     } finally {
-      try {
-        stream?.close()
-      } finally {
-        try {
-          document.close()
-        } finally {
-          if (temporary.exists()) temporary.delete()
-        }
-      }
+      runCleanupsPreserving(
+        failure,
+        { stream?.close() },
+        { document.close() },
+        { if (temporary.exists()) temporary.delete() },
+      )
     }
   }
 
@@ -101,15 +139,7 @@ object WorkReportRenderer {
 
   private fun JSONObject.nonNegativeSeconds(): Long {
     val raw = get("seconds")
-    require(raw is Number) { "seconds must be numeric" }
-    val value = raw.toDouble()
-    require(
-      value.isFinite() &&
-        value >= 0.0 &&
-        value % 1.0 == 0.0 &&
-        value <= Long.MAX_VALUE.toDouble(),
-    ) { "seconds must be a non-negative integer" }
-    return value.toLong()
+    return parseNonNegativeSeconds(raw)
   }
 
   private fun JSONArray.objects(): List<JSONObject> =
@@ -187,27 +217,37 @@ object WorkReportRenderer {
     private var page: PdfDocument.Page? = null
     private var pageNumber = 0
     private var y = 0f
+    private var statisticsContentTop = 0f
 
     fun render() {
-      startFirstTimesheetPage()
-      model.days.forEach(::drawDay)
-      model.statistics?.let { statistics ->
+      try {
+        startFirstTimesheetPage()
+        model.days.forEach(::drawDay)
+        model.statistics?.let { statistics ->
+          finishPage()
+          startStatisticsPage(statistics)
+          drawStatisticsSection(
+            statistics,
+            statistics.byProjectTitle,
+            statistics.projectRows,
+          )
+          y += 18f
+          drawStatisticsSection(
+            statistics,
+            statistics.byTagTitle,
+            statistics.tagRows,
+            statistics.nonExclusiveNote,
+          )
+        }
         finishPage()
-        startStatisticsPage(statistics)
-        drawStatisticsSection(
-          statistics,
-          statistics.byProjectTitle,
-          statistics.projectRows,
-        )
-        y += 18f
-        drawStatisticsSection(
-          statistics,
-          statistics.byTagTitle,
-          statistics.tagRows,
-          statistics.nonExclusiveNote,
-        )
+      } catch (error: Throwable) {
+        val activePage = page
+        page = null
+        if (activePage != null) {
+          runCleanupsPreserving(error, { document.finishPage(activePage) })
+        }
+        throw error
       }
-      finishPage()
     }
 
     private fun startPage(): Canvas {
@@ -223,12 +263,13 @@ object WorkReportRenderer {
 
     private fun finishPage() {
       val current = checkNotNull(page)
-      drawText(
+      drawFittedText(
         current.canvas,
         "${model.meta.pageLabel} $pageNumber",
         WorkReportLayout.PAGE_WIDTH - WorkReportLayout.MARGIN,
         WorkReportLayout.PAGE_HEIGHT - 16f,
         9f,
+        CONTENT_WIDTH,
         align = Paint.Align.RIGHT,
       )
       document.finishPage(current)
@@ -237,25 +278,70 @@ object WorkReportRenderer {
 
     private fun startFirstTimesheetPage() {
       val canvas = startPage()
-      drawText(canvas, model.meta.title, MARGIN, 68f, 22f, bold = true)
-      drawRule(canvas, 86f)
+      y = drawWrappedBlock(
+        canvas,
+        model.meta.title,
+        MARGIN,
+        42f,
+        CONTENT_WIDTH,
+        20f,
+        25f,
+        2,
+        bold = true,
+      )
+      val ruleY = y + 8f
+      drawRule(canvas, ruleY)
 
-      y = 112f
-      drawText(canvas, model.meta.companyName, MARGIN, y, 13f, bold = true)
-      y += 17f
-      drawText(canvas, model.meta.personName, MARGIN, y, 11f)
-      y += 17f
-      drawText(canvas, model.meta.range, MARGIN, y, 10f)
+      y = ruleY + 25f
+      y = drawWrappedBlock(
+        canvas,
+        model.meta.companyName,
+        MARGIN,
+        y,
+        CONTENT_WIDTH,
+        13f,
+        18f,
+        2,
+        bold = true,
+      ) + 4f
+      y = drawWrappedBlock(
+        canvas,
+        model.meta.personName,
+        MARGIN,
+        y,
+        CONTENT_WIDTH,
+        11f,
+        17f,
+        2,
+      ) + 4f
+      y = drawWrappedBlock(
+        canvas,
+        model.meta.range,
+        MARGIN,
+        y,
+        CONTENT_WIDTH,
+        10f,
+        15f,
+        2,
+      )
 
-      val totalTop = y + 18f
+      val totalTop = y + 16f
       fill(canvas, MARGIN, totalTop, PAGE_RIGHT, totalTop + 58f, PALE_BLUE)
-      drawText(canvas, model.meta.totalLabel, MARGIN + 14f, totalTop + 21f, 10f)
-      drawText(
+      drawFittedText(
+        canvas,
+        model.meta.totalLabel,
+        MARGIN + 14f,
+        totalTop + 21f,
+        10f,
+        TOTAL_LABEL_WIDTH,
+      )
+      drawFittedText(
         canvas,
         model.meta.totalHours,
         PAGE_RIGHT - 14f,
         totalTop + 42f,
         25f,
+        TOTAL_HOURS_WIDTH,
         bold = true,
         align = Paint.Align.RIGHT,
         color = BLUE,
@@ -274,21 +360,46 @@ object WorkReportRenderer {
 
     private fun drawCompactIdentity(canvas: Canvas) {
       val identity = "${model.meta.companyName} · ${model.meta.personName}"
-      drawText(canvas, identity, MARGIN, 54f, 11f, bold = true)
-      drawText(canvas, model.meta.range, MARGIN, 71f, 9f)
+      drawFittedText(
+        canvas,
+        identity,
+        MARGIN,
+        54f,
+        11f,
+        CONTENT_WIDTH,
+        bold = true,
+      )
+      drawFittedText(canvas, model.meta.range, MARGIN, 71f, 9f, CONTENT_WIDTH)
     }
 
     private fun drawColumnHeadings(canvas: Canvas) {
       fill(canvas, MARGIN, y, PAGE_RIGHT, y + 27f, PALE_BLUE)
       val baseline = y + 18f
-      drawText(canvas, model.columns.date, DATE_X, baseline, 9f, bold = true)
-      drawText(canvas, model.columns.weekday, WEEKDAY_X, baseline, 9f, bold = true)
-      drawText(
+      drawFittedText(
+        canvas,
+        model.columns.date,
+        DATE_X,
+        baseline,
+        9f,
+        DATE_COLUMN_WIDTH,
+        bold = true,
+      )
+      drawFittedText(
+        canvas,
+        model.columns.weekday,
+        WEEKDAY_X,
+        baseline,
+        9f,
+        WEEKDAY_COLUMN_WIDTH,
+        bold = true,
+      )
+      drawFittedText(
         canvas,
         model.columns.hours,
         PAGE_RIGHT - 10f,
         baseline,
         9f,
+        HOURS_COLUMN_WIDTH,
         bold = true,
         align = Paint.Align.RIGHT,
       )
@@ -302,21 +413,36 @@ object WorkReportRenderer {
       val blockHeight = DAY_ROW_HEIGHT +
         headlineLines.sumOf { it.size }.toFloat() * HEADLINE_LINE_HEIGHT +
         if (headlineLines.isEmpty()) 0f else 5f
-      if (WorkReportLayout.needsPageBreak(y, blockHeight)) {
+      val continuationCapacity = WorkReportLayout.FOOTER_TOP - CONTINUATION_BODY_TOP
+      if (
+        WorkReportLayout.needsPageBreak(y, DAY_ROW_HEIGHT) ||
+        (
+          blockHeight <= continuationCapacity &&
+            WorkReportLayout.needsPageBreak(y, blockHeight)
+          )
+      ) {
         finishPage()
         startTimesheetContinuation()
       }
 
       val canvas = checkNotNull(page).canvas
       val baseline = y + 18f
-      drawText(canvas, day.date, DATE_X, baseline, 10f)
-      drawText(canvas, day.weekday, WEEKDAY_X, baseline, 10f)
-      drawText(
+      drawFittedText(canvas, day.date, DATE_X, baseline, 10f, DATE_COLUMN_WIDTH)
+      drawFittedText(
+        canvas,
+        day.weekday,
+        WEEKDAY_X,
+        baseline,
+        10f,
+        WEEKDAY_COLUMN_WIDTH,
+      )
+      drawFittedText(
         canvas,
         day.hours,
         PAGE_RIGHT - 10f,
         baseline,
         10f,
+        HOURS_COLUMN_WIDTH,
         bold = true,
         align = Paint.Align.RIGHT,
       )
@@ -344,8 +470,18 @@ object WorkReportRenderer {
       val canvas = startPage()
       drawCompactIdentity(canvas)
       drawRule(canvas, 82f)
-      drawText(canvas, statistics.title, MARGIN, 116f, 20f, bold = true)
-      y = 138f
+      y = drawWrappedBlock(
+        canvas,
+        statistics.title,
+        MARGIN,
+        96f,
+        CONTENT_WIDTH,
+        20f,
+        24f,
+        2,
+        bold = true,
+      ) + 14f
+      statisticsContentTop = y
     }
 
     private fun drawStatisticsSection(
@@ -354,69 +490,207 @@ object WorkReportRenderer {
       rows: List<AllocationRow>,
       note: String? = null,
     ) {
+      val titleLines = wrapLimited(title, CONTENT_WIDTH, 13f, 2, bold = true)
       val noteLines = note?.let { wrap(it, CONTENT_WIDTH, 9f) }.orEmpty()
-      val headingHeight = 25f + noteLines.size * 13f
+      val titleHeight = titleLines.size * SECTION_LINE_HEIGHT + SECTION_BOTTOM_GAP
       val firstRowHeight = rows.firstOrNull()?.let(::statisticsRowHeight) ?: 0f
-      if (WorkReportLayout.needsPageBreak(y, headingHeight + firstRowHeight)) {
+      val introHeight = titleHeight + noteLines.size * NOTE_LINE_HEIGHT + firstRowHeight
+      val freshCapacity = WorkReportLayout.FOOTER_TOP - statisticsContentTop
+      val minimumContentHeight = when {
+        noteLines.isNotEmpty() -> NOTE_LINE_HEIGHT
+        firstRowHeight > 0f -> minOf(firstRowHeight, STAT_LINE_HEIGHT)
+        else -> 0f
+      }
+      if (
+        (
+          introHeight <= freshCapacity &&
+            WorkReportLayout.needsPageBreak(y, introHeight)
+          ) ||
+        WorkReportLayout.needsPageBreak(y, titleHeight + minimumContentHeight)
+      ) {
         finishPage()
         startStatisticsPage(statistics)
       }
-      drawStatisticsHeading(title, noteLines)
+      drawStatisticsHeading(titleLines)
+
+      drawStatisticsLines(
+        statistics,
+        titleLines,
+        noteLines,
+        NOTE_LINE_HEIGHT,
+      ) { canvas, line, _ ->
+        drawText(canvas, line, MARGIN, y + 10f, 9f, italic = true)
+      }
 
       val maxSeconds = rows.maxOfOrNull(AllocationRow::seconds) ?: 0L
       rows.forEach { row ->
         val rowHeight = statisticsRowHeight(row)
-        if (WorkReportLayout.needsPageBreak(y, rowHeight)) {
+        val freshRowCapacity =
+          WorkReportLayout.FOOTER_TOP - statisticsContentTop - titleHeight
+        if (
+          rowHeight <= freshRowCapacity &&
+            WorkReportLayout.needsPageBreak(y, rowHeight)
+        ) {
           finishPage()
           startStatisticsPage(statistics)
-          drawStatisticsHeading(title, noteLines)
+          drawStatisticsHeading(titleLines)
         }
-        drawStatisticsRow(row, maxSeconds)
+        drawStatisticsRow(statistics, titleLines, row, maxSeconds)
       }
     }
 
-    private fun drawStatisticsHeading(title: String, noteLines: List<String>) {
+    private fun drawStatisticsHeading(titleLines: List<String>) {
       val canvas = checkNotNull(page).canvas
-      drawText(canvas, title, MARGIN, y + 14f, 13f, bold = true)
-      y += 25f
-      noteLines.forEach { line ->
-        drawText(canvas, line, MARGIN, y + 10f, 9f, italic = true)
-        y += 13f
+      titleLines.forEach { line ->
+        drawText(canvas, line, MARGIN, y + 13f, 13f, bold = true)
+        y += SECTION_LINE_HEIGHT
       }
+      y += SECTION_BOTTOM_GAP
     }
 
     private fun statisticsRowHeight(row: AllocationRow): Float =
-      wrap(row.label, STAT_LABEL_WIDTH, 9.5f).size * 14f + 20f
+      wrap(row.label, STAT_LABEL_WIDTH, 9.5f).size * STAT_LINE_HEIGHT +
+        STAT_TRAILING_HEIGHT
 
-    private fun drawStatisticsRow(row: AllocationRow, maxSeconds: Long) {
-      val canvas = checkNotNull(page).canvas
+    private fun drawStatisticsRow(
+      statistics: Statistics,
+      titleLines: List<String>,
+      row: AllocationRow,
+      maxSeconds: Long,
+    ) {
       val lines = wrap(row.label, STAT_LABEL_WIDTH, 9.5f)
-      lines.forEachIndexed { index, line ->
+      drawStatisticsLines(
+        statistics,
+        titleLines,
+        lines,
+        STAT_LINE_HEIGHT,
+        STAT_TRAILING_HEIGHT,
+      ) { canvas, line, index ->
         drawText(canvas, line, MARGIN, y + 10f, 9.5f)
         if (index == 0) {
-          drawText(
+          drawFittedText(
             canvas,
             row.hours,
             PAGE_RIGHT,
             y + 10f,
             9.5f,
+            STAT_HOURS_WIDTH,
             bold = true,
             align = Paint.Align.RIGHT,
           )
         }
-        y += 14f
       }
+      val canvas = checkNotNull(page).canvas
       fill(canvas, MARGIN, y + 3f, PAGE_RIGHT, y + 10f, PALE_BLUE)
       val fraction = if (maxSeconds == 0L) 0f else {
         (row.seconds.toDouble() / maxSeconds.toDouble()).toFloat().coerceIn(0f, 1f)
       }
       fill(canvas, MARGIN, y + 3f, MARGIN + CONTENT_WIDTH * fraction, y + 10f, BLUE)
-      y += 20f
+      y += STAT_TRAILING_HEIGHT
     }
 
-    private fun wrap(text: String, maxWidth: Float, size: Float): List<String> {
-      configureText(size)
+    private fun drawStatisticsLines(
+      statistics: Statistics,
+      titleLines: List<String>,
+      lines: List<String>,
+      lineHeight: Float,
+      trailingHeight: Float = 0f,
+      drawLine: (Canvas, String, Int) -> Unit,
+    ) {
+      var index = 0
+      while (index < lines.size) {
+        val count = WorkReportLayout.linesForPage(
+          currentY = y,
+          remainingLines = lines.size - index,
+          lineHeight = lineHeight,
+          trailingHeight = trailingHeight,
+        )
+        if (count == 0) {
+          finishPage()
+          startStatisticsPage(statistics)
+          drawStatisticsHeading(titleLines)
+          continue
+        }
+        repeat(count) {
+          drawLine(checkNotNull(page).canvas, lines[index], index)
+          y += lineHeight
+          index += 1
+        }
+      }
+    }
+
+    private fun wrap(
+      text: String,
+      maxWidth: Float,
+      size: Float,
+      bold: Boolean = false,
+      italic: Boolean = false,
+    ): List<String> {
+      configureText(size, bold, italic)
       return WorkReportLayout.wrap(text, maxWidth, paint::measureText)
+    }
+
+    private fun wrapLimited(
+      text: String,
+      maxWidth: Float,
+      size: Float,
+      maxLines: Int,
+      bold: Boolean = false,
+      italic: Boolean = false,
+    ): List<String> {
+      configureText(size, bold, italic)
+      return WorkReportLayout.wrapLimited(
+        text,
+        maxWidth,
+        maxLines,
+        paint::measureText,
+      )
+    }
+
+    private fun drawWrappedBlock(
+      canvas: Canvas,
+      text: String,
+      x: Float,
+      top: Float,
+      maxWidth: Float,
+      size: Float,
+      lineHeight: Float,
+      maxLines: Int,
+      bold: Boolean = false,
+      italic: Boolean = false,
+      color: Int = NAVY,
+    ): Float {
+      val lines = wrapLimited(text, maxWidth, size, maxLines, bold, italic)
+      lines.forEachIndexed { index, line ->
+        drawText(
+          canvas,
+          line,
+          x,
+          top + size + index * lineHeight,
+          size,
+          bold,
+          italic,
+          color = color,
+        )
+      }
+      return top + lines.size * lineHeight
+    }
+
+    private fun drawFittedText(
+      canvas: Canvas,
+      text: String,
+      x: Float,
+      baseline: Float,
+      size: Float,
+      maxWidth: Float,
+      bold: Boolean = false,
+      italic: Boolean = false,
+      align: Paint.Align = Paint.Align.LEFT,
+      color: Int = NAVY,
+    ) {
+      configureText(size, bold, italic, align, color)
+      val fitted = WorkReportLayout.ellipsize(text, maxWidth, paint::measureText)
+      drawText(canvas, fitted, x, baseline, size, bold, italic, align, color)
     }
 
     private fun drawText(
@@ -490,10 +764,23 @@ object WorkReportRenderer {
       const val CONTENT_WIDTH = WorkReportLayout.PAGE_WIDTH - MARGIN * 2
       const val DATE_X = MARGIN + 10f
       const val WEEKDAY_X = 210f
+      const val HOURS_COLUMN_LEFT = 465f
+      const val DATE_COLUMN_WIDTH = WEEKDAY_X - DATE_X - 12f
+      const val WEEKDAY_COLUMN_WIDTH = HOURS_COLUMN_LEFT - WEEKDAY_X - 12f
+      const val HOURS_COLUMN_WIDTH = PAGE_RIGHT - 10f - HOURS_COLUMN_LEFT
       const val HEADLINE_X = MARGIN + 22f
       const val STAT_LABEL_WIDTH = CONTENT_WIDTH - 78f
+      const val STAT_HOURS_WIDTH = 70f
+      const val TOTAL_LABEL_WIDTH = CONTENT_WIDTH - 180f
+      const val TOTAL_HOURS_WIDTH = 160f
       const val DAY_ROW_HEIGHT = 28f
       const val HEADLINE_LINE_HEIGHT = 14f
+      const val CONTINUATION_BODY_TOP = 121f
+      const val SECTION_LINE_HEIGHT = 18f
+      const val SECTION_BOTTOM_GAP = 7f
+      const val NOTE_LINE_HEIGHT = 13f
+      const val STAT_LINE_HEIGHT = 14f
+      const val STAT_TRAILING_HEIGHT = 20f
     }
   }
 }

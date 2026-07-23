@@ -1,5 +1,7 @@
 package com.kelomitapp.reporting
 
+import kotlin.math.floor
+
 object WorkReportLayout {
   const val PAGE_WIDTH = 595
   const val PAGE_HEIGHT = 842
@@ -8,6 +10,49 @@ object WorkReportLayout {
 
   fun needsPageBreak(currentY: Float, blockHeight: Float): Boolean =
     currentY + blockHeight > FOOTER_TOP
+
+  fun ellipsize(
+    text: String,
+    maxWidth: Float,
+    measure: (String) -> Float,
+  ): String {
+    require(maxWidth > 0f)
+    if (measure(text) <= maxWidth) return text
+    if (measure(ELLIPSIS) > maxWidth) return ""
+    val prefixLength = prefixEnds(text).lastOrNull { end ->
+      measure(text.substring(0, end).trimEnd() + ELLIPSIS) <= maxWidth
+    } ?: return ELLIPSIS
+    return text.substring(0, prefixLength).trimEnd() + ELLIPSIS
+  }
+
+  fun wrapLimited(
+    text: String,
+    maxWidth: Float,
+    maxLines: Int,
+    measure: (String) -> Float,
+  ): List<String> {
+    require(maxLines > 0)
+    val lines = wrap(text, maxWidth, measure)
+    if (lines.size <= maxLines) return lines
+    return lines.take(maxLines - 1) +
+      ellipsize(lines.drop(maxLines - 1).joinToString(" "), maxWidth, measure)
+  }
+
+  fun linesForPage(
+    currentY: Float,
+    remainingLines: Int,
+    lineHeight: Float,
+    trailingHeight: Float = 0f,
+  ): Int {
+    require(remainingLines >= 0 && lineHeight > 0f && trailingHeight >= 0f)
+    if (remainingLines == 0) return 0
+    val available = FOOTER_TOP - currentY
+    if (remainingLines * lineHeight + trailingHeight <= available) {
+      return remainingLines
+    }
+    val linesWithoutTrailing = floor(available / lineHeight).toInt().coerceAtLeast(0)
+    return minOf(remainingLines - 1, linesWithoutTrailing)
+  }
 
   fun wrap(
     text: String,
@@ -28,9 +73,9 @@ object WorkReportLayout {
         }
         var remaining = word
         while (remaining.isNotEmpty() && measure(remaining) > maxWidth) {
-          val prefixLength = (remaining.length downTo 1).firstOrNull {
+          val prefixLength = prefixEnds(remaining).lastOrNull {
             measure(remaining.substring(0, it)) <= maxWidth
-          } ?: 1
+          } ?: prefixEnds(remaining).first()
           lines += remaining.substring(0, prefixLength)
           remaining = remaining.substring(prefixLength)
         }
@@ -49,4 +94,14 @@ object WorkReportLayout {
     if (current.isNotEmpty()) lines += current
     return lines
   }
+
+  private fun prefixEnds(text: String): List<Int> = buildList {
+    var index = 0
+    while (index < text.length) {
+      index += Character.charCount(text.codePointAt(index))
+      add(index)
+    }
+  }
+
+  private const val ELLIPSIS = "…"
 }
