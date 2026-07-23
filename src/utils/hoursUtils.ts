@@ -8,13 +8,13 @@ export interface HourBreakdown {
   totalTrackedSeconds: number;
 }
 
-function entrySeconds(entry: Entry): number {
+export function entryTrackedSeconds(entry: Entry): number {
   // Unconfirmed to-dos don't count toward worked hours until completed.
   if (entry.is_todo && !entry.completed_at) {
     return 0;
   }
   if (entry.duration_sec != null) {
-    return entry.duration_sec;
+    return Math.max(0, entry.duration_sec);
   }
   if (entry.time_from && entry.time_to) {
     const s = differenceInSeconds(parseISO(entry.time_to), parseISO(entry.time_from));
@@ -32,7 +32,7 @@ export function calcHourBreakdown(entries: Entry[]): HourBreakdown {
   let personalSeconds = 0;
 
   for (const e of entries) {
-    const secs = entrySeconds(e);
+    const secs = entryTrackedSeconds(e);
     if (secs === 0) { continue; }
     if (e.activity_type === 'work') { workSeconds += secs; }
     else if (e.activity_type === 'personal_work') { personalWorkSeconds += secs; }
@@ -160,11 +160,12 @@ export function calcDayWorkBreakdown(day: Day, entries: Entry[]): DayWorkBreakdo
   const legUnion = merge(legs);
 
   if (legUnion.length === 0) {
+    const tracked = calcHourBreakdown(entries);
     return {
       baselineSeconds: 0,
       addedWorkSeconds: 0,
       deductedPersonalSeconds: 0,
-      workSeconds: calcHourBreakdown(entries).workSeconds,
+      workSeconds: tracked.workSeconds + tracked.personalWorkSeconds,
       hasDayLegs: false,
     };
   }
@@ -181,19 +182,20 @@ export function calcDayWorkBreakdown(day: Day, entries: Entry[]): DayWorkBreakdo
   let deductedDurationPersonal = 0;
 
   for (const e of entries) {
+    const activity = e.project?.type === 'personal' ? 'personal' : e.activity_type;
     const iv = entryInterval(e);
     if (iv) {
-      if (e.activity_type === 'work') {
+      if (activity === 'work') {
         workOutside.push(...subtract(iv, legUnion));
-      } else if (e.activity_type === 'personal') {
+      } else if (activity === 'personal') {
         personalInside.push(...intersect(iv, legUnion));
       }
       // personal_work: neither added nor deducted (it's just a label).
     } else {
-      const secs = entrySeconds(e); // duration_sec for unplaceable entries; 0 (+todo guard) otherwise
+      const secs = entryTrackedSeconds(e); // duration_sec for unplaceable entries; 0 (+todo guard) otherwise
       if (secs > 0) {
-        if (e.activity_type === 'work') { addedDurationWork += secs; }
-        else if (e.activity_type === 'personal') { deductedDurationPersonal += secs; }
+        if (activity === 'work') { addedDurationWork += secs; }
+        else if (activity === 'personal') { deductedDurationPersonal += secs; }
       }
     }
   }

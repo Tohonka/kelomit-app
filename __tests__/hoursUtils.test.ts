@@ -137,6 +137,35 @@ describe('calcDayWorkBreakdown (work-day model)', () => {
     expect(b.workSeconds).toBe(2 * H); // only work entries, personal ignored
   });
 
+  it('counts personal_work when entries are the only work signal', () => {
+    const day = makeDay({});
+    const entries = [
+      makeEntry({activity_type: 'work', duration_sec: 2 * H}),
+      makeEntry({id: 2, activity_type: 'personal_work', duration_sec: H}),
+    ];
+    expect(calcDayWorkSecs(day, entries)).toBe(3 * H);
+  });
+
+  it('treats a Personal-project interval as personal regardless of marker', () => {
+    const day = makeDay({started_at: at(8), ended_at: at(16)});
+    const entries = [
+      makeEntry({
+        activity_type: 'work',
+        time_from: at(12),
+        time_to: at(13),
+        project: {
+          id: 9,
+          name: 'Private',
+          type: 'personal',
+          archived: false,
+          created_at: at(0),
+          updated_at: at(0),
+        },
+      }),
+    ];
+    expect(calcDayWorkSecs(day, entries)).toBe(7 * H);
+  });
+
   it('uses the leg span as the baseline with no entries', () => {
     const day = makeDay({started_at: at(8), ended_at: at(16)});
     const b = calcDayWorkBreakdown(day, []);

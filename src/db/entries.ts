@@ -125,6 +125,33 @@ async function fetchProjectById(
   };
 }
 
+async function fetchProjectsForRows(rows: RawRow[]): Promise<Map<number, Project>> {
+  const projectIds = [
+    ...new Set(rows.map(row => row.project_id as number | null).filter(Boolean)),
+  ] as number[];
+  if (projectIds.length === 0) {
+    return new Map();
+  }
+  const db = getDB();
+  const result = await db.execute(
+    `SELECT * FROM projects WHERE id IN (${projectIds.map(() => '?').join(',')});`,
+    projectIds,
+  );
+  const projects = new Map<number, Project>();
+  for (const row of result.rows ?? []) {
+    const r = row as RawRow;
+    projects.set(r.id as number, {
+      id: r.id as number,
+      name: r.name as string,
+      type: r.type as Project['type'],
+      archived: Boolean(r.archived),
+      created_at: r.created_at as string,
+      updated_at: r.updated_at as string,
+    });
+  }
+  return projects;
+}
+
 export async function getEntriesForDay(dayId: number): Promise<Entry[]> {
   const db = getDB();
   const result = await db.execute(
@@ -140,28 +167,7 @@ export async function getEntriesForDay(dayId: number): Promise<Entry[]> {
   const tagsMap = await fetchTagsForEntries(entryIds);
   const mediaMap = await fetchMediaForEntries(entryIds);
 
-  const projectIds = [
-    ...new Set(rows.map(r => r.project_id as number | null).filter(Boolean)),
-  ] as number[];
-  const projectsResult =
-    projectIds.length > 0
-      ? await db.execute(
-          `SELECT * FROM projects WHERE id IN (${projectIds.map(() => '?').join(',')});`,
-          projectIds,
-        )
-      : {rows: []};
-  const projectsMap = new Map<number, Project>();
-  for (const pr of projectsResult.rows ?? []) {
-    const r = pr as RawRow;
-    projectsMap.set(r.id as number, {
-      id: r.id as number,
-      name: r.name as string,
-      type: r.type as Project['type'],
-      archived: Boolean(r.archived),
-      created_at: r.created_at as string,
-      updated_at: r.updated_at as string,
-    });
-  }
+  const projectsMap = await fetchProjectsForRows(rows);
 
   return rows.map(r =>
     rowToEntry(
@@ -169,6 +175,31 @@ export async function getEntriesForDay(dayId: number): Promise<Entry[]> {
       tagsMap.get(r.id as number) ?? [],
       projectsMap.get(r.project_id as number) ?? null,
       mediaMap.get(r.id as number) ?? [],
+    ),
+  );
+}
+
+export async function getEntriesForDays(dayIds: number[]): Promise<Entry[]> {
+  if (dayIds.length === 0) { return []; }
+  const db = getDB();
+  const placeholders = dayIds.map(() => '?').join(',');
+  const result = await db.execute(
+    `SELECT * FROM entries
+      WHERE day_id IN (${placeholders})
+      ORDER BY day_id ASC, created_at ASC;`,
+    dayIds,
+  );
+  const rows = (result.rows ?? []) as RawRow[];
+  const ids = rows.map(row => row.id as number);
+  const [tags, projects] = await Promise.all([
+    fetchTagsForEntries(ids),
+    fetchProjectsForRows(rows),
+  ]);
+  return rows.map(row =>
+    rowToEntry(
+      row,
+      tags.get(row.id as number) ?? [],
+      projects.get(row.project_id as number) ?? null,
     ),
   );
 }
@@ -382,17 +413,10 @@ export async function getWorkSecondsByDay(
   const days = await getDaysInRange(startDate, endDate);
   if (days.length === 0) { return {}; }
 
-  const db = getDB();
   const dayIds = days.map(d => d.id);
-  const placeholders = dayIds.map(() => '?').join(',');
-  const result = await db.execute(
-    `SELECT * FROM entries WHERE day_id IN (${placeholders});`,
-    dayIds,
-  );
-  // Tags/project aren't needed for the hours math, so skip those joins.
+  const entries = await getEntriesForDays(dayIds);
   const entriesByDay = new Map<number, Entry[]>();
-  for (const row of result.rows ?? []) {
-    const e = rowToEntry(row as RawRow, [], null);
+  for (const e of entries) {
     const list = entriesByDay.get(e.day_id);
     if (list) { list.push(e); } else { entriesByDay.set(e.day_id, [e]); }
   }
