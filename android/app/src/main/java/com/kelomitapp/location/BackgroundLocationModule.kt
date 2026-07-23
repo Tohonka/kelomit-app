@@ -2,6 +2,7 @@ package com.kelomitapp.location
 
 import android.content.Intent
 import android.os.Build
+import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
@@ -100,21 +101,55 @@ class BackgroundLocationModule(reactContext: ReactApplicationContext) :
   }
 
   @ReactMethod
-  fun monitorPlaces(places: ReadableArray, promise: Promise) {
+  fun syncPlaces(places: ReadableArray, promise: Promise) {
     try {
-      val parsed = (0 until places.size()).mapNotNull { i ->
-        val f = places.getMap(i) ?: return@mapNotNull null
-        LocationService.ParkFence(
-          id = f.getDouble("id").toLong(),
-          latitude = f.getDouble("latitude"),
-          longitude = f.getDouble("longitude"),
-          radiusM = f.getDouble("radius").toFloat(),
+      val parsed = (0 until places.size()).map { index ->
+        val place = requireNotNull(places.getMap(index)) { "Place $index is not an object" }
+        val id = place.getDouble("id")
+        require(id.isFinite() && id >= 0.0 && id % 1.0 == 0.0) {
+          "Place $index has an invalid ID"
+        }
+        val parsedPlace = NativePlace(
+          id = id.toLong(),
+          kind = requireNotNull(place.getString("kind")),
+          latitude = place.getDouble("latitude"),
+          longitude = place.getDouble("longitude"),
+          radiusM = place.getDouble("radius").toFloat(),
         )
+        require(parsedPlace.kind in setOf("work", "home", "other"))
+        require(parsedPlace.latitude in -90.0..90.0)
+        require(parsedPlace.longitude in -180.0..180.0)
+        require(parsedPlace.radiusM > 0f)
+        parsedPlace
       }
-      LocationService.instance?.monitorPlaces(parsed)
+      NativePlaceStore(reactApplicationContext).replace(parsed)
       promise.resolve(null)
     } catch (e: Exception) {
-      promise.reject("monitor_places_failed", e)
+      promise.reject("sync_places_failed", e)
+    }
+  }
+
+  @ReactMethod
+  fun readNativeEvents(promise: Promise) {
+    try {
+      val out = Arguments.createArray()
+      NativeEventJournal(reactApplicationContext).readLines().forEach(out::pushString)
+      promise.resolve(out)
+    } catch (e: Exception) {
+      promise.reject("read_native_events_failed", e)
+    }
+  }
+
+  @ReactMethod
+  fun ackNativeEvents(sequence: Double, promise: Promise) {
+    try {
+      require(sequence.isFinite() && sequence >= 0.0 && sequence % 1.0 == 0.0) {
+        "Sequence must be a non-negative integer"
+      }
+      NativeEventJournal(reactApplicationContext).ackThrough(sequence.toLong())
+      promise.resolve(null)
+    } catch (e: Exception) {
+      promise.reject("ack_native_events_failed", e)
     }
   }
 }

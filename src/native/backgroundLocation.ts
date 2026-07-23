@@ -11,7 +11,9 @@ interface BackgroundLocationNative {
   stop(): Promise<void>;
   setMode(mode: string, ms: number): Promise<void>;
   enterParked(fences: ParkFence[]): Promise<void>;
-  monitorPlaces(places: MonitoredPlace[]): Promise<void>;
+  syncPlaces(places: MonitoredPlace[]): Promise<void>;
+  readNativeEvents(): Promise<string[]>;
+  ackNativeEvents(sequence: number): Promise<void>;
   drainFixBuffer(): Promise<string[]>;
   /** Build-time Google Maps key (from .maps.env), exposed as a native constant. */
   mapsApiKey?: string;
@@ -141,6 +143,64 @@ export interface MonitoredPlace {
   kind: string;
 }
 
+export type NativeJournalEvent =
+  | {
+      sequence: number;
+      type: 'crossing';
+      locationId: number;
+      kind: 'work' | 'home' | 'other';
+      direction: 'enter' | 'exit';
+      timestamp: number;
+      latitude: number | null;
+      longitude: number | null;
+    }
+  | {
+      sequence: number;
+      type: 'day_end_prompted' | 'day_end_confirmed' | 'day_end_rejected' |
+        'day_end_assumed' | 'day_end_cancelled';
+      token: string;
+      exitTimestamp: number;
+      timestamp: number;
+    };
+
+const dayEndTypes = new Set([
+  'day_end_prompted',
+  'day_end_confirmed',
+  'day_end_rejected',
+  'day_end_assumed',
+  'day_end_cancelled',
+]);
+
+export function parseNativeEvent(line: string): NativeJournalEvent | null {
+  try {
+    const value: unknown = JSON.parse(line);
+    if (!value || typeof value !== 'object') return null;
+    const event = value as Record<string, unknown>;
+    if (!Number.isSafeInteger(event.sequence) ||
+        typeof event.timestamp !== 'number') {
+      return null;
+    }
+    if (event.type === 'crossing') {
+      if (!Number.isSafeInteger(event.locationId) ||
+          !['work', 'home', 'other'].includes(String(event.kind)) ||
+          !['enter', 'exit'].includes(String(event.direction)) ||
+          !(event.latitude === null || typeof event.latitude === 'number') ||
+          !(event.longitude === null || typeof event.longitude === 'number')) {
+        return null;
+      }
+      return event as NativeJournalEvent;
+    }
+    if (typeof event.type === 'string' && dayEndTypes.has(event.type) &&
+        typeof event.token === 'string' && event.token.length > 0 &&
+        typeof event.exitTimestamp === 'number') {
+      return event as NativeJournalEvent;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export interface CrossingEvent {
   locationId: number;
   type: 'enter' | 'exit';
@@ -149,14 +209,26 @@ export interface CrossingEvent {
   timestamp: number; // ms since epoch
 }
 
-/** (Re)register always-on OS geofences for saved places (work + home). No-op on
- *  binaries without the native method. */
-export function monitorPlaces(places: MonitoredPlace[]): void {
-  try {
-    Native?.monitorPlaces?.(places)?.catch(() => {});
-  } catch {
-    // ignore
-  }
+/** Persist the complete native saved-place set. Task 3 adds OS registration. */
+export async function syncPlaces(places: MonitoredPlace[]): Promise<void> {
+  await Native?.syncPlaces?.(places);
+}
+
+/** Temporary name retained until the old JS workday engine is deleted. */
+export const monitorPlaces = syncPlaces;
+
+export async function readNativeEvents(): Promise<string[]> {
+  return (await Native?.readNativeEvents?.()) ?? [];
+}
+
+export async function ackNativeEvents(sequence: number): Promise<void> {
+  await Native?.ackNativeEvents?.(sequence);
+}
+
+export function subscribeNativeEventAvailable(
+  cb: () => void,
+): {remove: () => void} {
+  return DeviceEventEmitter.addListener('onNativeEventAvailable', cb);
 }
 
 /** Subscribe to OS geofence crossings (enter/exit of a saved place). */
