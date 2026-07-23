@@ -1,6 +1,7 @@
 import {format, parseISO} from 'date-fns';
 import {enUS, fi as fiLocale} from 'date-fns/locale';
 import type {Day, Entry} from '../types';
+import {parseTimestamp} from '../utils/dateUtils';
 import {calcDayWorkSecs, entryTrackedSeconds} from '../utils/hoursUtils';
 
 export type ReportLanguage = 'fi' | 'en';
@@ -89,7 +90,8 @@ function headlines(entries: Entry[]): string[] {
       && entry.title?.trim()
     ))
     .sort((a, b) => (
-      (a.time_from ?? a.created_at).localeCompare(b.time_from ?? b.created_at)
+      parseTimestamp(a.time_from ?? a.created_at).getTime()
+        - parseTimestamp(b.time_from ?? b.created_at).getTime()
       || a.id - b.id
     ))
     .map(entry => entry.title!.trim());
@@ -164,8 +166,12 @@ function buildStatistics(
 
 export function buildWorkReport(input: WorkReportInput): WorkReportModel {
   const personName = input.personName.trim();
+  const companyName = input.companyName.trim();
   if (!personName) {
     throw new Error('report_person_required');
+  }
+  if (!companyName) {
+    throw new Error('report_company_required');
   }
   if (input.startDate > input.endDate) {
     throw new Error('report_invalid_range');
@@ -188,9 +194,12 @@ export function buildWorkReport(input: WorkReportInput): WorkReportModel {
       return {day, entries, seconds: calcDayWorkSecs(day, entries)};
     })
     .filter(({seconds}) => seconds > 0);
+  if (reportDays.length === 0) {
+    throw new Error('report_empty');
+  }
   const days = reportDays.map(({day, entries, seconds}) => ({
     date: format(parseISO(day.date), 'd MMM yyyy', {locale}),
-    weekday: format(parseISO(day.date), 'EEEE', {locale}),
+    weekday: format(parseISO(day.date), 'cccc', {locale}),
     hours: formatDuration(seconds),
     seconds,
     headlines: input.type === 'headlines' ? headlines(entries) : [],
@@ -201,7 +210,7 @@ export function buildWorkReport(input: WorkReportInput): WorkReportModel {
   return {
     meta: {
       personName,
-      companyName: input.companyName.trim(),
+      companyName,
       range,
       title: copy.title,
       totalLabel: copy.total,

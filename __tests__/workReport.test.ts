@@ -74,11 +74,23 @@ const base = {
 };
 
 describe('buildWorkReport', () => {
-  it('validates the person and date range', () => {
+  it('validates the report identity and date range', () => {
     expect(() => buildWorkReport({...base, personName: ' '}))
       .toThrow('report_person_required');
+    expect(() => buildWorkReport({...base, companyName: ' '}))
+      .toThrow('report_company_required');
     expect(() => buildWorkReport({...base, startDate: '2026-07-26', endDate: '2026-07-25'}))
       .toThrow('report_invalid_range');
+  });
+
+  it('rejects reports without positive day rows', () => {
+    expect(() => buildWorkReport({
+      ...base,
+      startDate: zeroDay.date,
+      endDate: zeroDay.date,
+      days: [zeroDay],
+      entries: [],
+    })).toThrow('report_empty');
   });
 
   it('includes only positive in-range day rows', () => {
@@ -134,6 +146,32 @@ describe('buildWorkReport', () => {
     ]);
     expect(JSON.stringify(report)).not.toContain('Doctor');
     expect(JSON.stringify(report)).not.toContain('Private project');
+  });
+
+  it('sorts mixed SQLite and ISO headline timestamps by instant', () => {
+    const report = buildWorkReport({
+      ...base,
+      type: 'headlines',
+      entries: [
+        makeEntry({
+          id: 1,
+          day_id: 2,
+          title: 'Later untimed',
+          created_at: '2026-07-25 10:00:00',
+        }),
+        makeEntry({
+          id: 2,
+          day_id: 2,
+          title: 'Earlier timed',
+          time_from: '2026-07-25T09:00:00.000Z',
+        }),
+      ],
+    });
+
+    expect(report.days[0].headlines).toEqual([
+      'Earlier timed',
+      'Later untimed',
+    ]);
   });
 
   it('accounts for project and tag remainders once', () => {
@@ -226,7 +264,7 @@ describe('buildWorkReport', () => {
     });
     expect(report.days[0]).toMatchObject({
       date: '25 heinä 2026',
-      weekday: 'lauantaina',
+      weekday: 'lauantai',
     });
     expect(report.statistics).toMatchObject({
       title: 'Tilastot',
