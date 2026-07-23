@@ -263,7 +263,7 @@ export async function startTracking(intervalMs = 60_000): Promise<void> {
     await startBackgroundLocationService(intervalMs);
     // Import fixes captured while the React context was dead (process restart,
     // app swiped away) — they'd otherwise be a straight line in the trail.
-    importBufferedFixes().catch(() => {});
+    await importBufferedFixes().catch(() => {});
   } else {
     armWatch(FAST_INTERVAL_MS, true);
   }

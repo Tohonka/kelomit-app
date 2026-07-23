@@ -40,6 +40,11 @@ class BackgroundLocationModule(reactContext: ReactApplicationContext) :
       } else {
         ctx.startService(intent)
       }
+      // syncPlaces persists configuration before start while tracking may still
+      // be disabled; register that persisted set now that enabled=true.
+      PlaceMonitor.sync(ctx).addOnFailureListener {
+        DiagLog.write(ctx, "crossing.register.fail", it.javaClass.simpleName)
+      }
       promise.resolve(null)
     } catch (e: Exception) {
       promise.reject("start_failed", e)

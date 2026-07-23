@@ -39,7 +39,9 @@ function AppContent() {
   useEffect(() => {
     initDB()
       .then(async () => {
-        await reconcileTrackingJournal();
+        await reconcileTrackingJournal().catch(reconcileError => {
+          diag('journal.launch.fail', String(reconcileError));
+        });
         await load();
         setDbReady(true);
         ensureNotificationChannel().catch(() => {});
@@ -91,7 +93,8 @@ function AppContent() {
         nextState === 'active'
       ) {
         reconcileTrackingJournal()
-          .then(syncGps)
+          .catch(reconcileError => diag('journal.resume.fail', String(reconcileError)))
+          .then(() => syncGps())
           .catch(resumeError => diag('track.resume.fail', String(resumeError)));
         // A widget may have started/stopped a session while we were backgrounded.
         useSessionStore.getState().reconcile().catch(() => {});

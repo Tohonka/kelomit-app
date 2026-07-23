@@ -123,19 +123,19 @@ class LocationService : Service() {
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     val settings = NativeTrackingSettings(this)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+      startForeground(NOTIF_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
+    } else {
+      startForeground(NOTIF_ID, buildNotification())
+    }
     if (!settings.enabled) {
+      stopForeground(STOP_FOREGROUND_REMOVE)
       stopSelf()
       return START_NOT_STICKY
     }
     slowIntervalMs = intent?.getLongExtra(EXTRA_SLOW_INTERVAL, settings.slowIntervalMs)
       ?: settings.slowIntervalMs
     settings.slowIntervalMs = slowIntervalMs
-
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-      startForeground(NOTIF_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
-    } else {
-      startForeground(NOTIF_ID, buildNotification())
-    }
 
     val now = System.currentTimeMillis()
     policy = if (settings.movingUntilMs > now) {

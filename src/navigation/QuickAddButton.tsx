@@ -86,6 +86,8 @@ export default function QuickAddButton({target}: {target?: {date: string; dayId:
       try {
         const {dayId, date} = await resolveQuickAddDay(target, loadToday);
         navigation.navigate('QuickAddModal', {dayId, date, entryType});
+      } catch {
+        // Keep the button usable; the next press retries current-day resolution.
       } finally {
         setResolving(false);
       }
@@ -99,6 +101,8 @@ export default function QuickAddButton({target}: {target?: {date: string; dayId:
     try {
       const {dayId, date} = await resolveQuickAddDay(target, loadToday);
       navigation.navigate('AddEntryModal', {dayId, date});
+    } catch {
+      // Keep the button usable; the next press retries current-day resolution.
     } finally {
       setResolving(false);
     }
