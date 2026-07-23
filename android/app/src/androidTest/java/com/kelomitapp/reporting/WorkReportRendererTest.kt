@@ -16,19 +16,25 @@ import org.junit.runner.RunWith
 class WorkReportRendererTest {
   @Test
   fun testEnglishHeadlinesSpanTimesheetPages() {
-    val weekdays = listOf(
-      "Monday",
-      "Tuesday",
-      "Wednesday",
-      "Thursday",
-      "Friday",
-    )
     val days = JSONArray().apply {
-      repeat(12) { index ->
+      listOf(
+        "2026-06-01" to "Monday",
+        "2026-06-02" to "Tuesday",
+        "2026-06-03" to "Wednesday",
+        "2026-06-04" to "Thursday",
+        "2026-06-05" to "Friday",
+        "2026-06-06" to "Saturday",
+        "2026-06-07" to "Sunday",
+        "2026-06-08" to "Monday",
+        "2026-06-09" to "Tuesday",
+        "2026-06-10" to "Wednesday",
+        "2026-06-11" to "Thursday",
+        "2026-06-12" to "Friday",
+      ).forEachIndexed { index, (date, weekday) ->
         put(
           day(
-            date = "2026-06-${(index + 1).toString().padStart(2, '0')}",
-            weekday = weekdays[index % weekdays.size],
+            date = date,
+            weekday = weekday,
             hours = "7 h 30 min",
             seconds = 27_000,
             headlines = arrayOf(
@@ -63,19 +69,23 @@ class WorkReportRendererTest {
 
   @Test
   fun testFinnishStatisticsPreserveGlyphsAndStartOnANewPage() {
-    val weekdays = listOf(
-      "maanantai",
-      "tiistai",
-      "keskiviikko",
-      "torstai",
-      "perjantai",
-    )
     val days = JSONArray().apply {
-      repeat(10) { index ->
+      listOf(
+        "1.6.2026" to "maanantai",
+        "2.6.2026" to "tiistai",
+        "3.6.2026" to "keskiviikko",
+        "4.6.2026" to "torstai",
+        "5.6.2026" to "perjantai",
+        "6.6.2026" to "lauantai",
+        "7.6.2026" to "sunnuntai",
+        "8.6.2026" to "maanantai",
+        "9.6.2026" to "tiistai",
+        "10.6.2026" to "keskiviikko",
+      ).forEach { (date, weekday) ->
         put(
           day(
-            date = "${index + 1}.6.2026",
-            weekday = weekdays[index % weekdays.size],
+            date = date,
+            weekday = weekday,
             hours = "8 h 00 min",
             seconds = 28_800,
           ),
