@@ -37,6 +37,7 @@ class WorkReportRendererTest {
             weekday = weekday,
             hours = "7 h 30 min",
             seconds = 27_000,
+            details = "Work periods 08:00-12:00 · 13:00-16:30 · Overtime 0:30",
             headlines = arrayOf(
               "Prepared customer delivery ${index + 1} and reviewed the detailed implementation notes with the project team",
               "Documented follow-up actions, open questions, and the next practical steps for the customer",
@@ -81,13 +82,17 @@ class WorkReportRendererTest {
         "8.6.2026" to "maanantai",
         "9.6.2026" to "tiistai",
         "10.6.2026" to "keskiviikko",
-      ).forEach { (date, weekday) ->
+      ).forEachIndexed { index, (date, weekday) ->
         put(
           day(
             date = date,
             weekday = weekday,
             hours = "8 h 00 min",
             seconds = 28_800,
+            details = "Työajat 07:30-11:30 · 12:00-16:00",
+            headlines = arrayOf(
+              "Päivän ${index + 1} asiakastyö ja dokumentointi",
+            ),
           ),
         )
       }
@@ -208,12 +213,14 @@ class WorkReportRendererTest {
     weekday: String,
     hours: String,
     seconds: Int,
+    details: String,
     headlines: Array<String> = emptyArray(),
   ): JSONObject = JSONObject()
     .put("date", date)
     .put("weekday", weekday)
     .put("hours", hours)
     .put("seconds", seconds)
+    .put("details", details)
     .put("headlines", JSONArray(headlines))
 
   private fun allocation(label: String, hours: String, seconds: Int): JSONObject =

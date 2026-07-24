@@ -109,6 +109,7 @@ object WorkReportRenderer {
         weekday = day.requiredText("weekday"),
         hours = day.requiredText("hours"),
         seconds = day.nonNegativeSeconds(),
+        details = day.requiredText("details"),
         headlines = day.getJSONArray("headlines").strings(),
       )
     }
@@ -191,6 +192,7 @@ object WorkReportRenderer {
     val weekday: String,
     val hours: String,
     val seconds: Long,
+    val details: String,
     val headlines: List<String>,
   )
 
@@ -407,10 +409,12 @@ object WorkReportRenderer {
     }
 
     private fun drawDay(day: DayRow) {
+      val detailLines = wrap(day.details, PAGE_RIGHT - DETAIL_X, 9f)
       val headlineLines = day.headlines.map { headline ->
         wrap(headline, PAGE_RIGHT - HEADLINE_X, 9.5f)
       }
       val blockHeight = DAY_ROW_HEIGHT +
+        detailLines.size * DETAIL_LINE_HEIGHT + 4f +
         headlineLines.sumOf { it.size }.toFloat() * HEADLINE_LINE_HEIGHT +
         if (headlineLines.isEmpty()) 0f else 5f
       val continuationCapacity = WorkReportLayout.FOOTER_TOP - CONTINUATION_BODY_TOP
@@ -446,8 +450,24 @@ object WorkReportRenderer {
         bold = true,
         align = Paint.Align.RIGHT,
       )
-      drawHairline(canvas, y + DAY_ROW_HEIGHT - 1f)
       y += DAY_ROW_HEIGHT
+
+      detailLines.forEach { line ->
+        if (WorkReportLayout.needsPageBreak(y, DETAIL_LINE_HEIGHT)) {
+          finishPage()
+          startTimesheetContinuation()
+        }
+        drawText(
+          checkNotNull(page).canvas,
+          line,
+          DETAIL_X,
+          y + 10f,
+          9f,
+          color = BLUE,
+        )
+        y += DETAIL_LINE_HEIGHT
+      }
+      y += 4f
 
       headlineLines.forEach { lines ->
         lines.forEachIndexed { index, line ->
@@ -464,6 +484,7 @@ object WorkReportRenderer {
         }
       }
       if (headlineLines.isNotEmpty()) y += 5f
+      drawHairline(checkNotNull(page).canvas, y - 1f)
     }
 
     private fun startStatisticsPage(statistics: Statistics) {
@@ -768,12 +789,14 @@ object WorkReportRenderer {
       const val DATE_COLUMN_WIDTH = WEEKDAY_X - DATE_X - 12f
       const val WEEKDAY_COLUMN_WIDTH = HOURS_COLUMN_LEFT - WEEKDAY_X - 12f
       const val HOURS_COLUMN_WIDTH = PAGE_RIGHT - 10f - HOURS_COLUMN_LEFT
+      const val DETAIL_X = MARGIN + 10f
       const val HEADLINE_X = MARGIN + 22f
       const val STAT_LABEL_WIDTH = CONTENT_WIDTH - 78f
       const val STAT_HOURS_WIDTH = 70f
       const val TOTAL_LABEL_WIDTH = CONTENT_WIDTH - 180f
       const val TOTAL_HOURS_WIDTH = 160f
       const val DAY_ROW_HEIGHT = 28f
+      const val DETAIL_LINE_HEIGHT = 13f
       const val HEADLINE_LINE_HEIGHT = 14f
       const val CONTINUATION_BODY_TOP = 121f
       const val SECTION_LINE_HEIGHT = 18f

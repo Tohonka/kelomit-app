@@ -1,8 +1,8 @@
 import {format, parseISO} from 'date-fns';
 import {enUS, fi as fiLocale} from 'date-fns/locale';
 import type {Day, Entry} from '../types';
-import {parseTimestamp} from '../utils/dateUtils';
-import {calcDayWorkSecs, entryTrackedSeconds} from '../utils/hoursUtils';
+import {formatTime, parseTimestamp} from '../utils/dateUtils';
+import {calcDayWorkBreakdown, entryTrackedSeconds} from '../utils/hoursUtils';
 
 export type ReportLanguage = 'fi' | 'en';
 export type WorkReportType = 'hours' | 'headlines' | 'statistics';
@@ -34,6 +34,7 @@ export interface WorkReportModel {
     weekday: string;
     hours: string;
     seconds: number;
+    details: string;
     headlines: string[];
   }>;
   statistics: null | {
@@ -57,6 +58,9 @@ const COPY = {
     byProject: 'By project',
     byTag: 'By tag',
     untracked: 'Untracked work',
+    periods: 'Work periods',
+    notRecorded: 'not recorded',
+    overtime: 'Overtime',
     nonExclusive: 'Tag totals are non-exclusive.',
     page: 'Page',
   },
@@ -70,6 +74,9 @@ const COPY = {
     byProject: 'Projekteittain',
     byTag: 'Tunnisteittain',
     untracked: 'Kohdistamaton työ',
+    periods: 'Työajat',
+    notRecorded: 'ei merkitty',
+    overtime: 'Ylityö',
     nonExclusive: 'Tunnisteiden tunnit eivät sulje toisiaan pois.',
     page: 'Sivu',
   },
@@ -79,6 +86,27 @@ function formatDuration(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
   return `${hours}:${String(minutes).padStart(2, '0')}`;
+}
+
+function dayDetails(
+  day: Day,
+  overtimeSeconds: number,
+  language: ReportLanguage,
+): string {
+  const copy = COPY[language];
+  const periods = [
+    [day.started_at, day.ended_at],
+    [day.started_at_2, day.ended_at_2],
+  ]
+    .filter((period): period is [string, string] => Boolean(period[0] && period[1]))
+    .map(([start, end]) => `${formatTime(start)}-${formatTime(end)}`);
+  const parts = [
+    `${copy.periods} ${periods.length > 0 ? periods.join(' · ') : copy.notRecorded}`,
+  ];
+  if (overtimeSeconds > 0) {
+    parts.push(`${copy.overtime} ${formatDuration(overtimeSeconds)}`);
+  }
+  return parts.join(' · ');
 }
 
 function headlines(entries: Entry[]): string[] {
@@ -191,18 +219,22 @@ export function buildWorkReport(input: WorkReportInput): WorkReportModel {
     .sort((a, b) => a.date.localeCompare(b.date))
     .map(day => {
       const entries = entriesByDay.get(day.id) ?? [];
-      return {day, entries, seconds: calcDayWorkSecs(day, entries)};
+      const breakdown = calcDayWorkBreakdown(day, entries);
+      return {day, entries, breakdown, seconds: breakdown.workSeconds};
     })
     .filter(({seconds}) => seconds > 0);
   if (reportDays.length === 0) {
     throw new Error('report_empty');
   }
-  const days = reportDays.map(({day, entries, seconds}) => ({
+  const days = reportDays.map(({day, entries, breakdown, seconds}) => ({
     date: format(parseISO(day.date), 'd MMM yyyy', {locale}),
     weekday: format(parseISO(day.date), 'cccc', {locale}),
     hours: formatDuration(seconds),
     seconds,
-    headlines: input.type === 'headlines' ? headlines(entries) : [],
+    details: dayDetails(day, breakdown.addedWorkSeconds, input.language),
+    headlines: input.type === 'headlines' || input.type === 'statistics'
+      ? headlines(entries)
+      : [],
   }));
   const totalSeconds = reportDays.reduce((total, day) => total + day.seconds, 0);
   const range = `${format(parseISO(input.startDate), 'd MMM yyyy', {locale})} – ${format(parseISO(input.endDate), 'd MMM yyyy', {locale})}`;

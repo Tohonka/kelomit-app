@@ -108,6 +108,32 @@ describe('buildWorkReport', () => {
     expect(report.days[0].hours).toBe('8:00');
   });
 
+  it('shows both work periods and overtime in each day row', () => {
+    const day = makeDay({
+      id: 2,
+      started_at: new Date(2026, 6, 25, 8).toISOString(),
+      ended_at: new Date(2026, 6, 25, 12).toISOString(),
+      started_at_2: new Date(2026, 6, 25, 13).toISOString(),
+      ended_at_2: new Date(2026, 6, 25, 17).toISOString(),
+    });
+    const report = buildWorkReport({
+      ...base,
+      days: [day],
+      entries: [
+        makeEntry({
+          id: 2,
+          day_id: 2,
+          time_from: new Date(2026, 6, 25, 17).toISOString(),
+          time_to: new Date(2026, 6, 25, 18, 30).toISOString(),
+        }),
+      ],
+    });
+
+    expect((report.days[0] as typeof report.days[0] & {details: string}).details)
+      .toBe('Work periods 08:00-12:00 · 13:00-17:00 · Overtime 1:30');
+    expect(report.days[0].hours).toBe('9:30');
+  });
+
   it('includes only eligible completed work titles as headlines', () => {
     const report = buildWorkReport({
       ...base,
@@ -146,6 +172,18 @@ describe('buildWorkReport', () => {
     ]);
     expect(JSON.stringify(report)).not.toContain('Doctor');
     expect(JSON.stringify(report)).not.toContain('Private project');
+  });
+
+  it('includes eligible headlines in the statistics report', () => {
+    const report = buildWorkReport({
+      ...base,
+      type: 'statistics',
+      entries: [
+        makeEntry({id: 1, day_id: 2, title: 'Customer delivery'}),
+      ],
+    });
+
+    expect(report.days[0].headlines).toEqual(['Customer delivery']);
   });
 
   it('sorts mixed SQLite and ISO headline timestamps by instant', () => {
