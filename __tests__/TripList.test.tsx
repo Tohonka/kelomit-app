@@ -153,6 +153,12 @@ it('shows chronological frozen endpoints, local times, distance, duration, and m
       renderer.root.findByProps({testID: 'trip-swatch-1'}).props.style,
     ),
   ).toEqual(expect.objectContaining({backgroundColor: '#D97706'}));
+  const firstRow = renderer.root.findByProps({
+    accessibilityLabel:
+      'Frozen origin → Frozen destination, 11:30 – 12:00, 1.3 km · 30m',
+  });
+  expect(firstRow.type).toBe(View);
+  expect(firstRow.props.accessible).toBe(true);
 });
 
 it('uses localized day boundaries for null endpoints', () => {

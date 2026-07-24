@@ -209,6 +209,7 @@ export default function PlaceNameSheet({
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Pressable
           style={StyleSheet.absoluteFill}
+          accessible={false}
           onPress={isSaving ? undefined : onClose}
         />
         <View style={styles.sheet}>

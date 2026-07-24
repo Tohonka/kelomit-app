@@ -93,6 +93,7 @@ export function deriveRouteDay(
         longitude: unknown.longitude,
         anchor: null,
       };
+      movement.push(first);
       flushMovement(stop.key);
       stops.push(stop);
       originStopKey = stop.key;
@@ -121,24 +122,38 @@ export function deriveRouteDay(
   };
 
   for (const point of ordered) {
+    const entered = nearestAnchor(point, anchors);
     if (activeAnchor) {
-      const distance = distanceMeters(
+      const activeDistance = distanceMeters(
         point.latitude,
         point.longitude,
         activeAnchor.anchor.latitude,
         activeAnchor.anchor.longitude,
       );
-      if (distance <= activeAnchor.anchor.radiusM * EXIT_RADIUS_MULTIPLIER) {
+      const entersNearerAnchor =
+        entered != null &&
+        (entered.type !== activeAnchor.anchor.type ||
+          entered.id !== activeAnchor.anchor.id) &&
+        distanceMeters(
+          point.latitude,
+          point.longitude,
+          entered.latitude,
+          entered.longitude,
+        ) < activeDistance;
+      if (
+        !entersNearerAnchor &&
+        activeDistance <= activeAnchor.anchor.radiusM * EXIT_RADIUS_MULTIPLIER
+      ) {
         extendCluster(activeAnchor, point);
         continue;
       }
       closeActiveAnchor();
     }
 
-    const entered = nearestAnchor(point, anchors);
     if (entered) {
       flushUnknown();
       const key = `${entered.type}:${entered.id}:${point.timestamp}`;
+      movement.push(point);
       flushMovement(key);
       activeAnchor = {
         anchor: entered,

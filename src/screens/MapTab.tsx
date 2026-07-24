@@ -13,10 +13,13 @@ import {useDayMapData, DayMapCanvas, DayMapView, formatDistance} from './DayMapS
 import {
   createNamedPlaceForStop,
   getNearbyLocalPlaces,
+  setAutomaticGoogleStopName,
   setDayStopName,
 } from '../db/routeHistory';
-import {resolvePlaceCandidates} from '../services/placesService';
-import {refreshRouteDay} from '../services/routeHistoryService';
+import {
+  resolvePlaceCandidates,
+  resolvePlaceSnapshot,
+} from '../services/placesService';
 import {formatTime, formatDuration} from '../utils/dateUtils';
 import PlaceNameSheet, {
   type LocalPlaceChoice,
@@ -61,6 +64,7 @@ export function MapOverview({
   const [googleLoading, setGoogleLoading] = useState(false);
   const [googleError, setGoogleError] = useState(false);
   const currentDayId = useRef(dayId);
+  const stopOpenGeneration = useRef(0);
   currentDayId.current = dayId;
   const activeStops = useMemo(
     () => stops.filter(stop => stop.day_id === dayId),
@@ -70,12 +74,55 @@ export function MapOverview({
     selectedStop?.day_id === dayId ? selectedStop : null;
 
   useEffect(() => {
+    stopOpenGeneration.current += 1;
     setSelectedStop(null);
     setLocalChoices([]);
     setGoogleCandidates([]);
     setGoogleError(false);
     setGoogleLoading(false);
   }, [dayId]);
+
+  useEffect(() => {
+    let active = true;
+    const unnamedStops = activeStops.filter(
+      stop => !stop.user_edited && !stop.display_name?.trim(),
+    );
+    if (unnamedStops.length === 0) {
+      return;
+    }
+    (async () => {
+      let changed = false;
+      for (const stop of unnamedStops) {
+        let snapshot;
+        try {
+          snapshot = await resolvePlaceSnapshot(
+            stop.latitude,
+            stop.longitude,
+          );
+        } catch {
+          continue;
+        }
+        if (!active || currentDayId.current !== dayId) {
+          return;
+        }
+        if (!snapshot) {
+          continue;
+        }
+        try {
+          const updated = await setAutomaticGoogleStopName(stop.id, snapshot);
+          changed = updated || changed;
+        } catch {
+          continue;
+        }
+      }
+      if (changed && active && currentDayId.current === dayId) {
+        await reloadRouteHistory();
+      }
+    })().catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [activeStops, dayId, reloadRouteHistory]);
 
   useEffect(() => {
     if (!activeSelectedStop) {
@@ -110,11 +157,16 @@ export function MapOverview({
   }, [activeSelectedStop, dayId]);
 
   const openStop = async (stop: DayRouteStop) => {
+    const generation = ++stopOpenGeneration.current;
     const choices = await getNearbyLocalPlaces(
       stop.latitude,
       stop.longitude,
     ).catch(() => []);
-    if (currentDayId.current !== dayId || stop.day_id !== dayId) {
+    if (
+      currentDayId.current !== dayId ||
+      stop.day_id !== dayId ||
+      stopOpenGeneration.current !== generation
+    ) {
       return;
     }
     setLocalChoices(choices);
@@ -141,10 +193,6 @@ export function MapOverview({
       return;
     }
     await reloadRouteHistory();
-    if (currentDayId.current !== dayId) {
-      return;
-    }
-    await refreshRouteDay(dayId);
   };
 
   return (
@@ -195,7 +243,9 @@ export function MapOverview({
             openStop(stop).catch(() => {});
           }}
         />
-        <Text style={[styles.sectionHeader, styles.tripsHeader]}>
+        <Text
+          style={[styles.sectionHeader, styles.tripsHeader]}
+          accessibilityRole="header">
           {t('map.trips')}
         </Text>
         <TripList segments={segments} stops={activeStops} />
@@ -303,6 +353,7 @@ function LocationsList({
             new Date(stop.start_ts).getTime()) /
             1000,
         );
+        const time = `${formatTime(stop.start_ts)} – ${formatTime(stop.end_ts)}`;
         return (
           <TouchableOpacity
             key={stop.id}
@@ -311,14 +362,12 @@ function LocationsList({
               i === stops.length - 1 && styles.locRowLast,
             ]}
             accessibilityRole="button"
-            accessibilityLabel={name}
+            accessibilityLabel={`${name}, ${time}, ${dur}`}
             onPress={() => onPress(stop)}>
             <View style={styles.pin} />
             <View style={styles.locTextWrap}>
               <Text style={styles.locName}>{name}</Text>
-              <Text style={styles.locTime}>
-                {formatTime(stop.start_ts)} – {formatTime(stop.end_ts)}
-              </Text>
+              <Text style={styles.locTime}>{time}</Text>
             </View>
             <View style={styles.durBadge}><Text style={styles.durBadgeText}>{dur}</Text></View>
           </TouchableOpacity>

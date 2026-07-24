@@ -1,5 +1,5 @@
 import React from 'react';
-import {TouchableOpacity} from 'react-native';
+import {Text, TouchableOpacity} from 'react-native';
 import {
   act,
   create,
@@ -16,6 +16,7 @@ jest.mock('react-i18next', () => ({
     t: (key: string) =>
       ({
         'map.places': 'Places',
+        'map.trips': 'Trips',
         'map.noVisits': 'No stops',
         'map.unknownPlace': 'Unknown place',
       })[key] ?? key,
@@ -54,10 +55,12 @@ jest.mock('../src/screens/DayMapScreen', () => ({
 jest.mock('../src/db/routeHistory', () => ({
   getNearbyLocalPlaces: jest.fn(),
   setDayStopName: jest.fn(),
+  setAutomaticGoogleStopName: jest.fn(),
   createNamedPlaceForStop: jest.fn(),
 }));
 jest.mock('../src/services/placesService', () => ({
   resolvePlaceName: jest.fn(),
+  resolvePlaceSnapshot: jest.fn(),
   resolvePlaceCandidates: jest.fn(),
 }));
 jest.mock('../src/services/routeHistoryService', () => ({
@@ -77,9 +80,13 @@ jest.mock('../src/components/map/PlaceNameSheet', () => {
 import {
   createNamedPlaceForStop,
   getNearbyLocalPlaces,
+  setAutomaticGoogleStopName,
   setDayStopName,
 } from '../src/db/routeHistory';
-import {resolvePlaceCandidates} from '../src/services/placesService';
+import {
+  resolvePlaceCandidates,
+  resolvePlaceSnapshot,
+} from '../src/services/placesService';
 import {refreshRouteDay} from '../src/services/routeHistoryService';
 import {MapOverview} from '../src/screens/MapTab';
 
@@ -105,6 +112,23 @@ const dayFiveStop = {
   day_id: 5,
   display_name: 'Day five',
 };
+const secondStop = {
+  ...stop,
+  id: 9,
+  start_ts: '2026-07-24T10:00:00.000Z',
+  end_ts: '2026-07-24T10:30:00.000Z',
+  latitude: 60.18,
+  longitude: 24.95,
+  display_name: 'Second stop',
+};
+const unnamedStop = {
+  ...stop,
+  id: 10,
+  google_place_id: null,
+  display_name: null,
+  name_source: 'unknown' as const,
+  user_edited: false,
+};
 const localChoice = {
   type: 'saved' as const,
   id: 2,
@@ -125,6 +149,10 @@ const getNearbyLocalPlacesMock = getNearbyLocalPlaces as jest.MockedFunction<
 const setDayStopNameMock = setDayStopName as jest.MockedFunction<
   typeof setDayStopName
 >;
+const setAutomaticGoogleStopNameMock =
+  setAutomaticGoogleStopName as jest.MockedFunction<
+    typeof setAutomaticGoogleStopName
+  >;
 const createNamedPlaceForStopMock =
   createNamedPlaceForStop as jest.MockedFunction<
     typeof createNamedPlaceForStop
@@ -133,13 +161,15 @@ const resolvePlaceCandidatesMock =
   resolvePlaceCandidates as jest.MockedFunction<
     typeof resolvePlaceCandidates
   >;
+const resolvePlaceSnapshotMock =
+  resolvePlaceSnapshot as jest.MockedFunction<typeof resolvePlaceSnapshot>;
 const refreshRouteDayMock = refreshRouteDay as jest.MockedFunction<
   typeof refreshRouteDay
 >;
 
 function button(root: ReactTestInstance, label: string): ReactTestInstance {
   return root.findAllByType(TouchableOpacity).find(
-    item => item.props.accessibilityLabel === label,
+    item => String(item.props.accessibilityLabel).startsWith(label),
   )!;
 }
 
@@ -181,7 +211,9 @@ beforeEach(() => {
   getNearbyLocalPlacesMock.mockResolvedValue([localChoice]);
   setDayStopNameMock.mockResolvedValue();
   createNamedPlaceForStopMock.mockResolvedValue();
+  setAutomaticGoogleStopNameMock.mockResolvedValue(false);
   resolvePlaceCandidatesMock.mockResolvedValue([googleChoice]);
+  resolvePlaceSnapshotMock.mockResolvedValue(null);
   refreshRouteDayMock.mockResolvedValue();
 });
 
@@ -216,10 +248,109 @@ it('loads persisted stops and wires saved and reusable name updates', async () =
   });
   expect(createNamedPlaceForStopMock).toHaveBeenCalledWith(7, 'New anchor');
   expect(mockReloadRouteHistory).toHaveBeenCalledTimes(2);
-  expect(refreshRouteDayMock).toHaveBeenCalledWith(4);
-  expect(
-    mockReloadRouteHistory.mock.invocationCallOrder[1],
-  ).toBeLessThan(refreshRouteDayMock.mock.invocationCallOrder[0]);
+  expect(refreshRouteDayMock).not.toHaveBeenCalled();
+});
+
+it('snapshots an automatic Google result into an unnamed stop and reloads once', async () => {
+  mockUseDayMapData.mockReturnValue({
+    segments: [],
+    stops: [unnamedStop],
+    routeCoords: [],
+    buckets: [],
+    region: undefined,
+    stats: {distanceM: 0, durationSec: 0},
+    isReady: true,
+    isEmpty: true,
+    reloadRouteHistory: mockReloadRouteHistory,
+  });
+  resolvePlaceSnapshotMock.mockResolvedValue({
+    name: 'Cached cafe',
+    placeId: 'cached-id',
+  });
+  setAutomaticGoogleStopNameMock.mockResolvedValue(true);
+
+  await act(async () => {
+    create(overview(4));
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  expect(resolvePlaceSnapshotMock).toHaveBeenCalledWith(60.17, 24.94);
+  expect(setAutomaticGoogleStopNameMock).toHaveBeenCalledWith(10, {
+    name: 'Cached cafe',
+    placeId: 'cached-id',
+  });
+  expect(mockReloadRouteHistory).toHaveBeenCalledTimes(1);
+});
+
+it('leaves an unnamed stop unchanged when automatic lookup has no result', async () => {
+  mockUseDayMapData.mockReturnValue({
+    segments: [],
+    stops: [unnamedStop],
+    routeCoords: [],
+    buckets: [],
+    region: undefined,
+    stats: {distanceM: 0, durationSec: 0},
+    isReady: true,
+    isEmpty: true,
+    reloadRouteHistory: mockReloadRouteHistory,
+  });
+
+  await act(async () => {
+    create(overview(4));
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  expect(resolvePlaceSnapshotMock).toHaveBeenCalledTimes(1);
+  expect(setAutomaticGoogleStopNameMock).not.toHaveBeenCalled();
+  expect(mockReloadRouteHistory).not.toHaveBeenCalled();
+});
+
+it('keeps an explicit choice when it wins a race with automatic lookup', async () => {
+  const automatic = deferred<{name: string; placeId: string} | null>();
+  mockUseDayMapData.mockReturnValue({
+    segments: [],
+    stops: [unnamedStop],
+    routeCoords: [],
+    buckets: [],
+    region: undefined,
+    stats: {distanceM: 0, durationSec: 0},
+    isReady: true,
+    isEmpty: true,
+    reloadRouteHistory: mockReloadRouteHistory,
+  });
+  resolvePlaceSnapshotMock.mockReturnValue(automatic.promise);
+  setAutomaticGoogleStopNameMock.mockResolvedValue(false);
+  let renderer!: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(overview(4));
+    await Promise.resolve();
+  });
+  act(() => {
+    button(renderer.root, 'Unknown place').props.onPress();
+  });
+  await act(async () => {
+    await Promise.resolve();
+  });
+
+  const sheet = renderer.root.findByProps({testID: 'place-name-sheet'});
+  await act(async () => {
+    await sheet.props.onChoose(localChoice);
+  });
+  await act(async () => {
+    automatic.resolve({name: 'Late Google', placeId: 'late-id'});
+    await automatic.promise;
+    await Promise.resolve();
+  });
+
+  expect(setDayStopNameMock).toHaveBeenCalledWith(10, localChoice);
+  expect(setAutomaticGoogleStopNameMock).toHaveBeenCalledWith(10, {
+    name: 'Late Google',
+    placeId: 'late-id',
+  });
+  expect(mockReloadRouteHistory).toHaveBeenCalledTimes(1);
 });
 
 it('shows Google failures without replacing local choices or the historical name', async () => {
@@ -243,6 +374,70 @@ it('shows Google failures without replacing local choices or the historical name
   expect(sheet.props.localChoices).toEqual([localChoice]);
   expect(sheet.props.googleCandidates).toEqual([]);
   expect(sheet.props.googleError).toBe(true);
+});
+
+it('keeps the newer same-day stop open when an older local lookup finishes last', async () => {
+  const first = deferred<typeof localChoice[]>();
+  const second = deferred<typeof localChoice[]>();
+  mockUseDayMapData.mockReturnValue({
+    segments: [],
+    stops: [stop, secondStop],
+    routeCoords: [],
+    buckets: [],
+    region: undefined,
+    stats: {distanceM: 0, durationSec: 0},
+    isReady: true,
+    isEmpty: true,
+    reloadRouteHistory: mockReloadRouteHistory,
+  });
+  getNearbyLocalPlacesMock.mockImplementation(lat =>
+    lat === stop.latitude ? first.promise : second.promise,
+  );
+  let renderer!: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(overview(4));
+    await Promise.resolve();
+  });
+
+  act(() => {
+    button(renderer.root, 'Historical label').props.onPress();
+    button(renderer.root, 'Second stop').props.onPress();
+  });
+  await act(async () => {
+    second.resolve([localChoice]);
+    await second.promise;
+  });
+  expect(
+    renderer.root.findByProps({testID: 'place-name-sheet'}).props.currentName,
+  ).toBe('Second stop');
+
+  await act(async () => {
+    first.resolve([]);
+    await first.promise;
+  });
+  expect(
+    renderer.root.findByProps({testID: 'place-name-sheet'}).props.currentName,
+  ).toBe('Second stop');
+});
+
+it('includes visible stop timing in its accessibility label and marks Trips as a heading', async () => {
+  let renderer!: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(overview(4));
+    await Promise.resolve();
+  });
+
+  expect(
+    renderer.root.findAllByType(TouchableOpacity).some(
+      item =>
+        item.props.accessibilityLabel ===
+        'Historical label, 11:00 – 12:00, 1h 0m',
+    ),
+  ).toBe(true);
+  expect(
+    renderer.root.findAllByType(Text).find(item => item.props.children === 'Trips')
+      ?.props.accessibilityRole,
+  ).toBe('header');
 });
 
 it('discards prior-day results and prevents an old selection acting after day change', async () => {

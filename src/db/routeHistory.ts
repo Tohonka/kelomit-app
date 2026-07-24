@@ -64,30 +64,41 @@ function rowToStop(row: RawRow): DayRouteStop {
   };
 }
 
-function parseCoordinates(value: unknown): RouteCoordinate[] {
+function parseCoordinates(value: unknown): RouteCoordinate[] | null {
   if (typeof value !== 'string') {
-    return [];
+    return null;
   }
   try {
     const parsed: unknown = JSON.parse(value);
     return Array.isArray(parsed) &&
-      parsed.every(
-        coordinate =>
-          coordinate != null &&
-          typeof coordinate === 'object' &&
-          typeof (coordinate as RawRow).latitude === 'number' &&
-          Number.isFinite((coordinate as RawRow).latitude) &&
-          typeof (coordinate as RawRow).longitude === 'number' &&
-          Number.isFinite((coordinate as RawRow).longitude),
-      )
+      parsed.every(coordinate => {
+        if (coordinate == null || typeof coordinate !== 'object') {
+          return false;
+        }
+        const {latitude, longitude} = coordinate as RawRow;
+        return (
+          typeof latitude === 'number' &&
+          Number.isFinite(latitude) &&
+          latitude >= -90 &&
+          latitude <= 90 &&
+          typeof longitude === 'number' &&
+          Number.isFinite(longitude) &&
+          longitude >= -180 &&
+          longitude <= 180
+        );
+      })
       ? (parsed as RouteCoordinate[])
-      : [];
+      : null;
   } catch {
-    return [];
+    return null;
   }
 }
 
-function rowToSegment(row: RawRow): DayRouteSegment {
+function rowToSegment(row: RawRow): DayRouteSegment | null {
+  const coordinates = parseCoordinates(row.coordinates_json);
+  if (coordinates === null) {
+    return null;
+  }
   return {
     id: row.id as number,
     day_id: row.day_id as number,
@@ -96,7 +107,7 @@ function rowToSegment(row: RawRow): DayRouteSegment {
     end_ts: row.end_ts as string,
     origin_stop_id: (row.origin_stop_id as number | null) ?? null,
     destination_stop_id: (row.destination_stop_id as number | null) ?? null,
-    coordinates: parseCoordinates(row.coordinates_json),
+    coordinates,
     distance_m: row.distance_m as number,
     duration_sec: row.duration_sec as number,
     average_speed_mps: row.average_speed_mps as number,
@@ -224,6 +235,26 @@ export async function setDayStopName(
   await setDayStopNameWith(getDB(), stopId, choice);
 }
 
+export async function setAutomaticGoogleStopName(
+  stopId: number,
+  snapshot: {name: string; placeId: string},
+): Promise<boolean> {
+  const result = await getDB().execute(
+    `UPDATE day_route_stops
+     SET saved_location_id = NULL, named_place_id = NULL,
+         display_name = ?, google_place_id = ?, name_source = 'google',
+         updated_at = datetime('now')
+     WHERE id = ? AND user_edited = 0
+       AND (display_name IS NULL OR TRIM(display_name) = '');`,
+    [
+      requiredName(snapshot.name),
+      snapshot.placeId.trim() || null,
+      stopId,
+    ],
+  );
+  return (result.rowsAffected ?? 0) > 0;
+}
+
 export async function createNamedPlaceForStop(
   stopId: number,
   name: string,
@@ -271,9 +302,9 @@ export async function getDayRouteHistory(
   );
   return {
     stops: (stopResult.rows ?? []).map(row => rowToStop(row as RawRow)),
-    segments: (segmentResult.rows ?? []).map(row =>
-      rowToSegment(row as RawRow),
-    ),
+    segments: (segmentResult.rows ?? [])
+      .map(row => rowToSegment(row as RawRow))
+      .filter((segment): segment is DayRouteSegment => segment !== null),
   };
 }
 
@@ -291,10 +322,51 @@ export async function getLatestDerivedRawTimestamp(
   dayId: number,
 ): Promise<string | null> {
   const result = await getDB().execute(
-    'SELECT MAX(raw_last_ts) AS raw_last_ts FROM day_route_segments WHERE day_id = ?;',
-    [dayId],
+    `SELECT MAX(value) AS raw_last_ts
+     FROM (
+       SELECT raw_last_ts AS value
+       FROM day_route_segments
+       WHERE day_id = ?
+       UNION ALL
+       SELECT end_ts AS value
+       FROM day_route_stops
+       WHERE day_id = ?
+     );`,
+    [dayId, dayId],
   );
   return (result.rows?.[0]?.raw_last_ts as string | null | undefined) ?? null;
+}
+
+export async function getEarliestDerivedTimestamp(
+  dayId: number,
+): Promise<string | null> {
+  const result = await getDB().execute(
+    `SELECT MIN(value) AS first_ts
+     FROM (
+       SELECT start_ts AS value
+       FROM day_route_segments
+       WHERE day_id = ?
+       UNION ALL
+       SELECT start_ts AS value
+       FROM day_route_stops
+       WHERE day_id = ?
+     );`,
+    [dayId, dayId],
+  );
+  return (result.rows?.[0]?.first_ts as string | null | undefined) ?? null;
+}
+
+export async function hasInvalidRouteGeometry(dayId: number): Promise<boolean> {
+  const result = await getDB().execute(
+    'SELECT coordinates_json FROM day_route_segments WHERE day_id = ?;',
+    [dayId],
+  );
+  for (const row of result.rows ?? []) {
+    if (parseCoordinates((row as RawRow).coordinates_json) === null) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export function matchExistingStop(
@@ -389,7 +461,8 @@ export async function reconcileDayRouteHistory(
           unmatched.findIndex(candidate => candidate.id === existing.id),
           1,
         );
-        const hasSnapshot = Boolean(existing.display_name?.trim());
+        const preserveIdentity =
+          existing.user_edited || Boolean(existing.display_name?.trim());
         await tx.execute(
           `UPDATE day_route_stops
            SET start_ts = ?, end_ts = ?, latitude = ?, longitude = ?,
@@ -402,13 +475,15 @@ export async function reconcileDayRouteHistory(
             next.endTs,
             next.latitude,
             next.longitude,
-            identity.savedLocationId,
-            existing.user_edited
+            preserveIdentity
+              ? existing.saved_location_id
+              : identity.savedLocationId,
+            preserveIdentity
               ? existing.named_place_id
               : identity.namedPlaceId,
-            existing.user_edited ? existing.google_place_id : null,
-            hasSnapshot ? existing.display_name : identity.displayName,
-            existing.user_edited ? existing.name_source : identity.nameSource,
+            preserveIdentity ? existing.google_place_id : null,
+            preserveIdentity ? existing.display_name : identity.displayName,
+            preserveIdentity ? existing.name_source : identity.nameSource,
             existing.user_edited ? 1 : 0,
             existing.id,
             dayId,

@@ -1,5 +1,10 @@
 import React from 'react';
-import {Text, TextInput, TouchableOpacity} from 'react-native';
+import {
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+} from 'react-native';
 import {
   act,
   create,
@@ -122,6 +127,15 @@ it('shows local choices before Google candidates with visible type and distance'
       'Google · 31 m away',
     ]),
   );
+});
+
+it('keeps the dismissing backdrop out of the accessibility tree', () => {
+  const {renderer} = renderSheet();
+  const backdrop = renderer.root.findAll(
+    node => node.props.style === StyleSheet.absoluteFill,
+  )[0];
+
+  expect(backdrop.props.accessible).toBe(false);
 });
 
 it('awaits a successful place choice and closes the sheet', async () => {

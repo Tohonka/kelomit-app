@@ -1,7 +1,7 @@
 import {deriveRouteDay, type RouteAnchor} from '../src/utils/routeSegments';
 import type {GpsPoint} from '../src/types';
 
-const METRES_PER_DEGREE = 111194.9266;
+const METRES_PER_DEGREE = 111194.92664455874;
 const baseMs = Date.parse('2026-07-24T08:00:00.000Z');
 
 const p = (
@@ -104,9 +104,72 @@ describe('deriveRouteDay', () => {
     expect(out.segments[0].coordinates).toEqual([
       {latitude: p(0, 0).latitude, longitude: 0},
       {latitude: p(50, 500).latitude, longitude: 0},
+      {latitude: p(100, 1000).latitude, longitude: 0},
     ]);
     expect(out.segments[0].destinationStopKey).toBe(out.stops[0].key);
     expect(out.segments[1].originStopKey).toBe(out.stops[0].key);
+  });
+
+  it('ends a sparse incoming trip at the first point inside an anchor', () => {
+    const destination = anchor(1, 'Destination', 1000, 100);
+
+    const out = deriveRouteDay(
+      [p(0, 0), p(50, 500), p(100, 1000)],
+      [destination],
+    );
+
+    expect(out.segments[0].coordinates).toEqual([
+      {latitude: p(0, 0).latitude, longitude: 0},
+      {latitude: p(50, 500).latitude, longitude: 0},
+      {latitude: p(100, 1000).latitude, longitude: 0},
+    ]);
+  });
+
+  it('keeps the exact 70 m unknown-cluster boundary in the backdated stop', () => {
+    const out = deriveRouteDay(
+      [
+        p(0, 0),
+        p(10, 500),
+        p(20, 1000),
+        p(320, 1070),
+        p(330, 1500),
+        p(340, 2000),
+      ],
+      [],
+    );
+
+    expect(out.stops).toHaveLength(1);
+    expect(out.stops[0]).toMatchObject({
+      startTs: p(20, 1000).timestamp,
+      endTs: p(320, 1070).timestamp,
+    });
+    expect(out.segments[0].coordinates.at(-1)).toEqual({
+      latitude: p(20, 1000).latitude,
+      longitude: 0,
+    });
+  });
+
+  it('includes exact entry and hysteresis boundaries for a 100 m anchor', () => {
+    const place = anchor(1, 'Place', 0, 100);
+
+    const out = deriveRouteDay(
+      [p(0, 200), p(10, 100), p(20, 125), p(30, 126), p(40, 200)],
+      [place],
+    );
+
+    expect(out.stops).toHaveLength(1);
+    expect(out.stops[0]).toMatchObject({
+      startTs: p(10, 100).timestamp,
+      endTs: p(20, 125).timestamp,
+    });
+    expect(out.segments[0].coordinates.at(-1)).toEqual({
+      latitude: p(10, 100).latitude,
+      longitude: 0,
+    });
+    expect(out.segments[1].coordinates[0]).toEqual({
+      latitude: p(30, 126).latitude,
+      longitude: 0,
+    });
   });
 
   it.each(['saved', 'reusable'] as const)(
@@ -128,6 +191,7 @@ describe('deriveRouteDay', () => {
       expect(out.segments[0].coordinates.map(point => point.latitude)).toEqual([
         p(0, 200).latitude,
         p(10, 101).latitude,
+        p(20, 99).latitude,
       ]);
       expect(out.segments[1].coordinates.map(point => point.latitude)).toEqual([
         p(40, 126).latitude,
@@ -146,7 +210,27 @@ describe('deriveRouteDay', () => {
     expect(out.stops[0].anchor).toBe(nearer);
   });
 
-  it('omits every point recorded inside an anchor from segment geometry', () => {
+  it('transitions to a nearer containing anchor inside overlapping radii', () => {
+    const first = anchor(1, 'First', 0, 100);
+    const second = anchor(2, 'Second', 100, 100, 'reusable');
+
+    const out = deriveRouteDay(
+      [p(0, 0), p(10, 40), p(20, 70), p(30, 100)],
+      [first, second],
+    );
+
+    expect(out.stops.map(stop => stop.anchor?.id)).toEqual([1, 2]);
+    expect(out.stops[0]).toMatchObject({
+      startTs: p(0, 0).timestamp,
+      endTs: p(10, 40).timestamp,
+    });
+    expect(out.stops[1]).toMatchObject({
+      startTs: p(20, 70).timestamp,
+      endTs: p(30, 100).timestamp,
+    });
+  });
+
+  it('keeps the arrival point but omits subsequent anchor dwell geometry', () => {
     const place = anchor(1, 'Place', 0, 50);
     const out = deriveRouteDay(
       [p(0, 200), p(10, 100), p(20, 10), p(30, -10), p(40, 100), p(50, 200)],
@@ -160,7 +244,7 @@ describe('deriveRouteDay', () => {
           Math.round(point.latitude * METRES_PER_DEGREE),
         ),
       ),
-    ).toEqual([200, 100, 100, 200]);
+    ).toEqual([200, 100, 10, 100, 200]);
   });
 
   it('does not create a boundary for a GPS time gap without spatial dwell', () => {

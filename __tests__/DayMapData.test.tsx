@@ -192,7 +192,7 @@ it('renders accepted route history with empty entries when the entry read fails'
   expect(latest.region?.latitudeDelta).toBeCloseTo(0.014);
   expect(latest.region?.longitudeDelta).toBeCloseTo(0.014);
   expect(latest.stats).toEqual({distanceM: 1000, durationSec: 1800});
-  expect(useEntryStore.getState().entriesByDay[4]).toEqual([]);
+  expect(useEntryStore.getState().entriesByDay[4]).toEqual([staleEntry]);
   act(() => {
     renderer.unmount();
   });

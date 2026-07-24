@@ -23,6 +23,29 @@ export interface PlaceCandidate {
   distanceM: number;
 }
 
+export interface PlaceSnapshot {
+  placeId: string;
+  name: string;
+}
+
+function isLatitude(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value >= -90 &&
+    value <= 90
+  );
+}
+
+function isLongitude(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value >= -180 &&
+    value <= 180
+  );
+}
+
 function isCandidate(value: unknown): value is PlaceCandidate {
   if (value == null || typeof value !== 'object') {
     return false;
@@ -33,14 +56,28 @@ function isCandidate(value: unknown): value is PlaceCandidate {
     candidate.placeId.length > 0 &&
     typeof candidate.name === 'string' &&
     candidate.name.length > 0 &&
-    typeof candidate.latitude === 'number' &&
-    Number.isFinite(candidate.latitude) &&
-    typeof candidate.longitude === 'number' &&
-    Number.isFinite(candidate.longitude) &&
-    typeof candidate.distanceM === 'number' &&
-    Number.isFinite(candidate.distanceM) &&
-    candidate.distanceM >= 0
+    isLatitude(candidate.latitude) &&
+    isLongitude(candidate.longitude)
   );
+}
+
+function rankCandidates(
+  candidates: PlaceCandidate[],
+  lat: number,
+  lng: number,
+): PlaceCandidate[] {
+  return candidates
+    .map(candidate => ({
+      ...candidate,
+      distanceM: distanceMeters(
+        lat,
+        lng,
+        candidate.latitude,
+        candidate.longitude,
+      ),
+    }))
+    .sort((a, b) => a.distanceM - b.distanceM)
+    .slice(0, 10);
 }
 
 async function getCachedCandidates(
@@ -58,41 +95,31 @@ async function getCachedCandidates(
   }
   try {
     const parsed: unknown = JSON.parse(value);
-    if (!Array.isArray(parsed) || !parsed.every(isCandidate)) {
+    if (!Array.isArray(parsed)) {
       return undefined;
     }
-    return parsed
-      .map(candidate => ({
-        ...candidate,
-        distanceM: distanceMeters(
-          lat,
-          lng,
-          candidate.latitude,
-          candidate.longitude,
-        ),
-      }))
-      .sort((a, b) => a.distanceM - b.distanceM);
+    return rankCandidates(parsed.filter(isCandidate), lat, lng);
   } catch {
     return undefined;
   }
 }
 
-async function getCached(cell: string): Promise<string | null | undefined> {
-  const db = getDB();
-  const res = await db.execute('SELECT name FROM place_cache WHERE cell = ?;', [cell]);
-  const row = res.rows?.[0] as {name: string} | undefined;
+async function getCachedSnapshot(
+  cell: string,
+): Promise<PlaceSnapshot | null | undefined> {
+  const res = await getDB().execute(
+    'SELECT name, place_id FROM place_cache WHERE cell = ?;',
+    [cell],
+  );
+  const row = res.rows?.[0] as
+    | {name: string; place_id?: string | null}
+    | undefined;
   if (!row) {
     return undefined; // never fetched
   }
-  return row.name || null; // '' = fetched, nothing nearby
-}
-
-async function putCached(cell: string, name: string, placeId: string): Promise<void> {
-  const db = getDB();
-  await db.execute(
-    'INSERT OR REPLACE INTO place_cache (cell, name, place_id) VALUES (?, ?, ?);',
-    [cell, name, placeId],
-  );
+  return row.name
+    ? {name: row.name, placeId: row.place_id ?? ''}
+    : null; // '' = fetched, nothing nearby
 }
 
 async function putCachedCandidates(
@@ -136,7 +163,7 @@ function normalizeCandidates(
   const candidates: PlaceCandidate[] = [];
   for (const item of places) {
     if (item == null || typeof item !== 'object') {
-      return null;
+      continue;
     }
     const place = item as {
       id?: unknown;
@@ -148,12 +175,10 @@ function normalizeCandidates(
       !place.id ||
       typeof place.displayName?.text !== 'string' ||
       !place.displayName.text ||
-      typeof place.location?.latitude !== 'number' ||
-      !Number.isFinite(place.location.latitude) ||
-      typeof place.location.longitude !== 'number' ||
-      !Number.isFinite(place.location.longitude)
+      !isLatitude(place.location?.latitude) ||
+      !isLongitude(place.location.longitude)
     ) {
-      return null;
+      continue;
     }
     candidates.push({
       placeId: place.id,
@@ -168,14 +193,18 @@ function normalizeCandidates(
       ),
     });
   }
-  return candidates.sort((a, b) => a.distanceM - b.distanceM);
+  return candidates
+    .sort((a, b) => a.distanceM - b.distanceM)
+    .slice(0, 10);
 }
 
-export async function resolvePlaceCandidates(
+const candidateRequests = new Map<string, Promise<PlaceCandidate[]>>();
+
+async function resolvePlaceCandidatesForCell(
   lat: number,
   lng: number,
+  cell: string,
 ): Promise<PlaceCandidate[]> {
-  const cell = cellFor(lat, lng);
   const cached = await getCachedCandidates(cell, lat, lng);
   if (cached !== undefined) {
     return cached;
@@ -217,38 +246,48 @@ export async function resolvePlaceCandidates(
   return candidates;
 }
 
-export async function resolvePlaceName(lat: number, lng: number): Promise<string | null> {
+export function resolvePlaceCandidates(
+  lat: number,
+  lng: number,
+): Promise<PlaceCandidate[]> {
   const cell = cellFor(lat, lng);
-  const cached = await getCached(cell);
+  const active = candidateRequests.get(cell);
+  if (active) {
+    return active.then(candidates => rankCandidates(candidates, lat, lng));
+  }
+
+  const request = resolvePlaceCandidatesForCell(lat, lng, cell);
+  candidateRequests.set(cell, request);
+  const clearRequest = () => {
+    if (candidateRequests.get(cell) === request) {
+      candidateRequests.delete(cell);
+    }
+  };
+  request.then(clearRequest, clearRequest);
+  return request.then(candidates => rankCandidates(candidates, lat, lng));
+}
+
+export async function resolvePlaceSnapshot(
+  lat: number,
+  lng: number,
+): Promise<PlaceSnapshot | null> {
+  const cell = cellFor(lat, lng);
+  const cached = await getCachedSnapshot(cell);
   if (cached !== undefined) {
     return cached;
   }
-  const key = getMapsApiKey().trim();
-  if (!key) {
-    return null;
-  }
+  const nearest = (await resolvePlaceCandidates(lat, lng))[0];
+  return nearest
+    ? {name: nearest.name, placeId: nearest.placeId}
+    : null;
+}
+
+export async function resolvePlaceName(
+  lat: number,
+  lng: number,
+): Promise<string | null> {
   try {
-    const res = await fetch('https://places.googleapis.com/v1/places:searchNearby', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': key,
-        'X-Goog-FieldMask': 'places.displayName,places.id',
-      },
-      body: JSON.stringify({
-        maxResultCount: 1,
-        rankPreference: 'DISTANCE',
-        locationRestriction: {circle: {center: {latitude: lat, longitude: lng}, radius: 60}},
-      }),
-    });
-    if (!res.ok) {
-      return null; // don't cache auth/quota errors — let it retry later
-    }
-    const json = (await res.json()) as {places?: {displayName?: {text?: string}; id?: string}[]};
-    const place = json.places?.[0];
-    const name = place?.displayName?.text ?? '';
-    await putCached(cell, name, place?.id ?? '');
-    return name || null;
+    return (await resolvePlaceSnapshot(lat, lng))?.name ?? null;
   } catch {
     return null;
   }

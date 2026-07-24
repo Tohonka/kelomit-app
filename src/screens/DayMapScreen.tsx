@@ -10,6 +10,7 @@ import {useEntryStore} from '../store/entryStore';
 import {getDayRouteHistory} from '../db/routeHistory';
 import {getEntriesForDay} from '../db/entries';
 import {refreshRouteDayIfStale} from '../services/routeHistoryService';
+import {diag} from '../services/diag';
 import {bucketLocations, type LocationBucket} from '../utils/bucketLocations';
 import {regionFor} from '../utils/mapRegion';
 import {flatMapStyle} from '../components/map/mapStyle';
@@ -53,13 +54,15 @@ export interface DayMapData {
 async function readDayMapData(dayId: number) {
   const [history, entries] = await Promise.all([
     getDayRouteHistory(dayId),
-    getEntriesForDay(dayId).catch(() => []),
+    getEntriesForDay(dayId).catch(() => null),
   ]);
   return {...history, entries};
 }
 
 export async function loadDayMapData(dayId: number) {
-  await refreshRouteDayIfStale(dayId);
+  await refreshRouteDayIfStale(dayId).catch(error => {
+    diag('route.refresh.fail', String(error), {dayId});
+  });
   return readDayMapData(dayId);
 }
 
@@ -85,8 +88,10 @@ export function useDayMapData(dayId: number): DayMapData {
         currentDayId.current === dayId &&
         loadGeneration.current === generation
       ) {
-        setEntriesForDay(dayId, next.entries);
-        setLoaded({dayId, ...next});
+        if (next.entries !== null) {
+          setEntriesForDay(dayId, next.entries);
+        }
+        setLoaded({dayId, ...next, entries: next.entries ?? []});
       }
     },
     [dayId, setEntriesForDay],

@@ -42,9 +42,14 @@ export default function TripList({
             ? t('map.dayEnd')
             : stopsById.get(segment.destination_stop_id)?.display_name ??
               t('map.unknown');
+        const endpoints = `${origin} → ${destination}`;
+        const time = `${formatTime(segment.start_ts)} – ${formatTime(segment.end_ts)}`;
+        const stats = `${formatDistance(segment.distance_m)} · ${formatDuration(segment.duration_sec)}`;
         return (
           <View
             key={segment.id}
+            accessible
+            accessibilityLabel={`${endpoints}, ${time}, ${stats}`}
             style={[
               styles.row,
               index === segments.length - 1 && styles.lastRow,
@@ -62,17 +67,10 @@ export default function TripList({
               ]}
             />
             <View style={styles.details}>
-              <Text style={styles.name}>
-                {origin} → {destination}
-              </Text>
-              <Text style={styles.time}>
-                {formatTime(segment.start_ts)} – {formatTime(segment.end_ts)}
-              </Text>
+              <Text style={styles.name}>{endpoints}</Text>
+              <Text style={styles.time}>{time}</Text>
             </View>
-            <Text style={styles.stats}>
-              {formatDistance(segment.distance_m)} ·{' '}
-              {formatDuration(segment.duration_sec)}
-            </Text>
+            <Text style={styles.stats}>{stats}</Text>
           </View>
         );
       })}

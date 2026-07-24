@@ -8,6 +8,7 @@ import {
   createNamedPlace,
   createNamedPlaceForStop,
   getDayRouteHistory,
+  getEarliestDerivedTimestamp,
   getLatestDerivedRawTimestamp,
   getLatestRawTimestamp,
   getNearbyLocalPlaces,
@@ -15,6 +16,8 @@ import {
   matchExistingStop,
   reconcileDayRouteHistory,
   renameNamedPlace,
+  hasInvalidRouteGeometry,
+  setAutomaticGoogleStopName,
   setDayStopName,
 } from '../src/db/routeHistory';
 import type {DayRouteStop} from '../src/types';
@@ -25,9 +28,12 @@ import type {
 
 const mockGetDB = getDB as jest.MockedFunction<typeof getDB>;
 
-const result = (rows: Record<string, unknown>[] = []) => ({
+const result = (
+  rows: Record<string, unknown>[] = [],
+  rowsAffected = 0,
+) => ({
   rows,
-  rowsAffected: 0,
+  rowsAffected,
 });
 
 const stopRow = (
@@ -251,6 +257,31 @@ describe('route history repository', () => {
     );
   });
 
+  it('snapshots an automatic Google name only while the stop is still unnamed', async () => {
+    const {execute} = mockDatabase([result([], 1), result([], 0)]);
+
+    await expect(
+      setAutomaticGoogleStopName(12, {
+        name: ' Nearby cafe ',
+        placeId: ' google-id ',
+      }),
+    ).resolves.toBe(true);
+    await expect(
+      setAutomaticGoogleStopName(12, {
+        name: 'Late result',
+        placeId: 'late-id',
+      }),
+    ).resolves.toBe(false);
+
+    expect(execute).toHaveBeenNthCalledWith(
+      1,
+      expect.stringMatching(
+        /UPDATE day_route_stops[\s\S]*user_edited = 0[\s\S]*display_name[\s\S]*(IS NULL|= '')/i,
+      ),
+      ['Nearby cafe', 'google-id', 12],
+    );
+  });
+
   it('creates a reusable place from the stop centroid in one transaction', async () => {
     const inserted = {
       id: 9,
@@ -283,6 +314,11 @@ describe('route history repository', () => {
       expect.stringMatching(/UPDATE day_route_stops/i),
       [null, 9, null, 'Workshop', 'reusable', 12],
     ]);
+    expect(
+      transactionExecute.mock.calls.some(([sql]) =>
+        String(sql).includes('DELETE'),
+      ),
+    ).toBe(false);
   });
 
   it('does not create a reusable place when the stop is missing', async () => {
@@ -294,58 +330,68 @@ describe('route history repository', () => {
     expect(transactionExecute).toHaveBeenCalledTimes(1);
   });
 
-  it('reads history and safely falls back for malformed segment geometry', async () => {
+  it('omits malformed segment geometry but keeps a valid empty array', async () => {
+    const valid = {
+      id: 10,
+      day_id: 4,
+      sequence: 0,
+      start_ts: 'start',
+      end_ts: 'end',
+      origin_stop_id: 1,
+      destination_stop_id: null,
+      coordinates_json:
+        '[{"latitude":60.17,"longitude":24.94},{"latitude":60.18,"longitude":24.95}]',
+      distance_m: 100,
+      duration_sec: 60,
+      average_speed_mps: 1.67,
+      maximum_speed_mps: 2,
+      raw_last_ts: 'latest',
+      created_at: 'created',
+      updated_at: 'updated',
+    };
     const segments = [
+      valid,
+      {...valid, id: 11, sequence: 1, coordinates_json: '{bad json'},
       {
-        id: 10,
-        day_id: 4,
-        sequence: 0,
-        start_ts: 'start',
-        end_ts: 'end',
-        origin_stop_id: 1,
-        destination_stop_id: null,
-        coordinates_json:
-          '[{"latitude":60.17,"longitude":24.94},{"latitude":60.18,"longitude":24.95}]',
-        distance_m: 100,
-        duration_sec: 60,
-        average_speed_mps: 1.67,
-        maximum_speed_mps: 2,
-        raw_last_ts: 'latest',
-        created_at: 'created',
-        updated_at: 'updated',
-      },
-      {
-        id: 11,
-        day_id: 4,
-        sequence: 1,
-        coordinates_json: '{bad json',
-      },
-      {
+        ...valid,
         id: 12,
-        day_id: 4,
         sequence: 2,
         coordinates_json: '{"latitude":60.17}',
       },
       {
+        ...valid,
         id: 13,
-        day_id: 4,
         sequence: 3,
         coordinates_json: '[{"latitude":"bad","longitude":24.94}]',
       },
+      {
+        ...valid,
+        id: 14,
+        sequence: 4,
+        coordinates_json: '[{"latitude":91,"longitude":24.94}]',
+      },
+      {
+        ...valid,
+        id: 15,
+        sequence: 5,
+        coordinates_json: '[{"latitude":60.17,"longitude":181}]',
+      },
+      {...valid, id: 16, sequence: 6, coordinates_json: '[]'},
     ];
     mockDatabase([result([stopRow({user_edited: 1})]), result(segments)]);
 
     const history = await getDayRouteHistory(4);
 
     expect(history.stops[0].user_edited).toBe(true);
-    expect(history.segments.map(item => item.coordinates)).toEqual([
+    expect(history.segments.map(item => [item.id, item.coordinates])).toEqual([
       [
-        {latitude: 60.17, longitude: 24.94},
-        {latitude: 60.18, longitude: 24.95},
+        10,
+        [
+          {latitude: 60.17, longitude: 24.94},
+          {latitude: 60.18, longitude: 24.95},
+        ],
       ],
-      [],
-      [],
-      [],
+      [16, []],
     ]);
   });
 
@@ -353,11 +399,15 @@ describe('route history repository', () => {
     const {execute} = mockDatabase([
       result([{timestamp: 'raw-latest'}]),
       result([{raw_last_ts: 'derived-latest'}]),
+      result([{first_ts: 'derived-first'}]),
     ]);
 
     await expect(getLatestRawTimestamp(4)).resolves.toBe('raw-latest');
     await expect(getLatestDerivedRawTimestamp(4)).resolves.toBe(
       'derived-latest',
+    );
+    await expect(getEarliestDerivedTimestamp(4)).resolves.toBe(
+      'derived-first',
     );
     expect(execute).toHaveBeenNthCalledWith(
       1,
@@ -366,9 +416,30 @@ describe('route history repository', () => {
     );
     expect(execute).toHaveBeenNthCalledWith(
       2,
-      expect.stringMatching(/MAX\(raw_last_ts\)/i),
-      [4],
+      expect.stringMatching(
+        /day_route_segments[\s\S]*day_route_stops|day_route_stops[\s\S]*day_route_segments/i,
+      ),
+      [4, 4],
     );
+    expect(execute).toHaveBeenNthCalledWith(
+      3,
+      expect.stringMatching(
+        /day_route_segments[\s\S]*day_route_stops|day_route_stops[\s\S]*day_route_segments/i,
+      ),
+      [4, 4],
+    );
+  });
+
+  it('reports malformed geometry without discarding its persisted watermark', async () => {
+    mockDatabase([
+      result([{raw_last_ts: 'derived-latest'}]),
+      result([{coordinates_json: '{bad json'}]),
+    ]);
+
+    await expect(getLatestDerivedRawTimestamp(4)).resolves.toBe(
+      'derived-latest',
+    );
+    await expect(hasInvalidRouteGeometry(4)).resolves.toBe(true);
   });
 
   it('matches by overlap, then distance, then lowest ID', () => {
@@ -409,69 +480,138 @@ describe('route history repository', () => {
     expect(matchExistingStop(next, candidates)?.id).toBe(1);
   });
 
-  it('reconciles once while preserving explicit identity and frozen names', async () => {
-    const existing = [
-      stopRow({
-        id: 10,
+  it.each([
+    {
+      label: 'saved',
+      existing: {
+        saved_location_id: 5,
+        display_name: 'Chosen saved place',
+        name_source: 'saved',
+      },
+      identity: [5, null, null, 'Chosen saved place', 'saved', 1],
+    },
+    {
+      label: 'reusable',
+      existing: {
         named_place_id: 7,
+        display_name: 'Chosen reusable place',
+        name_source: 'reusable',
+      },
+      identity: [null, 7, null, 'Chosen reusable place', 'reusable', 1],
+    },
+    {
+      label: 'Google',
+      existing: {
         google_place_id: 'chosen-google-id',
+        display_name: 'Chosen Google place',
+        name_source: 'google',
+      },
+      identity: [
+        null,
+        null,
+        'chosen-google-id',
+        'Chosen Google place',
+        'google',
+        1,
+      ],
+    },
+    {
+      label: 'day-only',
+      existing: {
         display_name: 'Chosen for this day',
         name_source: 'day',
-        user_edited: 1,
-      }),
-      stopRow({
-        id: 11,
-        start_ts: '2026-07-24T09:00:00.000Z',
-        end_ts: '2026-07-24T09:10:00.000Z',
-        display_name: 'Frozen Google snapshot',
-        google_place_id: 'automatic-google-id',
-        name_source: 'google',
-      }),
-    ];
-    const {execute, transaction, transactionExecute} = mockDatabase([], [
-      result(existing),
-      result(),
+      },
+      identity: [null, null, null, 'Chosen for this day', 'day', 1],
+    },
+  ])('preserves every mutually exclusive $label choice on rebuild', async item => {
+    const existing = stopRow({
+      id: 10,
+      ...item.existing,
+      user_edited: 1,
+    });
+    const {transactionExecute} = mockDatabase([], [
+      result([existing]),
       result(),
       result(),
     ]);
-    const nextStops = [
-      derivedStop({
-        key: 'first',
-        anchor: {
-          id: 99,
-          type: 'reusable',
-          name: 'Renamed reusable place',
-          latitude: 60.17,
-          longitude: 24.94,
-          radiusM: 70,
-        },
-      }),
-      derivedStop({
-        key: 'second',
-        startTs: '2026-07-24T09:02:00.000Z',
-        endTs: '2026-07-24T09:12:00.000Z',
-      }),
-    ];
+    const next = derivedStop({
+      startTs: '2026-07-24T08:03:00.000Z',
+      endTs: '2026-07-24T08:13:00.000Z',
+      latitude: 60.1702,
+      longitude: 24.9402,
+      anchor: {
+        id: 99,
+        type: 'reusable',
+        name: 'Conflicting derived place',
+        latitude: 60.17,
+        longitude: 24.94,
+        radiusM: 70,
+      },
+    });
 
-    await reconcileDayRouteHistory(4, {stops: nextStops, segments: []});
+    await reconcileDayRouteHistory(4, {stops: [next], segments: []});
 
-    expect(transaction).toHaveBeenCalledTimes(1);
-    expect(execute).not.toHaveBeenCalled();
-    const updates = transactionExecute.mock.calls.filter(([sql]) =>
+    const update = transactionExecute.mock.calls.find(([sql]) =>
       String(sql).includes('UPDATE day_route_stops'),
     );
-    expect(updates).toHaveLength(2);
-    expect(updates[0][1].slice(4)).toEqual([
-      null,
-      7,
-      'chosen-google-id',
-      'Chosen for this day',
-      'day',
-      1,
+    expect(update?.[1]).toEqual([
+      next.startTs,
+      next.endTs,
+      next.latitude,
+      next.longitude,
+      ...item.identity,
       10,
       4,
     ]);
-    expect(updates[1][1][7]).toBe('Frozen Google snapshot');
+  });
+
+  it('preserves automatic Google snapshot provenance while updating derived fields', async () => {
+    const existing = stopRow({
+      id: 11,
+      display_name: 'Frozen Google snapshot',
+      google_place_id: 'automatic-google-id',
+      name_source: 'google',
+      user_edited: 0,
+    });
+    const {transactionExecute} = mockDatabase([], [
+      result([existing]),
+      result(),
+      result(),
+    ]);
+    const next = derivedStop({
+      startTs: '2026-07-24T08:03:00.000Z',
+      endTs: '2026-07-24T08:13:00.000Z',
+      latitude: 60.1702,
+      longitude: 24.9402,
+      anchor: {
+        id: 99,
+        type: 'saved',
+        name: 'New derived anchor',
+        latitude: 60.17,
+        longitude: 24.94,
+        radiusM: 70,
+      },
+    });
+
+    await reconcileDayRouteHistory(4, {stops: [next], segments: []});
+
+    const update = transactionExecute.mock.calls.find(([sql]) =>
+      String(sql).includes('UPDATE day_route_stops'),
+    );
+    expect(update?.[1]).toEqual([
+      next.startTs,
+      next.endTs,
+      next.latitude,
+      next.longitude,
+      null,
+      null,
+      'automatic-google-id',
+      'Frozen Google snapshot',
+      'google',
+      0,
+      11,
+      4,
+    ]);
   });
 
   it('consumes each old stop at most once during reconciliation', async () => {

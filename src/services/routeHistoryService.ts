@@ -4,9 +4,11 @@ import {
 } from '../db/gps';
 import {getLocations} from '../db/locations';
 import {
+  getEarliestDerivedTimestamp,
   getLatestDerivedRawTimestamp,
   getLatestRawTimestamp,
   getNamedPlaces,
+  hasInvalidRouteGeometry,
   reconcileDayRouteHistory,
 } from '../db/routeHistory';
 import {deriveRouteDay, type RouteAnchor} from '../utils/routeSegments';
@@ -16,12 +18,31 @@ const REFRESH_DELAY_MS = 15_000;
 const refreshTimers = new Map<number, ReturnType<typeof setTimeout>>();
 const activeRefreshes = new Map<
   number,
-  {promise: Promise<void>; pending: boolean}
+  {promise: Promise<void>; pending: boolean; repairInvalidGeometry: boolean}
 >();
 
-async function refreshRouteDayOnce(dayId: number): Promise<void> {
-  const [points, locations, namedPlaces] = await Promise.all([
+async function refreshRouteDayOnce(
+  dayId: number,
+  repairInvalidGeometry: boolean,
+): Promise<void> {
+  const [points, persistedFirstTs, persistedRawLastTs] = await Promise.all([
     getGpsPointsForDay(dayId),
+    getEarliestDerivedTimestamp(dayId),
+    getLatestDerivedRawTimestamp(dayId),
+  ]);
+  const sourceFirstTs = points[0]?.timestamp;
+  const sourceRawLastTs = points[points.length - 1]?.timestamp;
+  if (
+    sourceFirstTs == null ||
+    sourceRawLastTs == null ||
+    (persistedFirstTs !== null && sourceFirstTs > persistedFirstTs) ||
+    (persistedRawLastTs !== null &&
+      (sourceRawLastTs < persistedRawLastTs ||
+        (!repairInvalidGeometry && sourceRawLastTs === persistedRawLastTs)))
+  ) {
+    return;
+  }
+  const [locations, namedPlaces] = await Promise.all([
     getLocations(),
     getNamedPlaces(),
   ]);
@@ -46,20 +67,30 @@ async function refreshRouteDayOnce(dayId: number): Promise<void> {
   await reconcileDayRouteHistory(dayId, deriveRouteDay(points, anchors));
 }
 
-export function refreshRouteDay(dayId: number): Promise<void> {
+export function refreshRouteDay(
+  dayId: number,
+  repairInvalidGeometry = false,
+): Promise<void> {
   const active = activeRefreshes.get(dayId);
   if (active) {
     active.pending = true;
+    active.repairInvalidGeometry ||= repairInvalidGeometry;
     return active.promise;
   }
 
-  const state = {promise: Promise.resolve(), pending: false};
+  const state = {
+    promise: Promise.resolve(),
+    pending: false,
+    repairInvalidGeometry,
+  };
   activeRefreshes.set(dayId, state);
   state.promise = (async () => {
     try {
       do {
         state.pending = false;
-        await refreshRouteDayOnce(dayId);
+        const repair = state.repairInvalidGeometry;
+        state.repairInvalidGeometry = false;
+        await refreshRouteDayOnce(dayId, repair);
       } while (state.pending);
     } finally {
       activeRefreshes.delete(dayId);
@@ -71,17 +102,20 @@ export function refreshRouteDay(dayId: number): Promise<void> {
 export async function refreshRouteDayIfStale(
   dayId: number,
 ): Promise<boolean> {
-  const [rawTimestamp, derivedTimestamp] = await Promise.all([
+  const [rawTimestamp, derivedTimestamp, invalidGeometry] = await Promise.all([
     getLatestRawTimestamp(dayId),
     getLatestDerivedRawTimestamp(dayId),
+    hasInvalidRouteGeometry(dayId),
   ]);
   if (
     rawTimestamp === null ||
-    (derivedTimestamp !== null && derivedTimestamp >= rawTimestamp)
+    (!invalidGeometry &&
+      derivedTimestamp !== null &&
+      derivedTimestamp >= rawTimestamp)
   ) {
     return false;
   }
-  await refreshRouteDay(dayId);
+  await refreshRouteDay(dayId, invalidGeometry);
   return true;
 }
 

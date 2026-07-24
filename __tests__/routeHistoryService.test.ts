@@ -4,6 +4,8 @@ const mockGetLocations = jest.fn();
 const mockGetNamedPlaces = jest.fn();
 const mockGetLatestRawTimestamp = jest.fn();
 const mockGetLatestDerivedRawTimestamp = jest.fn();
+const mockGetEarliestDerivedTimestamp = jest.fn();
+const mockHasInvalidRouteGeometry = jest.fn();
 const mockGetDayRouteHistory = jest.fn();
 const mockGetEntriesForDay = jest.fn();
 const mockReconcileDayRouteHistory = jest.fn();
@@ -40,6 +42,10 @@ jest.mock('../src/db/routeHistory', () => ({
     mockGetLatestRawTimestamp(...args),
   getLatestDerivedRawTimestamp: (...args: unknown[]) =>
     mockGetLatestDerivedRawTimestamp(...args),
+  getEarliestDerivedTimestamp: (...args: unknown[]) =>
+    mockGetEarliestDerivedTimestamp(...args),
+  hasInvalidRouteGeometry: (...args: unknown[]) =>
+    mockHasInvalidRouteGeometry(...args),
   getDayRouteHistory: (...args: unknown[]) => mockGetDayRouteHistory(...args),
   reconcileDayRouteHistory: (...args: unknown[]) =>
     mockReconcileDayRouteHistory(...args),
@@ -110,8 +116,12 @@ beforeEach(() => {
   mockGetNamedPlaces.mockResolvedValue(namedPlaces);
   mockGetLatestRawTimestamp.mockResolvedValue('2026-07-23T05:00:00.000Z');
   mockGetLatestDerivedRawTimestamp.mockResolvedValue(
+    '2026-07-23T04:59:00.000Z',
+  );
+  mockGetEarliestDerivedTimestamp.mockResolvedValue(
     '2026-07-23T05:00:00.000Z',
   );
+  mockHasInvalidRouteGeometry.mockResolvedValue(false);
   mockDeriveRouteDay.mockReturnValue(derived);
   mockReconcileDayRouteHistory.mockResolvedValue(undefined);
   mockGetDayRouteHistory.mockResolvedValue({stops: [], segments: []});
@@ -140,14 +150,26 @@ it('refreshes stale history before loading persisted map data', async () => {
   expect(mockGetEntriesForDay).toHaveBeenCalledWith(4);
 });
 
-it('does not hide a stale refresh reconciliation failure', async () => {
+it('diagnoses a stale refresh failure and still reads persisted map history', async () => {
   jest
     .spyOn(routeHistoryService, 'refreshRouteDayIfStale')
     .mockRejectedValue(new Error('reconciliation failed'));
+  mockGetDayRouteHistory.mockResolvedValue({
+    stops: [],
+    segments: [{id: 20}],
+  });
+  mockGetEntriesForDay.mockResolvedValue([{id: 30}]);
 
-  await expect(loadDayMapData(4)).rejects.toThrow('reconciliation failed');
-  expect(mockGetDayRouteHistory).not.toHaveBeenCalled();
-  expect(mockGetEntriesForDay).not.toHaveBeenCalled();
+  await expect(loadDayMapData(4)).resolves.toEqual({
+    stops: [],
+    segments: [{id: 20}],
+    entries: [{id: 30}],
+  });
+  expect(mockDiag).toHaveBeenCalledWith(
+    'route.refresh.fail',
+    'Error: reconciliation failed',
+    {dayId: 4},
+  );
 });
 
 it('derives and reconciles a day from raw points and both anchor sources', async () => {
@@ -177,7 +199,70 @@ it('derives and reconciles a day from raw points and both anchor sources', async
   expect(mockReconcileDayRouteHistory).toHaveBeenCalledTimes(1);
 });
 
+it('preserves existing history when a refresh has no retained raw points', async () => {
+  mockGetGpsPointsForDay.mockResolvedValue([]);
+
+  await refreshRouteDay(4);
+
+  expect(mockDeriveRouteDay).not.toHaveBeenCalled();
+  expect(mockReconcileDayRouteHistory).not.toHaveBeenCalled();
+});
+
+it.each([
+  ['older', '2026-07-23T04:59:00.000Z'],
+  ['same-watermark', '2026-07-23T05:00:00.000Z'],
+])(
+  'preserves newer existing history when the retained raw source is %s',
+  async (_label, timestamp) => {
+    mockGetLatestDerivedRawTimestamp.mockResolvedValue(
+      '2026-07-23T05:00:00.000Z',
+    );
+    mockGetEarliestDerivedTimestamp.mockResolvedValue(
+      '2026-07-23T04:00:00.000Z',
+    );
+    mockGetGpsPointsForDay.mockResolvedValue([{...points[0], timestamp}]);
+
+    await refreshRouteDay(4);
+
+    expect(mockDeriveRouteDay).not.toHaveBeenCalled();
+    expect(mockReconcileDayRouteHistory).not.toHaveBeenCalled();
+  },
+);
+
+it('repairs invalid geometry when retained raw data covers the persisted bounds', async () => {
+  mockGetLatestDerivedRawTimestamp.mockResolvedValue(
+    '2026-07-23T05:00:00.000Z',
+  );
+  mockGetEarliestDerivedTimestamp.mockResolvedValue(
+    '2026-07-23T05:00:00.000Z',
+  );
+  mockHasInvalidRouteGeometry.mockResolvedValue(true);
+
+  await expect(refreshRouteDayIfStale(4)).resolves.toBe(true);
+
+  expect(mockReconcileDayRouteHistory).toHaveBeenCalledWith(4, derived);
+});
+
+it('does not repair invalid geometry from a partially retained raw suffix', async () => {
+  mockGetLatestDerivedRawTimestamp.mockResolvedValue(
+    '2026-07-23T05:00:00.000Z',
+  );
+  mockGetEarliestDerivedTimestamp.mockResolvedValue(
+    '2026-07-23T04:00:00.000Z',
+  );
+  mockHasInvalidRouteGeometry.mockResolvedValue(true);
+
+  await expect(refreshRouteDayIfStale(4)).resolves.toBe(true);
+
+  expect(mockDeriveRouteDay).not.toHaveBeenCalled();
+  expect(mockReconcileDayRouteHistory).not.toHaveBeenCalled();
+});
+
 it('skips a day whose raw and derived timestamps match', async () => {
+  mockGetLatestDerivedRawTimestamp.mockResolvedValue(
+    '2026-07-23T05:00:00.000Z',
+  );
+
   await expect(refreshRouteDayIfStale(4)).resolves.toBe(false);
 
   expect(mockGetGpsPointsForDay).not.toHaveBeenCalled();
@@ -224,10 +309,13 @@ it('keeps separate refresh timers for different days', async () => {
 
 it('serializes same-day refreshes and coalesces in-flight calls into one follow-up', async () => {
   const olderPoints = points;
-  const newerPoints = [{
-    ...points[0],
-    timestamp: '2026-07-23T05:01:00.000Z',
-  }];
+  const newerPoints = [
+    ...points,
+    {
+      ...points[0],
+      timestamp: '2026-07-23T05:01:00.000Z',
+    },
+  ];
   const olderRead = deferred<typeof points>();
   const newerRead = deferred<typeof newerPoints>();
   const olderDerived = {stops: [{key: 'older'}], segments: []};
@@ -285,7 +373,12 @@ it('checks only raw day IDs returned inside the retention window', async () => {
 
   expect(mockGetGpsDayIdsWithinRetention).toHaveBeenCalledWith();
   expect(mockGetLatestRawTimestamp.mock.calls).toEqual([[9], [4]]);
-  expect(mockGetLatestDerivedRawTimestamp.mock.calls).toEqual([[9], [4]]);
+  expect(mockGetLatestDerivedRawTimestamp.mock.calls).toEqual([
+    [9],
+    [4],
+    [9],
+    [4],
+  ]);
 });
 
 it('diagnoses a failed scheduled refresh without rejecting the timer', async () => {
