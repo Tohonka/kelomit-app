@@ -105,6 +105,12 @@ const stop = {
   created_at: '2026-07-24T09:00:00.000Z',
   updated_at: '2026-07-24T09:00:00.000Z',
 };
+const dayFiveStop = {
+  ...stop,
+  id: 8,
+  day_id: 5,
+  display_name: 'Day five',
+};
 const localChoice = {
   type: 'saved' as const,
   id: 2,
@@ -146,6 +152,27 @@ function button(root: ReactTestInstance, label: string): ReactTestInstance {
   )!;
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>(done => {
+    resolve = done;
+  });
+  return {promise, resolve};
+}
+
+function overview(dayId: number) {
+  return (
+    <MapOverview
+      dayId={dayId}
+      title="Map"
+      topInset={0}
+      bottomInset={0}
+      onFullScreen={jest.fn()}
+      onOpenEntry={jest.fn()}
+    />
+  );
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   getDayRouteHistoryMock.mockResolvedValue({stops: [stop], segments: []});
@@ -159,16 +186,7 @@ beforeEach(() => {
 it('loads persisted stops and wires saved and reusable name updates', async () => {
   let renderer!: ReactTestRenderer;
   await act(async () => {
-    renderer = create(
-      <MapOverview
-        dayId={4}
-        title="Map"
-        topInset={0}
-        bottomInset={0}
-        onFullScreen={jest.fn()}
-        onOpenEntry={jest.fn()}
-      />,
-    );
+    renderer = create(overview(4));
     await Promise.resolve();
   });
 
@@ -200,4 +218,110 @@ it('loads persisted stops and wires saved and reusable name updates', async () =
   expect(
     getDayRouteHistoryMock.mock.invocationCallOrder[2],
   ).toBeLessThan(refreshRouteDayMock.mock.invocationCallOrder[0]);
+});
+
+it('shows Google failures without replacing local choices or the historical name', async () => {
+  resolvePlaceCandidatesMock.mockRejectedValue(new Error('offline'));
+  let renderer!: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(overview(4));
+    await Promise.resolve();
+  });
+
+  act(() => {
+    button(renderer.root, 'Historical label').props.onPress();
+  });
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  const sheet = renderer.root.findByProps({testID: 'place-name-sheet'});
+  expect(sheet.props.currentName).toBe('Historical label');
+  expect(sheet.props.localChoices).toEqual([localChoice]);
+  expect(sheet.props.googleCandidates).toEqual([]);
+  expect(sheet.props.googleError).toBe(true);
+});
+
+it('discards prior-day results and prevents an old selection acting after day change', async () => {
+  const oldReload = deferred<{stops: typeof stop[]; segments: []}>();
+  const newLoad = deferred<{stops: typeof dayFiveStop[]; segments: []}>();
+  getDayRouteHistoryMock
+    .mockResolvedValueOnce({stops: [stop], segments: []})
+    .mockReturnValueOnce(oldReload.promise)
+    .mockReturnValueOnce(newLoad.promise);
+
+  let renderer!: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(overview(4));
+    await Promise.resolve();
+  });
+  act(() => {
+    button(renderer.root, 'Historical label').props.onPress();
+  });
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  const oldChoose = renderer.root.findByProps({
+    testID: 'place-name-sheet',
+  }).props.onChoose;
+  let oldSave!: Promise<void>;
+  act(() => {
+    oldSave = oldChoose(localChoice);
+  });
+
+  await act(async () => {
+    renderer.update(overview(5));
+    await Promise.resolve();
+  });
+  expect(
+    renderer.root.findByProps({testID: 'place-name-sheet'}).props.visible,
+  ).toBe(false);
+  expect(
+    renderer.root.findAllByType(TouchableOpacity).some(
+      item => item.props.accessibilityLabel === 'Historical label',
+    ),
+  ).toBe(false);
+
+  await act(async () => {
+    await oldChoose(localChoice);
+  });
+  expect(setDayStopNameMock).toHaveBeenCalledTimes(1);
+
+  await act(async () => {
+    newLoad.resolve({stops: [dayFiveStop], segments: []});
+    await newLoad.promise;
+  });
+  expect(button(renderer.root, 'Day five')).toBeDefined();
+
+  await act(async () => {
+    oldReload.resolve({stops: [stop], segments: []});
+    await oldSave;
+  });
+  expect(button(renderer.root, 'Day five')).toBeDefined();
+  expect(
+    renderer.root.findAllByType(TouchableOpacity).some(
+      item => item.props.accessibilityLabel === 'Historical label',
+    ),
+  ).toBe(false);
+});
+
+it('propagates persistence failures so the sheet can keep the edit open', async () => {
+  setDayStopNameMock.mockRejectedValue(new Error('write failed'));
+  let renderer!: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(overview(4));
+    await Promise.resolve();
+  });
+  act(() => {
+    button(renderer.root, 'Historical label').props.onPress();
+  });
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  const sheet = renderer.root.findByProps({testID: 'place-name-sheet'});
+  await expect(sheet.props.onChoose(localChoice)).rejects.toThrow('write failed');
 });

@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {View, Text, ScrollView, TouchableOpacity, ActivityIndicator, StyleSheet} from 'react-native';
 import {useTranslation} from 'react-i18next';
 import {useFocusEffect, useNavigation} from '@react-navigation/native';
@@ -51,10 +51,25 @@ export function MapOverview({
   const [googleCandidates, setGoogleCandidates] = useState<PlaceCandidate[]>([]);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [googleError, setGoogleError] = useState(false);
+  const currentDayId = useRef(dayId);
+  const loadGeneration = useRef(0);
+  currentDayId.current = dayId;
+  const activeStops = useMemo(
+    () => stops.filter(stop => stop.day_id === dayId),
+    [dayId, stops],
+  );
+  const activeSelectedStop =
+    selectedStop?.day_id === dayId ? selectedStop : null;
 
   const reloadStops = useCallback(async () => {
+    const generation = ++loadGeneration.current;
     const history = await getDayRouteHistory(dayId);
-    setStops(history.stops);
+    if (
+      currentDayId.current === dayId &&
+      loadGeneration.current === generation
+    ) {
+      setStops(history.stops);
+    }
   }, [dayId]);
 
   useFocusEffect(
@@ -64,62 +79,73 @@ export function MapOverview({
   );
 
   useEffect(() => {
-    if (!selectedStop) {
+    setStops([]);
+    setSelectedStop(null);
+    setLocalChoices([]);
+    setGoogleCandidates([]);
+    setGoogleError(false);
+    setGoogleLoading(false);
+  }, [dayId]);
+
+  useEffect(() => {
+    if (!activeSelectedStop) {
       return;
     }
     let active = true;
     setGoogleCandidates([]);
     setGoogleError(false);
     setGoogleLoading(true);
-    resolvePlaceCandidates(selectedStop.latitude, selectedStop.longitude)
+    resolvePlaceCandidates(
+      activeSelectedStop.latitude,
+      activeSelectedStop.longitude,
+    )
       .then(candidates => {
-        if (active) {
+        if (active && currentDayId.current === dayId) {
           setGoogleCandidates(candidates);
         }
       })
       .catch(() => {
-        if (active) {
+        if (active && currentDayId.current === dayId) {
           setGoogleError(true);
         }
       })
       .finally(() => {
-        if (active) {
+        if (active && currentDayId.current === dayId) {
           setGoogleLoading(false);
         }
       });
     return () => {
       active = false;
     };
-  }, [selectedStop]);
+  }, [activeSelectedStop, dayId]);
 
   const openStop = async (stop: DayRouteStop) => {
     const choices = await getNearbyLocalPlaces(
       stop.latitude,
       stop.longitude,
     ).catch(() => []);
+    if (currentDayId.current !== dayId || stop.day_id !== dayId) {
+      return;
+    }
     setLocalChoices(choices);
     setSelectedStop(stop);
   };
 
   const choosePlace = async (choice: PlaceNameChoice) => {
-    if (!selectedStop) {
+    if (!activeSelectedStop || currentDayId.current !== dayId) {
       return;
     }
-    try {
-      await setDayStopName(selectedStop.id, choice);
-      await reloadStops();
-    } catch {}
+    await setDayStopName(activeSelectedStop.id, choice);
+    await reloadStops();
   };
 
   const createName = async (name: string) => {
-    if (!selectedStop) {
+    if (!activeSelectedStop || currentDayId.current !== dayId) {
       return;
     }
-    try {
-      await createNamedPlaceForStop(selectedStop.id, name);
-      await reloadStops();
-      await refreshRouteDay(dayId);
-    } catch {}
+    await createNamedPlaceForStop(activeSelectedStop.id, name);
+    await reloadStops();
+    await refreshRouteDay(dayId);
   };
 
   return (
@@ -163,7 +189,7 @@ export function MapOverview({
 
         <Text style={styles.sectionHeader}>{t('map.places')}</Text>
         <LocationsList
-          stops={stops}
+          stops={activeStops}
           styles={styles}
           onPress={stop => {
             openStop(stop).catch(() => {});
@@ -171,8 +197,8 @@ export function MapOverview({
         />
       </ScrollView>
       <PlaceNameSheet
-        visible={selectedStop != null}
-        currentName={selectedStop?.display_name ?? null}
+        visible={activeSelectedStop != null}
+        currentName={activeSelectedStop?.display_name ?? null}
         localChoices={localChoices}
         googleCandidates={googleCandidates}
         googleLoading={googleLoading}

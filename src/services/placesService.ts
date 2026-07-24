@@ -182,43 +182,39 @@ export async function resolvePlaceCandidates(
   }
   const key = getMapsApiKey().trim();
   if (!key) {
-    return [];
+    throw new Error('Google Places API key is unavailable');
   }
-  try {
-    const response = await fetch(
-      'https://places.googleapis.com/v1/places:searchNearby',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Goog-Api-Key': key,
-          'X-Goog-FieldMask':
-            'places.displayName,places.id,places.location',
-        },
-        body: JSON.stringify({
-          maxResultCount: 10,
-          rankPreference: 'DISTANCE',
-          locationRestriction: {
-            circle: {
-              center: {latitude: lat, longitude: lng},
-              radius: 60,
-            },
-          },
-        }),
+  const response = await fetch(
+    'https://places.googleapis.com/v1/places:searchNearby',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': key,
+        'X-Goog-FieldMask':
+          'places.displayName,places.id,places.location',
       },
-    );
-    if (!response.ok) {
-      return [];
-    }
-    const candidates = normalizeCandidates(await response.json(), lat, lng);
-    if (candidates === null) {
-      return [];
-    }
-    await putCachedCandidates(cell, candidates);
-    return candidates;
-  } catch {
-    return [];
+      body: JSON.stringify({
+        maxResultCount: 10,
+        rankPreference: 'DISTANCE',
+        locationRestriction: {
+          circle: {
+            center: {latitude: lat, longitude: lng},
+            radius: 60,
+          },
+        },
+      }),
+    },
+  );
+  if (!response.ok) {
+    throw new Error('Google Places request failed');
   }
+  const candidates = normalizeCandidates(await response.json(), lat, lng);
+  if (candidates === null) {
+    throw new Error('Google Places returned malformed candidates');
+  }
+  await putCachedCandidates(cell, candidates);
+  return candidates;
 }
 
 export async function resolvePlaceName(lat: number, lng: number): Promise<string | null> {

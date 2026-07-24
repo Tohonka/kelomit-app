@@ -176,11 +176,11 @@ describe('places service', () => {
       'malformed response',
       () => mockFetch.mockResolvedValue(response({places: 'not-an-array'})),
     ],
-  ])('does not cache %s as an empty success', async (_label, arrange) => {
+  ])('rejects and does not cache %s as an empty success', async (_label, arrange) => {
     const execute = mockDatabase();
     arrange();
 
-    await expect(resolvePlaceCandidates(60.17, 24.94)).resolves.toEqual([]);
+    await expect(resolvePlaceCandidates(60.17, 24.94)).rejects.toThrow();
 
     expect(
       execute.mock.calls.some(([sql]) => String(sql).includes('INSERT')),

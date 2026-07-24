@@ -1,4 +1,4 @@
-import React, {useEffect, useMemo, useState} from 'react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {
   KeyboardAvoidingView,
@@ -34,8 +34,8 @@ interface Props {
   googleCandidates: PlaceCandidate[];
   googleLoading: boolean;
   googleError: boolean;
-  onChoose: (choice: PlaceNameChoice) => void;
-  onCreateName: (name: string) => void;
+  onChoose: (choice: PlaceNameChoice) => Promise<void>;
+  onCreateName: (name: string) => Promise<void>;
   onClose: () => void;
 }
 
@@ -140,12 +140,16 @@ export default function PlaceNameSheet({
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [isNaming, setIsNaming] = useState(false);
   const [name, setName] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState(false);
+  const savingRef = useRef(false);
   const trimmedName = name.trim();
 
   useEffect(() => {
     if (!visible) {
       setIsNaming(false);
       setName('');
+      setSaveError(false);
     }
   }, [visible]);
 
@@ -159,16 +163,28 @@ export default function PlaceNameSheet({
     );
   const distanceLabel = (distanceM: number) =>
     t('map.distanceAway', {distance: `${Math.round(distanceM)} m`});
-  const choose = (choice: PlaceNameChoice) => {
-    onChoose(choice);
-    onClose();
+  const save = async (operation: () => Promise<void>) => {
+    if (savingRef.current) {
+      return;
+    }
+    savingRef.current = true;
+    setIsSaving(true);
+    setSaveError(false);
+    try {
+      await operation();
+      onClose();
+    } catch {
+      setSaveError(true);
+    } finally {
+      savingRef.current = false;
+      setIsSaving(false);
+    }
   };
-  const createName = () => {
+  const createName = async () => {
     if (!trimmedName) {
       return;
     }
-    onCreateName(trimmedName);
-    onClose();
+    await save(() => onCreateName(trimmedName));
   };
 
   return (
@@ -176,11 +192,14 @@ export default function PlaceNameSheet({
       visible={visible}
       transparent
       animationType="fade"
-      onRequestClose={onClose}>
+      onRequestClose={isSaving ? () => {} : onClose}>
       <KeyboardAvoidingView
         style={styles.backdrop}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={isSaving ? undefined : onClose}
+        />
         <View style={styles.sheet}>
           <Text style={styles.heading}>{t('map.choosePlace')}</Text>
           {currentName ? (
@@ -198,7 +217,11 @@ export default function PlaceNameSheet({
                   style={styles.row}
                   accessibilityRole="button"
                   accessibilityLabel={`${t('map.choosePlace')} ${choice.name}, ${type}, ${distance}`}
-                  onPress={() => choose(choice)}>
+                  accessibilityState={{disabled: isSaving}}
+                  disabled={isSaving}
+                  onPress={() => {
+                    save(() => onChoose(choice));
+                  }}>
                   <Text style={styles.rowName}>{choice.name}</Text>
                   <Text style={styles.rowMeta}>
                     {type} · {distance}
@@ -216,7 +239,11 @@ export default function PlaceNameSheet({
                   style={styles.row}
                   accessibilityRole="button"
                   accessibilityLabel={`${t('map.choosePlace')} ${choice.name}, ${type}, ${distance}`}
-                  onPress={() => choose(choice)}>
+                  accessibilityState={{disabled: isSaving}}
+                  disabled={isSaving}
+                  onPress={() => {
+                    save(() => onChoose(choice));
+                  }}>
                   <Text style={styles.rowName}>{choice.name}</Text>
                   <Text style={styles.rowMeta}>
                     {type} · {distance}
@@ -230,6 +257,14 @@ export default function PlaceNameSheet({
               <Text style={styles.status}>{t('map.placesError')}</Text>
             ) : googleCandidates.length === 0 ? (
               <Text style={styles.status}>{t('map.unknown')}</Text>
+            ) : null}
+            {saveError ? (
+              <Text
+                style={styles.status}
+                accessibilityRole="alert"
+                accessibilityLiveRegion="polite">
+                {t('map.placeSaveError')}
+              </Text>
             ) : null}
             {isNaming ? (
               <>
@@ -247,6 +282,8 @@ export default function PlaceNameSheet({
                     style={styles.action}
                     accessibilityRole="button"
                     accessibilityLabel={t('map.cancel')}
+                    accessibilityState={{disabled: isSaving}}
+                    disabled={isSaving}
                     onPress={() => {
                       setIsNaming(false);
                       setName('');
@@ -257,12 +294,12 @@ export default function PlaceNameSheet({
                     style={[
                       styles.action,
                       styles.save,
-                      !trimmedName && styles.disabled,
+                      (!trimmedName || isSaving) && styles.disabled,
                     ]}
                     accessibilityRole="button"
                     accessibilityLabel={t('map.save')}
-                    accessibilityState={{disabled: !trimmedName}}
-                    disabled={!trimmedName}
+                    accessibilityState={{disabled: !trimmedName || isSaving}}
+                    disabled={!trimmedName || isSaving}
                     onPress={createName}>
                     <Text style={[styles.actionText, styles.saveText]}>
                       {t('map.save')}
@@ -276,6 +313,8 @@ export default function PlaceNameSheet({
                   style={styles.row}
                   accessibilityRole="button"
                   accessibilityLabel={t('map.nameThisPlace')}
+                  accessibilityState={{disabled: isSaving}}
+                  disabled={isSaving}
                   onPress={() => setIsNaming(true)}>
                   <Text style={styles.rowName}>{t('map.nameThisPlace')}</Text>
                 </TouchableOpacity>
@@ -283,6 +322,8 @@ export default function PlaceNameSheet({
                   style={styles.action}
                   accessibilityRole="button"
                   accessibilityLabel={t('map.cancel')}
+                  accessibilityState={{disabled: isSaving}}
+                  disabled={isSaving}
                   onPress={onClose}>
                   <Text style={styles.actionText}>{t('map.cancel')}</Text>
                 </TouchableOpacity>

@@ -123,6 +123,7 @@ const fi: typeof en = {
     cancel: 'Peruuta',
     placesLoading: 'Ladataan paikkoja…',
     placesError: 'Paikkojen lataaminen epäonnistui.',
+    placeSaveError: 'Paikan nimen tallentaminen epäonnistui.',
     unknown: 'Tuntematon',
     dayStart: 'Päivän alku',
     dayEnd: 'Päivän loppu',

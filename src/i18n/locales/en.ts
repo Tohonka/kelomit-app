@@ -121,6 +121,7 @@ const en = {
     cancel: 'Cancel',
     placesLoading: 'Loading places…',
     placesError: 'Could not load places.',
+    placeSaveError: 'Could not save place name.',
     unknown: 'Unknown',
     dayStart: 'Day start',
     dayEnd: 'Day end',

@@ -100,6 +100,16 @@ function renderSheet(
   return {renderer, onChoose, onCreateName, onClose};
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((done, fail) => {
+    resolve = done;
+    reject = fail;
+  });
+  return {promise, resolve, reject};
+}
+
 it('shows local choices before Google candidates with visible type and distance', () => {
   const {renderer} = renderSheet();
   const text = visibleText(renderer.root);
@@ -114,11 +124,13 @@ it('shows local choices before Google candidates with visible type and distance'
   );
 });
 
-it('chooses a place once and closes the sheet', () => {
+it('awaits a successful place choice and closes the sheet', async () => {
   const {renderer, onChoose, onClose} = renderSheet();
+  onChoose.mockResolvedValue(undefined);
 
-  act(() => {
+  await act(async () => {
     button(renderer.root, 'Choose place Workshop, Saved place, 12 m away').props.onPress();
+    await Promise.resolve();
   });
 
   expect(onChoose).toHaveBeenCalledTimes(1);
@@ -145,8 +157,9 @@ it('opens custom naming and keeps Save disabled for whitespace', () => {
   expect(onCreateName).not.toHaveBeenCalled();
 });
 
-it('creates a reusable name with trimmed text and closes', () => {
+it('creates a reusable name with trimmed text and closes after success', async () => {
   const {renderer, onCreateName, onClose} = renderSheet();
+  onCreateName.mockResolvedValue(undefined);
 
   act(() => {
     button(renderer.root, 'Name this place…').props.onPress();
@@ -154,12 +167,53 @@ it('creates a reusable name with trimmed text and closes', () => {
   act(() => {
     renderer.root.findByType(TextInput).props.onChangeText('  New anchor  ');
   });
-  act(() => {
+  await act(async () => {
     button(renderer.root, 'Save').props.onPress();
+    await Promise.resolve();
   });
 
   expect(onCreateName).toHaveBeenCalledTimes(1);
   expect(onCreateName).toHaveBeenCalledWith('New anchor');
+  expect(onClose).toHaveBeenCalledTimes(1);
+});
+
+it('keeps the sheet open and shows a localized error when persistence rejects', async () => {
+  const {renderer, onChoose, onClose} = renderSheet();
+  onChoose.mockRejectedValue(new Error('database unavailable'));
+
+  await act(async () => {
+    button(renderer.root, 'Choose place Workshop, Saved place, 12 m away').props.onPress();
+    await Promise.resolve();
+  });
+
+  expect(onClose).not.toHaveBeenCalled();
+  expect(visibleText(renderer.root)).toContain('Could not save place name.');
+  expect(
+    button(renderer.root, 'Choose place Workshop, Saved place, 12 m away').props
+      .disabled,
+  ).toBe(false);
+});
+
+it('prevents duplicate submits while a place choice is saving', async () => {
+  const pending = deferred<void>();
+  const {renderer, onChoose, onClose} = renderSheet();
+  onChoose.mockReturnValue(pending.promise);
+  const label = 'Choose place Workshop, Saved place, 12 m away';
+
+  act(() => {
+    button(renderer.root, label).props.onPress();
+  });
+  expect(button(renderer.root, label).props.disabled).toBe(true);
+  act(() => {
+    button(renderer.root, label).props.onPress();
+  });
+  expect(onChoose).toHaveBeenCalledTimes(1);
+  expect(onClose).not.toHaveBeenCalled();
+
+  await act(async () => {
+    pending.resolve();
+    await pending.promise;
+  });
   expect(onClose).toHaveBeenCalledTimes(1);
 });
 
