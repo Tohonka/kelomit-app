@@ -8,6 +8,7 @@ import {useTheme, typography, spacing} from '../theme';
 import type {Colors} from '../theme';
 import {useEntryStore} from '../store/entryStore';
 import {getDayRouteHistory} from '../db/routeHistory';
+import {getEntriesForDay} from '../db/entries';
 import {refreshRouteDayIfStale} from '../services/routeHistoryService';
 import {bucketLocations, type LocationBucket} from '../utils/bucketLocations';
 import {regionFor} from '../utils/mapRegion';
@@ -34,6 +35,9 @@ export const ROUTE_SEGMENT_COLORS = [
   '#DC2626',
 ];
 
+const EMPTY_STOPS: DayRouteStop[] = [];
+const EMPTY_SEGMENTS: DayRouteSegment[] = [];
+
 export interface DayMapData {
   segments: DayRouteSegment[];
   stops: DayRouteStop[];
@@ -41,36 +45,58 @@ export interface DayMapData {
   buckets: LocationBucket[];
   region: Region | undefined;
   stats: {distanceM: number; durationSec: number};
+  isReady: boolean;
   isEmpty: boolean;
   reloadRouteHistory: () => Promise<void>;
 }
 
+async function readDayMapData(dayId: number) {
+  const [history, entries] = await Promise.all([
+    getDayRouteHistory(dayId),
+    getEntriesForDay(dayId),
+  ]);
+  return {...history, entries};
+}
+
 export async function loadDayMapData(dayId: number) {
   await refreshRouteDayIfStale(dayId).catch(() => {});
-  return getDayRouteHistory(dayId);
+  return readDayMapData(dayId);
 }
 
 /** Loads and derives a day's map data. Shared by the DayMap route and Map tab. */
 export function useDayMapData(dayId: number): DayMapData {
-  const {entriesByDay, loadEntriesForDay} = useEntryStore();
-  const [history, setHistory] = useState<{
+  const setEntriesForDay = useEntryStore(state => state.setEntriesForDay);
+  const [loaded, setLoaded] = useState<{
+    dayId: number;
     stops: DayRouteStop[];
     segments: DayRouteSegment[];
-  }>({stops: [], segments: []});
+    entries: Entry[];
+  } | null>(null);
   const currentDayId = useRef(dayId);
   const loadGeneration = useRef(0);
   currentDayId.current = dayId;
 
+  const accept = useCallback(
+    (
+      next: Awaited<ReturnType<typeof readDayMapData>>,
+      generation: number,
+    ) => {
+      if (
+        currentDayId.current === dayId &&
+        loadGeneration.current === generation
+      ) {
+        setEntriesForDay(dayId, next.entries);
+        setLoaded({dayId, ...next});
+      }
+    },
+    [dayId, setEntriesForDay],
+  );
+
   const reloadRouteHistory = useCallback(async () => {
     const generation = ++loadGeneration.current;
-    const next = await getDayRouteHistory(dayId);
-    if (
-      currentDayId.current === dayId &&
-      loadGeneration.current === generation
-    ) {
-      setHistory(next);
-    }
-  }, [dayId]);
+    const next = await readDayMapData(dayId);
+    accept(next, generation);
+  }, [accept, dayId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -78,35 +104,21 @@ export function useDayMapData(dayId: number): DayMapData {
       const generation = ++loadGeneration.current;
       loadDayMapData(dayId)
         .then(next => {
-          if (
-            active &&
-            currentDayId.current === dayId &&
-            loadGeneration.current === generation
-          ) {
-            setHistory(next);
+          if (active) {
+            accept(next, generation);
           }
         })
-        .catch(() => {})
-        .finally(() => {
-          if (active && currentDayId.current === dayId) {
-            loadEntriesForDay(dayId).catch(() => {});
-          }
-        });
+        .catch(() => {});
       return () => { active = false; };
-    }, [dayId, loadEntriesForDay]),
+    }, [accept, dayId]),
   );
 
-  const stops = useMemo(
-    () => history.stops.filter(stop => stop.day_id === dayId),
-    [dayId, history.stops],
-  );
-  const segments = useMemo(
-    () => history.segments.filter(segment => segment.day_id === dayId),
-    [dayId, history.segments],
-  );
+  const active = loaded?.dayId === dayId ? loaded : null;
+  const stops = active?.stops ?? EMPTY_STOPS;
+  const segments = active?.segments ?? EMPTY_SEGMENTS;
   const buckets = useMemo(
-    () => bucketLocations(entriesByDay[dayId] ?? [], 50),
-    [entriesByDay, dayId],
+    () => bucketLocations(active?.entries ?? [], 50),
+    [active],
   );
   const routeCoords = useMemo(
     () => segments.flatMap(segment => segment.coordinates),
@@ -135,6 +147,7 @@ export function useDayMapData(dayId: number): DayMapData {
     buckets,
     region,
     stats,
+    isReady: active != null,
     isEmpty: routeCoords.length === 0 && buckets.length === 0,
     reloadRouteHistory,
   };
@@ -217,10 +230,10 @@ export function DayMapView({dayId, onOpenEntry, topInset = 0}: {dayId: number; o
   const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const {segments, routeCoords, buckets, region, stats, isEmpty} =
+  const {segments, routeCoords, buckets, region, stats, isReady, isEmpty} =
     useDayMapData(dayId);
 
-  if (isEmpty) {
+  if (!isReady || isEmpty) {
     return (
       <SafeAreaView style={styles.empty} edges={['bottom']}>
         <Text style={styles.emptyIcon}>🗺️</Text>

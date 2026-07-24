@@ -14,6 +14,7 @@ interface EntryState {
   isLoading: boolean;
   error: string | null;
   loadEntriesForDay: (dayId: number) => Promise<void>;
+  setEntriesForDay: (dayId: number, entries: Entry[]) => void;
   addEntry: (params: CreateEntryParams) => Promise<Entry>;
   editEntry: (
     id: number,
@@ -46,6 +47,11 @@ export const useEntryStore = create<EntryState>(set => ({
       set({error: String(e), isLoading: false});
     }
   },
+
+  setEntriesForDay: (dayId, entries) =>
+    set(state => ({
+      entriesByDay: {...state.entriesByDay, [dayId]: entries},
+    })),
 
   addEntry: async (params: CreateEntryParams) => {
     const entry = await createEntry(params);

@@ -5,6 +5,7 @@ const mockGetNamedPlaces = jest.fn();
 const mockGetLatestRawTimestamp = jest.fn();
 const mockGetLatestDerivedRawTimestamp = jest.fn();
 const mockGetDayRouteHistory = jest.fn();
+const mockGetEntriesForDay = jest.fn();
 const mockReconcileDayRouteHistory = jest.fn();
 const mockDeriveRouteDay = jest.fn();
 const mockDiag = jest.fn();
@@ -26,6 +27,9 @@ jest.mock('../src/db/gps', () => ({
   getGpsPointsForDay: (...args: unknown[]) => mockGetGpsPointsForDay(...args),
   getGpsDayIdsWithinRetention: (...args: unknown[]) =>
     mockGetGpsDayIdsWithinRetention(...args),
+}));
+jest.mock('../src/db/entries', () => ({
+  getEntriesForDay: (...args: unknown[]) => mockGetEntriesForDay(...args),
 }));
 jest.mock('../src/db/locations', () => ({
   getLocations: (...args: unknown[]) => mockGetLocations(...args),
@@ -111,6 +115,7 @@ beforeEach(() => {
   mockDeriveRouteDay.mockReturnValue(derived);
   mockReconcileDayRouteHistory.mockResolvedValue(undefined);
   mockGetDayRouteHistory.mockResolvedValue({stops: [], segments: []});
+  mockGetEntriesForDay.mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -127,10 +132,12 @@ it('refreshes stale history before loading persisted map data', async () => {
 
   const load = loadDayMapData(4);
   expect(mockGetDayRouteHistory).not.toHaveBeenCalled();
+  expect(mockGetEntriesForDay).not.toHaveBeenCalled();
 
   refresh.resolve(false);
-  await expect(load).resolves.toEqual({stops: [], segments: []});
+  await expect(load).resolves.toEqual({stops: [], segments: [], entries: []});
   expect(mockGetDayRouteHistory).toHaveBeenCalledWith(4);
+  expect(mockGetEntriesForDay).toHaveBeenCalledWith(4);
 });
 
 it('derives and reconciles a day from raw points and both anchor sources', async () => {

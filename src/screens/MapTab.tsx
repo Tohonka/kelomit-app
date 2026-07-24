@@ -51,6 +51,7 @@ export function MapOverview({
     buckets,
     region,
     stats,
+    isReady,
     isEmpty,
     reloadRouteHistory,
   } = useDayMapData(dayId);
@@ -163,7 +164,7 @@ export function MapOverview({
         </View>
 
         <View style={styles.mapCard}>
-          {isEmpty ? (
+          {!isReady || isEmpty ? (
             <View style={styles.mapEmpty}>
               <Text style={styles.mapEmptyIcon}>🗺️</Text>
               <Text style={styles.mapEmptyText}>{t('dayMap.empty')}</Text>

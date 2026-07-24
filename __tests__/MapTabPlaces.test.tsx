@@ -173,6 +173,7 @@ beforeEach(() => {
     buckets: [],
     region: undefined,
     stats: {distanceM: 0, durationSec: 0},
+    isReady: true,
     isEmpty: true,
     reloadRouteHistory: mockReloadRouteHistory,
   }));
