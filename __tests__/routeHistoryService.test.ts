@@ -4,10 +4,24 @@ const mockGetLocations = jest.fn();
 const mockGetNamedPlaces = jest.fn();
 const mockGetLatestRawTimestamp = jest.fn();
 const mockGetLatestDerivedRawTimestamp = jest.fn();
+const mockGetDayRouteHistory = jest.fn();
 const mockReconcileDayRouteHistory = jest.fn();
 const mockDeriveRouteDay = jest.fn();
 const mockDiag = jest.fn();
 
+jest.mock('react-native-maps', () => {
+  const {View} = jest.requireActual('react-native');
+  return {
+    __esModule: true,
+    default: View,
+    Marker: View,
+    Polyline: View,
+    PROVIDER_GOOGLE: 'google',
+  };
+});
+jest.mock('@react-navigation/native', () => ({
+  useFocusEffect: jest.fn(),
+}));
 jest.mock('../src/db/gps', () => ({
   getGpsPointsForDay: (...args: unknown[]) => mockGetGpsPointsForDay(...args),
   getGpsDayIdsWithinRetention: (...args: unknown[]) =>
@@ -22,6 +36,7 @@ jest.mock('../src/db/routeHistory', () => ({
     mockGetLatestRawTimestamp(...args),
   getLatestDerivedRawTimestamp: (...args: unknown[]) =>
     mockGetLatestDerivedRawTimestamp(...args),
+  getDayRouteHistory: (...args: unknown[]) => mockGetDayRouteHistory(...args),
   reconcileDayRouteHistory: (...args: unknown[]) =>
     mockReconcileDayRouteHistory(...args),
 }));
@@ -38,6 +53,8 @@ import {
   refreshRouteDayIfStale,
   scheduleRouteRefresh,
 } from '../src/services/routeHistoryService';
+import * as routeHistoryService from '../src/services/routeHistoryService';
+import {loadDayMapData} from '../src/screens/DayMapScreen';
 
 const points = [{
   day_id: 4,
@@ -93,11 +110,27 @@ beforeEach(() => {
   );
   mockDeriveRouteDay.mockReturnValue(derived);
   mockReconcileDayRouteHistory.mockResolvedValue(undefined);
+  mockGetDayRouteHistory.mockResolvedValue({stops: [], segments: []});
 });
 
 afterEach(() => {
+  jest.restoreAllMocks();
   jest.clearAllTimers();
   jest.useRealTimers();
+});
+
+it('refreshes stale history before loading persisted map data', async () => {
+  const refresh = deferred<boolean>();
+  jest
+    .spyOn(routeHistoryService, 'refreshRouteDayIfStale')
+    .mockReturnValue(refresh.promise);
+
+  const load = loadDayMapData(4);
+  expect(mockGetDayRouteHistory).not.toHaveBeenCalled();
+
+  refresh.resolve(false);
+  await expect(load).resolves.toEqual({stops: [], segments: []});
+  expect(mockGetDayRouteHistory).toHaveBeenCalledWith(4);
 });
 
 it('derives and reconciles a day from raw points and both anchor sources', async () => {

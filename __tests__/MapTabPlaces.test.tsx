@@ -7,6 +7,9 @@ import {
   type ReactTestRenderer,
 } from 'react-test-renderer';
 
+const mockUseDayMapData = jest.fn();
+const mockReloadRouteHistory = jest.fn();
+
 jest.mock('react-i18next', () => ({
   initReactI18next: {type: '3rdParty', init: jest.fn()},
   useTranslation: () => ({
@@ -43,20 +46,12 @@ jest.mock('../src/store/locationStore', () => ({
   useLocationStore: () => ({locations: [], loaded: true, load: jest.fn()}),
 }));
 jest.mock('../src/screens/DayMapScreen', () => ({
-  useDayMapData: () => ({
-    routeCoords: [],
-    buckets: [],
-    region: undefined,
-    stats: {distanceM: 0, durationSec: 0},
-    points: [],
-    isEmpty: true,
-  }),
+  useDayMapData: (dayId: number) => mockUseDayMapData(dayId),
   DayMapCanvas: () => null,
   DayMapView: () => null,
   formatDistance: (distance: number) => `${distance} m`,
 }));
 jest.mock('../src/db/routeHistory', () => ({
-  getDayRouteHistory: jest.fn(),
   getNearbyLocalPlaces: jest.fn(),
   setDayStopName: jest.fn(),
   createNamedPlaceForStop: jest.fn(),
@@ -81,7 +76,6 @@ jest.mock('../src/components/map/PlaceNameSheet', () => {
 
 import {
   createNamedPlaceForStop,
-  getDayRouteHistory,
   getNearbyLocalPlaces,
   setDayStopName,
 } from '../src/db/routeHistory';
@@ -125,9 +119,6 @@ const googleChoice = {
   distanceM: 14,
 };
 
-const getDayRouteHistoryMock = getDayRouteHistory as jest.MockedFunction<
-  typeof getDayRouteHistory
->;
 const getNearbyLocalPlacesMock = getNearbyLocalPlaces as jest.MockedFunction<
   typeof getNearbyLocalPlaces
 >;
@@ -175,7 +166,17 @@ function overview(dayId: number) {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  getDayRouteHistoryMock.mockResolvedValue({stops: [stop], segments: []});
+  mockUseDayMapData.mockImplementation((dayId: number) => ({
+    segments: [],
+    stops: dayId === 5 ? [dayFiveStop] : [stop],
+    routeCoords: [],
+    buckets: [],
+    region: undefined,
+    stats: {distanceM: 0, durationSec: 0},
+    isEmpty: true,
+    reloadRouteHistory: mockReloadRouteHistory,
+  }));
+  mockReloadRouteHistory.mockResolvedValue(undefined);
   getNearbyLocalPlacesMock.mockResolvedValue([localChoice]);
   setDayStopNameMock.mockResolvedValue();
   createNamedPlaceForStopMock.mockResolvedValue();
@@ -207,16 +208,16 @@ it('loads persisted stops and wires saved and reusable name updates', async () =
     await sheet.props.onChoose(localChoice);
   });
   expect(setDayStopNameMock).toHaveBeenCalledWith(7, localChoice);
-  expect(getDayRouteHistoryMock).toHaveBeenCalledTimes(2);
+  expect(mockReloadRouteHistory).toHaveBeenCalledTimes(1);
 
   await act(async () => {
     await sheet.props.onCreateName('New anchor');
   });
   expect(createNamedPlaceForStopMock).toHaveBeenCalledWith(7, 'New anchor');
-  expect(getDayRouteHistoryMock).toHaveBeenCalledTimes(3);
+  expect(mockReloadRouteHistory).toHaveBeenCalledTimes(2);
   expect(refreshRouteDayMock).toHaveBeenCalledWith(4);
   expect(
-    getDayRouteHistoryMock.mock.invocationCallOrder[2],
+    mockReloadRouteHistory.mock.invocationCallOrder[1],
   ).toBeLessThan(refreshRouteDayMock.mock.invocationCallOrder[0]);
 });
 
@@ -244,12 +245,8 @@ it('shows Google failures without replacing local choices or the historical name
 });
 
 it('discards prior-day results and prevents an old selection acting after day change', async () => {
-  const oldReload = deferred<{stops: typeof stop[]; segments: []}>();
-  const newLoad = deferred<{stops: typeof dayFiveStop[]; segments: []}>();
-  getDayRouteHistoryMock
-    .mockResolvedValueOnce({stops: [stop], segments: []})
-    .mockReturnValueOnce(oldReload.promise)
-    .mockReturnValueOnce(newLoad.promise);
+  const oldReload = deferred<void>();
+  mockReloadRouteHistory.mockReturnValue(oldReload.promise);
 
   let renderer!: ReactTestRenderer;
   await act(async () => {
@@ -289,14 +286,10 @@ it('discards prior-day results and prevents an old selection acting after day ch
   });
   expect(setDayStopNameMock).toHaveBeenCalledTimes(1);
 
-  await act(async () => {
-    newLoad.resolve({stops: [dayFiveStop], segments: []});
-    await newLoad.promise;
-  });
   expect(button(renderer.root, 'Day five')).toBeDefined();
 
   await act(async () => {
-    oldReload.resolve({stops: [stop], segments: []});
+    oldReload.resolve();
     await oldSave;
   });
   expect(button(renderer.root, 'Day five')).toBeDefined();
@@ -309,15 +302,6 @@ it('discards prior-day results and prevents an old selection acting after day ch
 
 it('does not let an old save invalidate an in-flight new-day load', async () => {
   const oldSave = deferred<void>();
-  const newLoad = deferred<{stops: typeof dayFiveStop[]; segments: []}>();
-  let dayFourLoads = 0;
-  getDayRouteHistoryMock.mockImplementation(dayId => {
-    if (dayId === 5) {
-      return newLoad.promise;
-    }
-    dayFourLoads += 1;
-    return Promise.resolve({stops: [stop], segments: []});
-  });
   setDayStopNameMock.mockReturnValue(oldSave.promise);
 
   let renderer!: ReactTestRenderer;
@@ -344,12 +328,8 @@ it('does not let an old save invalidate an in-flight new-day load', async () => 
     oldSave.resolve();
     await savePromise;
   });
-  await act(async () => {
-    newLoad.resolve({stops: [dayFiveStop], segments: []});
-    await newLoad.promise;
-  });
 
-  expect(dayFourLoads).toBe(1);
+  expect(mockReloadRouteHistory).not.toHaveBeenCalled();
   expect(button(renderer.root, 'Day five')).toBeDefined();
 });
 

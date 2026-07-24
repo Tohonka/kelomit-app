@@ -1,4 +1,4 @@
-import React, {useCallback, useMemo, useState} from 'react';
+import React, {useCallback, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {View, Text, StyleSheet, StyleProp, ViewStyle} from 'react-native';
 import MapView, {Polyline, Marker, PROVIDER_GOOGLE, Region} from 'react-native-maps';
@@ -7,67 +7,143 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import {useTheme, typography, spacing} from '../theme';
 import type {Colors} from '../theme';
 import {useEntryStore} from '../store/entryStore';
-import {getGpsPointsForDay} from '../db/gps';
+import {getDayRouteHistory} from '../db/routeHistory';
+import {refreshRouteDayIfStale} from '../services/routeHistoryService';
 import {bucketLocations, type LocationBucket} from '../utils/bucketLocations';
 import {regionFor} from '../utils/mapRegion';
 import {flatMapStyle} from '../components/map/mapStyle';
-import {routeStats} from '../utils/routeStats';
 import {formatDuration} from '../utils/dateUtils';
 import LocationMarker from '../components/map/LocationMarker';
 import MarkerNotesSheet from '../components/map/MarkerNotesSheet';
-import type {GpsPoint, Entry} from '../types';
+import type {
+  DayRouteSegment,
+  DayRouteStop,
+  Entry,
+  RouteCoordinate,
+} from '../types';
 
 export function formatDistance(m: number): string {
   return m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`;
 }
 
-type Coord = {latitude: number; longitude: number};
+export const ROUTE_SEGMENT_COLORS = [
+  '#2563EB',
+  '#D97706',
+  '#059669',
+  '#9333EA',
+  '#DC2626',
+];
 
 export interface DayMapData {
-  points: GpsPoint[];
-  routeCoords: Coord[];
+  segments: DayRouteSegment[];
+  stops: DayRouteStop[];
+  routeCoords: RouteCoordinate[];
   buckets: LocationBucket[];
   region: Region | undefined;
   stats: {distanceM: number; durationSec: number};
   isEmpty: boolean;
+  reloadRouteHistory: () => Promise<void>;
+}
+
+export async function loadDayMapData(dayId: number) {
+  await refreshRouteDayIfStale(dayId).catch(() => {});
+  return getDayRouteHistory(dayId);
 }
 
 /** Loads and derives a day's map data. Shared by the DayMap route and Map tab. */
 export function useDayMapData(dayId: number): DayMapData {
   const {entriesByDay, loadEntriesForDay} = useEntryStore();
-  const [points, setPoints] = useState<GpsPoint[]>([]);
+  const [history, setHistory] = useState<{
+    stops: DayRouteStop[];
+    segments: DayRouteSegment[];
+  }>({stops: [], segments: []});
+  const currentDayId = useRef(dayId);
+  const loadGeneration = useRef(0);
+  currentDayId.current = dayId;
+
+  const reloadRouteHistory = useCallback(async () => {
+    const generation = ++loadGeneration.current;
+    const next = await getDayRouteHistory(dayId);
+    if (
+      currentDayId.current === dayId &&
+      loadGeneration.current === generation
+    ) {
+      setHistory(next);
+    }
+  }, [dayId]);
 
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      loadEntriesForDay(dayId);
-      getGpsPointsForDay(dayId)
-        .then(p => { if (active) { setPoints(p); } })
-        .catch(() => {});
+      const generation = ++loadGeneration.current;
+      loadDayMapData(dayId)
+        .then(next => {
+          if (
+            active &&
+            currentDayId.current === dayId &&
+            loadGeneration.current === generation
+          ) {
+            setHistory(next);
+          }
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (active && currentDayId.current === dayId) {
+            loadEntriesForDay(dayId).catch(() => {});
+          }
+        });
       return () => { active = false; };
     }, [dayId, loadEntriesForDay]),
   );
 
+  const stops = useMemo(
+    () => history.stops.filter(stop => stop.day_id === dayId),
+    [dayId, history.stops],
+  );
+  const segments = useMemo(
+    () => history.segments.filter(segment => segment.day_id === dayId),
+    [dayId, history.segments],
+  );
   const buckets = useMemo(
     () => bucketLocations(entriesByDay[dayId] ?? [], 50),
     [entriesByDay, dayId],
   );
   const routeCoords = useMemo(
-    () => points.map(p => ({latitude: p.latitude, longitude: p.longitude})),
-    [points],
+    () => segments.flatMap(segment => segment.coordinates),
+    [segments],
   );
   const region = useMemo(
     () => regionFor([...routeCoords, ...buckets.map(b => ({latitude: b.latitude, longitude: b.longitude}))]),
     [routeCoords, buckets],
   );
-  const stats = useMemo(() => routeStats(points), [points]);
+  const stats = useMemo(
+    () =>
+      segments.reduce(
+        (sum, segment) => ({
+          distanceM: sum.distanceM + segment.distance_m,
+          durationSec: sum.durationSec + segment.duration_sec,
+        }),
+        {distanceM: 0, durationSec: 0},
+      ),
+    [segments],
+  );
 
-  return {points, routeCoords, buckets, region, stats, isEmpty: routeCoords.length === 0 && buckets.length === 0};
+  return {
+    segments,
+    stops,
+    routeCoords,
+    buckets,
+    region,
+    stats,
+    isEmpty: routeCoords.length === 0 && buckets.length === 0,
+    reloadRouteHistory,
+  };
 }
 
 /** Presentational map: route line, start/end dots, content markers + notes sheet.
  *  `interactive={false}` freezes pan/zoom so it can sit inside a ScrollView card. */
 export function DayMapCanvas({
+  segments,
   routeCoords,
   buckets,
   region,
@@ -75,14 +151,14 @@ export function DayMapCanvas({
   style,
   interactive = true,
 }: {
-  routeCoords: Coord[];
+  segments: DayRouteSegment[];
+  routeCoords: RouteCoordinate[];
   buckets: LocationBucket[];
   region: Region | undefined;
   onOpenEntry: (entry: Entry) => void;
   style?: StyleProp<ViewStyle>;
   interactive?: boolean;
 }) {
-  const {colors} = useTheme();
   const [openBucket, setOpenBucket] = useState<LocationBucket | null>(null);
   const dotStyles = useMemo(() => makeDotStyles(), []);
   return (
@@ -96,9 +172,16 @@ export function DayMapCanvas({
         zoomEnabled={interactive}
         rotateEnabled={interactive}
         pitchEnabled={interactive}>
-        {routeCoords.length >= 2 && (
-          <Polyline coordinates={routeCoords} strokeColor={colors.primary} strokeWidth={4} />
-        )}
+        {segments.map((segment, index) => (
+          <Polyline
+            key={segment.id}
+            coordinates={segment.coordinates}
+            strokeColor={
+              ROUTE_SEGMENT_COLORS[index % ROUTE_SEGMENT_COLORS.length]
+            }
+            strokeWidth={4}
+          />
+        ))}
         {routeCoords.length > 0 && (
           <Marker coordinate={routeCoords[0]} anchor={{x: 0.5, y: 0.5}} tracksViewChanges={false}>
             <View style={[dotStyles.dot, dotStyles.startDot]} />
@@ -134,7 +217,8 @@ export function DayMapView({dayId, onOpenEntry, topInset = 0}: {dayId: number; o
   const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const {routeCoords, buckets, region, stats, points, isEmpty} = useDayMapData(dayId);
+  const {segments, routeCoords, buckets, region, stats, isEmpty} =
+    useDayMapData(dayId);
 
   if (isEmpty) {
     return (
@@ -147,7 +231,7 @@ export function DayMapView({dayId, onOpenEntry, topInset = 0}: {dayId: number; o
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
-      {points.length > 0 && (
+      {segments.length > 0 && (
         <View style={[styles.stats, topInset > 0 && {paddingTop: topInset}]}>
           <Text style={styles.statText}>
             {t('dayMap.distance')}: {formatDistance(stats.distanceM)}
@@ -157,7 +241,14 @@ export function DayMapView({dayId, onOpenEntry, topInset = 0}: {dayId: number; o
           </Text>
         </View>
       )}
-      <DayMapCanvas routeCoords={routeCoords} buckets={buckets} region={region} onOpenEntry={onOpenEntry} style={styles.map} />
+      <DayMapCanvas
+        segments={segments}
+        routeCoords={routeCoords}
+        buckets={buckets}
+        region={region}
+        onOpenEntry={onOpenEntry}
+        style={styles.map}
+      />
     </SafeAreaView>
   );
 }

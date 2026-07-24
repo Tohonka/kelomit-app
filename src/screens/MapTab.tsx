@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {View, Text, ScrollView, TouchableOpacity, ActivityIndicator, StyleSheet} from 'react-native';
 import {useTranslation} from 'react-i18next';
 import {useFocusEffect, useNavigation} from '@react-navigation/native';
@@ -12,7 +12,6 @@ import {getDateFnsLocale} from '../i18n';
 import {useDayMapData, DayMapCanvas, DayMapView, formatDistance} from './DayMapScreen';
 import {
   createNamedPlaceForStop,
-  getDayRouteHistory,
   getNearbyLocalPlaces,
   setDayStopName,
 } from '../db/routeHistory';
@@ -23,6 +22,7 @@ import PlaceNameSheet, {
   type LocalPlaceChoice,
   type PlaceNameChoice,
 } from '../components/map/PlaceNameSheet';
+import TripList from '../components/map/TripList';
 import type {DayRouteStop, Entry} from '../types';
 import type {PlaceCandidate} from '../services/placesService';
 import type {RootStackParamList, RootStackScreenProps} from '../navigation/navigationTypes';
@@ -44,15 +44,22 @@ export function MapOverview({
   const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const {routeCoords, buckets, region, stats, points, isEmpty} = useDayMapData(dayId);
-  const [stops, setStops] = useState<DayRouteStop[]>([]);
+  const {
+    segments,
+    stops,
+    routeCoords,
+    buckets,
+    region,
+    stats,
+    isEmpty,
+    reloadRouteHistory,
+  } = useDayMapData(dayId);
   const [selectedStop, setSelectedStop] = useState<DayRouteStop | null>(null);
   const [localChoices, setLocalChoices] = useState<LocalPlaceChoice[]>([]);
   const [googleCandidates, setGoogleCandidates] = useState<PlaceCandidate[]>([]);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [googleError, setGoogleError] = useState(false);
   const currentDayId = useRef(dayId);
-  const loadGeneration = useRef(0);
   currentDayId.current = dayId;
   const activeStops = useMemo(
     () => stops.filter(stop => stop.day_id === dayId),
@@ -61,25 +68,7 @@ export function MapOverview({
   const activeSelectedStop =
     selectedStop?.day_id === dayId ? selectedStop : null;
 
-  const reloadStops = useCallback(async () => {
-    const generation = ++loadGeneration.current;
-    const history = await getDayRouteHistory(dayId);
-    if (
-      currentDayId.current === dayId &&
-      loadGeneration.current === generation
-    ) {
-      setStops(history.stops);
-    }
-  }, [dayId]);
-
-  useFocusEffect(
-    useCallback(() => {
-      reloadStops().catch(() => {});
-    }, [reloadStops]),
-  );
-
   useEffect(() => {
-    setStops([]);
     setSelectedStop(null);
     setLocalChoices([]);
     setGoogleCandidates([]);
@@ -139,7 +128,7 @@ export function MapOverview({
     if (currentDayId.current !== dayId) {
       return;
     }
-    await reloadStops();
+    await reloadRouteHistory();
   };
 
   const createName = async (name: string) => {
@@ -150,7 +139,7 @@ export function MapOverview({
     if (currentDayId.current !== dayId) {
       return;
     }
-    await reloadStops();
+    await reloadRouteHistory();
     if (currentDayId.current !== dayId) {
       return;
     }
@@ -164,7 +153,7 @@ export function MapOverview({
         contentContainerStyle={[styles.content, {paddingTop: topInset || spacing.md, paddingBottom: bottomInset + spacing.xl}]}>
         <View style={styles.header}>
           <Text style={styles.title}>{title}</Text>
-          {points.length > 0 && (
+          {segments.length > 0 && (
             <View style={styles.statPill}>
               <Text style={styles.statPillText}>
                 {formatDistance(stats.distanceM)} · {formatDuration(stats.durationSec)}
@@ -182,6 +171,7 @@ export function MapOverview({
           ) : (
             <>
               <DayMapCanvas
+                segments={segments}
                 routeCoords={routeCoords}
                 buckets={buckets}
                 region={region}
@@ -204,6 +194,10 @@ export function MapOverview({
             openStop(stop).catch(() => {});
           }}
         />
+        <Text style={[styles.sectionHeader, styles.tripsHeader]}>
+          {t('map.trips')}
+        </Text>
+        <TripList segments={segments} stops={activeStops} />
       </ScrollView>
       <PlaceNameSheet
         visible={activeSelectedStop != null}
@@ -375,6 +369,7 @@ const makeStyles = (c: Colors) =>
       marginBottom: spacing.sm,
       marginLeft: spacing.xs,
     },
+    tripsHeader: {marginTop: spacing.lg},
     locEmpty: {color: c.textMuted, fontSize: typography.sizes.sm, marginLeft: spacing.xs},
     locCard: {borderRadius: radius.lg, backgroundColor: c.bgCard, borderWidth: 1, borderColor: c.border, overflow: 'hidden'},
     locRow: {flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md, borderBottomWidth: 1, borderBottomColor: c.border},
