@@ -3,6 +3,7 @@ const mockStartTracking = jest.fn();
 const mockStopTracking = jest.fn();
 const mockStopNative = jest.fn();
 const mockReconcile = jest.fn();
+const mockReconcileRouteDays = jest.fn();
 let nativeListener: (() => void) | null = null;
 
 jest.mock('../src/native/backgroundLocation', () => ({
@@ -20,8 +21,13 @@ jest.mock('../src/services/gpsService', () => ({
 jest.mock('../src/services/nativeEventSync', () => ({
   reconcileNativeEvents: (...args: unknown[]) => mockReconcile(...args),
 }));
+jest.mock('../src/services/routeHistoryService', () => ({
+  reconcileRecentRouteDays: (...args: unknown[]) =>
+    mockReconcileRouteDays(...args),
+}));
 
 import {
+  reconcileRouteHistory,
   reconcileTrackingJournal,
   subscribeTrackingJournal,
   syncSavedPlaces,
@@ -88,4 +94,12 @@ it('reconciles on foreground calls and live native events', async () => {
 
   expect(mockReconcile).toHaveBeenCalledTimes(2);
   expect(sub.remove).toEqual(expect.any(Function));
+});
+
+it('reconciles recent route days on startup', async () => {
+  mockReconcileRouteDays.mockResolvedValue(undefined);
+
+  await reconcileRouteHistory();
+
+  expect(mockReconcileRouteDays).toHaveBeenCalledTimes(1);
 });

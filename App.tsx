@@ -14,6 +14,7 @@ import {getLocations} from './src/db/locations';
 import {stopTracking} from './src/services/gpsService';
 import {ensureNotificationChannel, requestNotificationPermission} from './src/services/notificationService';
 import {
+  reconcileRouteHistory,
   reconcileTrackingJournal,
   subscribeTrackingJournal,
   syncTrackingState,
@@ -41,6 +42,9 @@ function AppContent() {
       .then(async () => {
         await reconcileTrackingJournal().catch(reconcileError => {
           diag('journal.launch.fail', String(reconcileError));
+        });
+        reconcileRouteHistory().catch(reconcileError => {
+          diag('route.launch.fail', String(reconcileError));
         });
         await load();
         setDbReady(true);

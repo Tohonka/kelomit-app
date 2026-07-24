@@ -31,6 +31,10 @@ import {
 import {ensureActivityRecognitionPermission} from './permissionService';
 import {format} from 'date-fns';
 import type {SavedLocation, Day} from '../types';
+import {
+  refreshRouteDay,
+  scheduleRouteRefresh,
+} from './routeHistoryService';
 
 // Reject fixes worse than this (metres) from the trail — indoor network fixes
 // can read 60-80 m and wander, polluting the path. ponytail: tune on device.
@@ -486,7 +490,8 @@ async function persistFix(
   speed: number | null,
   tsMs: number,
   nativeOwned: boolean = false,
-): Promise<boolean> {
+  scheduleRefresh: boolean = true,
+): Promise<{ok: boolean; storedDayId: number | null}> {
   try {
     const iso = new Date(tsMs).toISOString();
     const dayStr = format(new Date(tsMs), 'yyyy-MM-dd');
@@ -499,6 +504,7 @@ async function persistFix(
     // Drop imprecise fixes from the trail: indoor network fixes wander tens of
     // metres and read as fake movement. Geofence/day logic still uses every fix.
     const lowQuality = accuracy != null && accuracy > MAX_TRAIL_ACCURACY_M;
+    let storedDayId: number | null = null;
     if (!jitter && !lowQuality) {
       await insertGpsPoint({
         day_id: day.id,
@@ -510,13 +516,17 @@ async function persistFix(
         timestamp: iso,
       });
       _lastRecordedPosition = {latitude, longitude, accuracy, timestamp: tsMs};
+      storedDayId = day.id;
+      if (scheduleRefresh) {
+        scheduleRouteRefresh(day.id);
+      }
     }
     if (!nativeOwned) {
       await processGeofences(latitude, longitude, day, iso);
     }
-    return true;
+    return {ok: true, storedDayId};
   } catch {
-    return false;
+    return {ok: false, storedDayId: null};
   }
 }
 
@@ -530,10 +540,11 @@ async function importBufferedFixes(): Promise<void> {
   }
   diag('buffer.import', `lines=${lines.length}`);
   let processed = 0;
+  const storedDayIds = new Set<number>();
   for (const line of lines) {
     const fix = parseFixLine(line);
     if (fix) {
-      const ok = await persistFix(
+      const result = await persistFix(
         fix.latitude,
         fix.longitude,
         fix.accuracy,
@@ -541,15 +552,24 @@ async function importBufferedFixes(): Promise<void> {
         fix.speed,
         fix.timestamp,
         true,
+        false,
       );
-      if (!ok) {
+      if (!result.ok) {
         break;
+      }
+      if (result.storedDayId !== null) {
+        storedDayIds.add(result.storedDayId);
       }
     }
     processed += 1;
   }
   if (processed > 0) {
     await ackNativeFixBuffer(processed);
+  }
+  for (const dayId of storedDayIds) {
+    await refreshRouteDay(dayId).catch(error => {
+      diag('route.refresh.fail', String(error), {dayId});
+    });
   }
 }
 

@@ -7,6 +7,7 @@ import {
 } from '../native/backgroundLocation';
 import {startTracking, stopTracking} from './gpsService';
 import {reconcileNativeEvents} from './nativeEventSync';
+import {reconcileRecentRouteDays} from './routeHistoryService';
 
 export interface TrackingState {
   gps_enabled: boolean;
@@ -47,6 +48,10 @@ export async function syncTrackingState(
 
 export async function reconcileTrackingJournal(): Promise<void> {
   await reconcileNativeEvents();
+}
+
+export async function reconcileRouteHistory(): Promise<void> {
+  await reconcileRecentRouteDays();
 }
 
 export function subscribeTrackingJournal(): {remove: () => void} {
