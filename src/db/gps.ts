@@ -84,3 +84,16 @@ export async function pruneGpsTracksOlderThan(
     retentionCutoffIso(Date.now(), days),
   ]);
 }
+
+export async function getGpsDayIdsWithinRetention(
+  days = GPS_RETENTION_DAYS,
+): Promise<number[]> {
+  const result = await getDB().execute(
+    `SELECT DISTINCT day_id
+     FROM gps_track
+     WHERE timestamp >= ?
+     ORDER BY day_id DESC;`,
+    [retentionCutoffIso(Date.now(), days)],
+  );
+  return (result.rows ?? []).map(row => (row as RawRow).day_id as number);
+}
