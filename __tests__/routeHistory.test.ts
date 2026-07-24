@@ -480,6 +480,73 @@ describe('route history repository', () => {
     expect(matchExistingStop(next, candidates)?.id).toBe(1);
   });
 
+  it('preserves a frozen identity for a coincident zero-duration stop', async () => {
+    const timestamp = '2026-07-24T08:10:00.000Z';
+    const existing = stopRow({
+      id: 10,
+      start_ts: timestamp,
+      end_ts: timestamp,
+      latitude: 60.1706,
+      google_place_id: 'frozen-google-id',
+      display_name: 'Frozen workshop',
+      name_source: 'google',
+    });
+    const unrelated = stopRow({
+      id: 1,
+      start_ts: '2026-07-24T08:11:00.000Z',
+      end_ts: '2026-07-24T08:11:00.000Z',
+    });
+    const {transactionExecute} = mockDatabase([], [
+      result([existing, unrelated]),
+      result([{id: 20}]),
+      result(),
+      result(),
+    ]);
+    const next = derivedStop({
+      startTs: timestamp,
+      endTs: timestamp,
+      anchor: {
+        id: 99,
+        type: 'saved',
+        name: 'New derived anchor',
+        latitude: 60.17,
+        longitude: 24.94,
+        radiusM: 70,
+      },
+    });
+
+    await reconcileDayRouteHistory(4, {stops: [next], segments: []});
+
+    expect(
+      transactionExecute.mock.calls.find(([sql]) =>
+        String(sql).includes('UPDATE day_route_stops'),
+      )?.[1],
+    ).toEqual([
+      timestamp,
+      timestamp,
+      60.17,
+      24.94,
+      null,
+      null,
+      'frozen-google-id',
+      'Frozen workshop',
+      'google',
+      0,
+      10,
+      4,
+    ]);
+    expect(
+      transactionExecute.mock.calls.filter(([sql]) =>
+        String(sql).includes('INSERT INTO day_route_stops'),
+      ),
+    ).toHaveLength(0);
+    expect(
+      transactionExecute.mock.calls
+        .filter(([sql]) => String(sql).includes('DELETE FROM day_route_stops'))
+        .map(([, params]) => params),
+    ).toEqual([[1, 4]]);
+  });
+
   it.each([
     {
       label: 'saved',

@@ -381,7 +381,7 @@ export function matchExistingStop(
     const overlapMs =
       Math.min(Date.parse(next.endTs), Date.parse(stop.end_ts)) -
       Math.max(Date.parse(next.startTs), Date.parse(stop.start_ts));
-    if (overlapMs <= 0) {
+    if (overlapMs < 0) {
       continue;
     }
     const distanceM = distanceMeters(
