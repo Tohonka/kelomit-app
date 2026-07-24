@@ -173,6 +173,31 @@ it('waits for late entries before exposing ready map data and includes their bou
   });
 });
 
+it('renders accepted route history with empty entries when the entry read fails', async () => {
+  const staleEntry = entry(9, 61, 25);
+  useEntryStore.setState({entriesByDay: {4: [staleEntry]}});
+  mockGetDayRouteHistory.mockResolvedValue({
+    stops: [],
+    segments: [routeSegment],
+  });
+  mockGetEntriesForDay.mockRejectedValue(new Error('entry read failed'));
+
+  const renderer = await renderHarness();
+
+  expect(latest.isReady).toBe(true);
+  expect(latest.segments).toEqual([routeSegment]);
+  expect(latest.buckets).toEqual([]);
+  expect(latest.region?.latitude).toBeCloseTo(60.005);
+  expect(latest.region?.longitude).toBeCloseTo(24.005);
+  expect(latest.region?.latitudeDelta).toBeCloseTo(0.014);
+  expect(latest.region?.longitudeDelta).toBeCloseTo(0.014);
+  expect(latest.stats).toEqual({distanceM: 1000, durationSec: 1800});
+  expect(useEntryStore.getState().entriesByDay[4]).toEqual([]);
+  act(() => {
+    renderer.unmount();
+  });
+});
+
 it('lets a correction reload invalidate older focus history and entries', async () => {
   const oldHistory = deferred<{
     stops: [];

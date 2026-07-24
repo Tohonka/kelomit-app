@@ -140,6 +140,16 @@ it('refreshes stale history before loading persisted map data', async () => {
   expect(mockGetEntriesForDay).toHaveBeenCalledWith(4);
 });
 
+it('does not hide a stale refresh reconciliation failure', async () => {
+  jest
+    .spyOn(routeHistoryService, 'refreshRouteDayIfStale')
+    .mockRejectedValue(new Error('reconciliation failed'));
+
+  await expect(loadDayMapData(4)).rejects.toThrow('reconciliation failed');
+  expect(mockGetDayRouteHistory).not.toHaveBeenCalled();
+  expect(mockGetEntriesForDay).not.toHaveBeenCalled();
+});
+
 it('derives and reconciles a day from raw points and both anchor sources', async () => {
   await refreshRouteDay(4);
 

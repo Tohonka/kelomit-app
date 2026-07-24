@@ -53,13 +53,13 @@ export interface DayMapData {
 async function readDayMapData(dayId: number) {
   const [history, entries] = await Promise.all([
     getDayRouteHistory(dayId),
-    getEntriesForDay(dayId),
+    getEntriesForDay(dayId).catch(() => []),
   ]);
   return {...history, entries};
 }
 
 export async function loadDayMapData(dayId: number) {
-  await refreshRouteDayIfStale(dayId).catch(() => {});
+  await refreshRouteDayIfStale(dayId);
   return readDayMapData(dayId);
 }
 
