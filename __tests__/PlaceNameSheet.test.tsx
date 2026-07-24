@@ -217,6 +217,80 @@ it('prevents duplicate submits while a place choice is saving', async () => {
   expect(onClose).toHaveBeenCalledTimes(1);
 });
 
+it('ignores an old save completion after a newer sheet instance opens', async () => {
+  const pending = deferred<void>();
+  const oldChoose = jest.fn().mockReturnValue(pending.promise);
+  const oldClose = jest.fn();
+  const newChoose = jest.fn().mockResolvedValue(undefined);
+  const newClose = jest.fn();
+  const props = {
+    localChoices,
+    googleCandidates,
+    googleLoading: false,
+    googleError: false,
+    onCreateName: jest.fn().mockResolvedValue(undefined),
+  };
+  let renderer!: ReactTestRenderer;
+  act(() => {
+    renderer = create(
+      <PlaceNameSheet
+        {...props}
+        visible
+        currentName="Old day"
+        onChoose={oldChoose}
+        onClose={oldClose}
+      />,
+    );
+  });
+  act(() => {
+    button(
+      renderer.root,
+      'Choose place Workshop, Saved place, 12 m away',
+    ).props.onPress();
+  });
+
+  act(() => {
+    renderer.update(
+      <PlaceNameSheet
+        {...props}
+        visible={false}
+        currentName={null}
+        onChoose={newChoose}
+        onClose={newClose}
+      />,
+    );
+  });
+  act(() => {
+    renderer.update(
+      <PlaceNameSheet
+        {...props}
+        visible
+        currentName="New day"
+        onChoose={newChoose}
+        onClose={newClose}
+      />,
+    );
+  });
+  const label = 'Choose place Workshop, Saved place, 12 m away';
+  expect(button(renderer.root, label).props.disabled).toBe(false);
+
+  await act(async () => {
+    pending.resolve();
+    await pending.promise;
+  });
+  expect(oldClose).not.toHaveBeenCalled();
+  expect(newClose).not.toHaveBeenCalled();
+  expect(visibleText(renderer.root)).toContain('New day');
+  expect(button(renderer.root, label).props.disabled).toBe(false);
+
+  await act(async () => {
+    button(renderer.root, label).props.onPress();
+    await Promise.resolve();
+  });
+  expect(newChoose).toHaveBeenCalledTimes(1);
+  expect(newClose).toHaveBeenCalledTimes(1);
+});
+
 it.each([
   {googleLoading: true, googleError: false, status: 'Loading places…'},
   {googleLoading: false, googleError: true, status: 'Could not load places.'},

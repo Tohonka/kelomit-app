@@ -143,13 +143,17 @@ export default function PlaceNameSheet({
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState(false);
   const savingRef = useRef(false);
+  const openToken = useRef(0);
   const trimmedName = name.trim();
 
   useEffect(() => {
+    openToken.current += 1;
+    savingRef.current = false;
+    setIsSaving(false);
+    setSaveError(false);
     if (!visible) {
       setIsNaming(false);
       setName('');
-      setSaveError(false);
     }
   }, [visible]);
 
@@ -168,16 +172,23 @@ export default function PlaceNameSheet({
       return;
     }
     savingRef.current = true;
+    const token = openToken.current;
     setIsSaving(true);
     setSaveError(false);
     try {
       await operation();
-      onClose();
+      if (openToken.current === token) {
+        onClose();
+      }
     } catch {
-      setSaveError(true);
+      if (openToken.current === token) {
+        setSaveError(true);
+      }
     } finally {
-      savingRef.current = false;
-      setIsSaving(false);
+      if (openToken.current === token) {
+        savingRef.current = false;
+        setIsSaving(false);
+      }
     }
   };
   const createName = async () => {

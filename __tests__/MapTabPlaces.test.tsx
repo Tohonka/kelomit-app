@@ -307,6 +307,52 @@ it('discards prior-day results and prevents an old selection acting after day ch
   ).toBe(false);
 });
 
+it('does not let an old save invalidate an in-flight new-day load', async () => {
+  const oldSave = deferred<void>();
+  const newLoad = deferred<{stops: typeof dayFiveStop[]; segments: []}>();
+  let dayFourLoads = 0;
+  getDayRouteHistoryMock.mockImplementation(dayId => {
+    if (dayId === 5) {
+      return newLoad.promise;
+    }
+    dayFourLoads += 1;
+    return Promise.resolve({stops: [stop], segments: []});
+  });
+  setDayStopNameMock.mockReturnValue(oldSave.promise);
+
+  let renderer!: ReactTestRenderer;
+  await act(async () => {
+    renderer = create(overview(4));
+    await Promise.resolve();
+  });
+  act(() => {
+    button(renderer.root, 'Historical label').props.onPress();
+  });
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  const savePromise = renderer.root.findByProps({
+    testID: 'place-name-sheet',
+  }).props.onChoose(localChoice);
+
+  await act(async () => {
+    renderer.update(overview(5));
+    await Promise.resolve();
+  });
+  await act(async () => {
+    oldSave.resolve();
+    await savePromise;
+  });
+  await act(async () => {
+    newLoad.resolve({stops: [dayFiveStop], segments: []});
+    await newLoad.promise;
+  });
+
+  expect(dayFourLoads).toBe(1);
+  expect(button(renderer.root, 'Day five')).toBeDefined();
+});
+
 it('propagates persistence failures so the sheet can keep the edit open', async () => {
   setDayStopNameMock.mockRejectedValue(new Error('write failed'));
   let renderer!: ReactTestRenderer;

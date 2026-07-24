@@ -136,6 +136,9 @@ export function MapOverview({
       return;
     }
     await setDayStopName(activeSelectedStop.id, choice);
+    if (currentDayId.current !== dayId) {
+      return;
+    }
     await reloadStops();
   };
 
@@ -144,7 +147,13 @@ export function MapOverview({
       return;
     }
     await createNamedPlaceForStop(activeSelectedStop.id, name);
+    if (currentDayId.current !== dayId) {
+      return;
+    }
     await reloadStops();
+    if (currentDayId.current !== dayId) {
+      return;
+    }
     await refreshRouteDay(dayId);
   };
 
