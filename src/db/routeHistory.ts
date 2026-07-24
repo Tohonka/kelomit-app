@@ -17,6 +17,14 @@ type RawRow = Record<string, unknown>;
 const DEFAULT_RADIUS_M = 70;
 const STOP_MATCH_RADIUS_M = 70;
 
+type StopNameChoice =
+  | {type: 'saved'; id: number; name: string}
+  | {type: 'reusable'; id: number; name: string}
+  | {type: 'google'; placeId: string; name: string}
+  | {type: 'day'; name: string};
+
+type Executor = Pick<ReturnType<typeof getDB>, 'execute'>;
+
 function requiredName(name: string): string {
   const trimmed = name.trim();
   if (!trimmed) {
@@ -136,6 +144,117 @@ export async function renameNamedPlace(
      WHERE id = ?;`,
     [requiredName(name), id],
   );
+}
+
+export async function getNearbyLocalPlaces(
+  lat: number,
+  lng: number,
+  radiusM = DEFAULT_RADIUS_M,
+): Promise<
+  Array<{
+    type: 'saved' | 'reusable';
+    id: number;
+    name: string;
+    distanceM: number;
+  }>
+> {
+  const result = await getDB().execute(
+    `SELECT 'saved' AS type, id, name, latitude, longitude FROM locations
+     UNION ALL
+     SELECT 'reusable' AS type, id, name, latitude, longitude FROM named_places;`,
+  );
+  return (result.rows ?? [])
+    .map(value => {
+      const row = value as RawRow;
+      return {
+        type: row.type as 'saved' | 'reusable',
+        id: row.id as number,
+        name: row.name as string,
+        distanceM: distanceMeters(
+          lat,
+          lng,
+          row.latitude as number,
+          row.longitude as number,
+        ),
+      };
+    })
+    .filter(place => place.distanceM <= radiusM)
+    .sort((a, b) => a.distanceM - b.distanceM);
+}
+
+function stopNameParams(
+  stopId: number,
+  choice: StopNameChoice,
+): [number | null, number | null, string | null, string, RouteStopNameSource, number] {
+  const name = requiredName(choice.name);
+  switch (choice.type) {
+    case 'saved':
+      return [choice.id, null, null, name, 'saved', stopId];
+    case 'reusable':
+      return [null, choice.id, null, name, 'reusable', stopId];
+    case 'google':
+      if (!choice.placeId.trim()) {
+        throw new Error('Google place ID is required');
+      }
+      return [null, null, choice.placeId.trim(), name, 'google', stopId];
+    case 'day':
+      return [null, null, null, name, 'day', stopId];
+  }
+}
+
+async function setDayStopNameWith(
+  executor: Executor,
+  stopId: number,
+  choice: StopNameChoice,
+): Promise<void> {
+  await executor.execute(
+    `UPDATE day_route_stops
+     SET saved_location_id = ?, named_place_id = ?, google_place_id = ?,
+         display_name = ?, name_source = ?, user_edited = 1,
+         updated_at = datetime('now')
+     WHERE id = ?;`,
+    stopNameParams(stopId, choice),
+  );
+}
+
+export async function setDayStopName(
+  stopId: number,
+  choice: StopNameChoice,
+): Promise<void> {
+  await setDayStopNameWith(getDB(), stopId, choice);
+}
+
+export async function createNamedPlaceForStop(
+  stopId: number,
+  name: string,
+): Promise<void> {
+  const normalizedName = requiredName(name);
+  await getDB().transaction(async tx => {
+    const stopResult = await tx.execute(
+      'SELECT latitude, longitude FROM day_route_stops WHERE id = ?;',
+      [stopId],
+    );
+    const stop = stopResult.rows?.[0] as
+      | {latitude: number; longitude: number}
+      | undefined;
+    if (!stop) {
+      throw new Error('Route stop not found');
+    }
+    const insert = await tx.execute(
+      `INSERT INTO named_places (name, latitude, longitude, radius_m)
+       VALUES (?, ?, ?, ?) RETURNING id;`,
+      [normalizedName, stop.latitude, stop.longitude, DEFAULT_RADIUS_M],
+    );
+    const id = (insert.rows?.[0]?.id as number | undefined) ?? insert.insertId;
+    if (id == null) {
+      throw new Error('Failed to insert named place');
+    }
+    await setDayStopNameWith(tx, stopId, {
+      type: 'reusable',
+      id,
+      name: normalizedName,
+    });
+  });
 }
 
 export async function getDayRouteHistory(

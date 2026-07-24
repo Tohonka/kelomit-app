@@ -6,13 +6,16 @@ import {getDB} from '../src/db/database';
 import {getGpsDayIdsWithinRetention} from '../src/db/gps';
 import {
   createNamedPlace,
+  createNamedPlaceForStop,
   getDayRouteHistory,
   getLatestDerivedRawTimestamp,
   getLatestRawTimestamp,
+  getNearbyLocalPlaces,
   getNamedPlaces,
   matchExistingStop,
   reconcileDayRouteHistory,
   renameNamedPlace,
+  setDayStopName,
 } from '../src/db/routeHistory';
 import type {DayRouteStop} from '../src/types';
 import type {
@@ -180,6 +183,115 @@ describe('route history repository', () => {
     expect(execute.mock.calls.flat().join(' ')).not.toContain(
       'day_route_stops',
     );
+  });
+
+  it('returns saved and reusable places inside the radius ordered by distance', async () => {
+    mockDatabase([
+      result([
+        {
+          type: 'reusable',
+          id: 8,
+          name: 'Workshop',
+          latitude: 60.1702,
+          longitude: 24.94,
+        },
+        {
+          type: 'saved',
+          id: 5,
+          name: 'Home',
+          latitude: 60.1701,
+          longitude: 24.94,
+        },
+        {
+          type: 'saved',
+          id: 6,
+          name: 'Too far',
+          latitude: 60.18,
+          longitude: 24.94,
+        },
+      ]),
+    ]);
+
+    const nearby = await getNearbyLocalPlaces(60.17, 24.94, 50);
+
+    expect(nearby.map(place => [place.type, place.id, place.name])).toEqual([
+      ['saved', 5, 'Home'],
+      ['reusable', 8, 'Workshop'],
+    ]);
+    expect(nearby.every(place => place.distanceM <= 50)).toBe(true);
+  });
+
+  it.each([
+    [
+      {type: 'saved' as const, id: 5, name: ' Home '},
+      [5, null, null, 'Home', 'saved', 12],
+    ],
+    [
+      {type: 'reusable' as const, id: 8, name: ' Workshop '},
+      [null, 8, null, 'Workshop', 'reusable', 12],
+    ],
+    [
+      {type: 'google' as const, placeId: 'google-id', name: ' Cafe '},
+      [null, null, 'google-id', 'Cafe', 'google', 12],
+    ],
+    [
+      {type: 'day' as const, name: ' Today only '},
+      [null, null, null, 'Today only', 'day', 12],
+    ],
+  ])('sets one stop snapshot and clears incompatible links', async (choice, params) => {
+    const {execute} = mockDatabase();
+
+    await setDayStopName(12, choice);
+
+    expect(execute).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /UPDATE day_route_stops[\s\S]*user_edited = 1[\s\S]*WHERE id = \?/i,
+      ),
+      params,
+    );
+  });
+
+  it('creates a reusable place from the stop centroid in one transaction', async () => {
+    const inserted = {
+      id: 9,
+      name: 'Workshop',
+      latitude: 60.17,
+      longitude: 24.94,
+      radius_m: 70,
+      created_at: 'created',
+      updated_at: 'updated',
+    };
+    const {execute, transaction, transactionExecute} = mockDatabase([], [
+      result([{latitude: 60.17, longitude: 24.94}]),
+      result([inserted]),
+      result(),
+    ]);
+
+    await createNamedPlaceForStop(12, ' Workshop ');
+
+    expect(transaction).toHaveBeenCalledTimes(1);
+    expect(execute).not.toHaveBeenCalled();
+    expect(transactionExecute.mock.calls[0]).toEqual([
+      expect.stringMatching(/SELECT latitude, longitude[\s\S]*WHERE id = \?/i),
+      [12],
+    ]);
+    expect(transactionExecute.mock.calls[1]).toEqual([
+      expect.stringMatching(/INSERT INTO named_places/i),
+      ['Workshop', 60.17, 24.94, 70],
+    ]);
+    expect(transactionExecute.mock.calls[2]).toEqual([
+      expect.stringMatching(/UPDATE day_route_stops/i),
+      [null, 9, null, 'Workshop', 'reusable', 12],
+    ]);
+  });
+
+  it('does not create a reusable place when the stop is missing', async () => {
+    const {transactionExecute} = mockDatabase([], [result()]);
+
+    await expect(createNamedPlaceForStop(404, 'Missing')).rejects.toThrow(
+      'Route stop not found',
+    );
+    expect(transactionExecute).toHaveBeenCalledTimes(1);
   });
 
   it('reads history and safely falls back for malformed segment geometry', async () => {
