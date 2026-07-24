@@ -139,6 +139,63 @@ export interface GpsPoint {
   timestamp: string;
 }
 
+export type RouteStopNameSource =
+  | 'saved'
+  | 'reusable'
+  | 'google'
+  | 'day'
+  | 'unknown';
+
+export interface NamedPlace {
+  id: number;
+  name: string;
+  latitude: number;
+  longitude: number;
+  radius_m: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DayRouteStop {
+  id: number;
+  day_id: number;
+  start_ts: string;
+  end_ts: string;
+  latitude: number;
+  longitude: number;
+  saved_location_id: number | null;
+  named_place_id: number | null;
+  google_place_id: string | null;
+  display_name: string | null;
+  name_source: RouteStopNameSource;
+  user_edited: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RouteCoordinate {
+  latitude: number;
+  longitude: number;
+}
+
+export interface DayRouteSegment {
+  id: number;
+  day_id: number;
+  sequence: number;
+  start_ts: string;
+  end_ts: string;
+  origin_stop_id: number | null;
+  destination_stop_id: number | null;
+  coordinates: RouteCoordinate[];
+  distance_m: number;
+  duration_sec: number;
+  average_speed_mps: number;
+  maximum_speed_mps: number;
+  raw_last_ts: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Settings {
   gps_enabled: boolean;
   gps_interval_ms: number;

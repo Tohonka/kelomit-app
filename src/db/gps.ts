@@ -64,6 +64,7 @@ export async function getLatestGpsPoint(
 }
 
 const DAY_MS = 86_400_000;
+export const GPS_RETENTION_DAYS = 45;
 
 /** ISO timestamp `days` before `nowMs`. Pure, for testability. */
 export function retentionCutoffIso(nowMs: number, days: number): string {
@@ -75,7 +76,9 @@ export function retentionCutoffIso(nowMs: number, days: number): string {
  * `gps_track` is transient — days/notes/geofence events are never touched.
  * ISO timestamps compare lexicographically, so a string `<` is correct.
  */
-export async function pruneGpsTracksOlderThan(days = 7): Promise<void> {
+export async function pruneGpsTracksOlderThan(
+  days = GPS_RETENTION_DAYS,
+): Promise<void> {
   const db = getDB();
   await db.execute('DELETE FROM gps_track WHERE timestamp < ?;', [
     retentionCutoffIso(Date.now(), days),
