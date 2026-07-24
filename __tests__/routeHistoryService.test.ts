@@ -69,6 +69,17 @@ const namedPlaces = [{
 }];
 const derived = {stops: [], segments: []};
 
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+} {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>(done => {
+    resolve = done;
+  });
+  return {promise, resolve};
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   jest.useRealTimers();
@@ -159,6 +170,62 @@ it('keeps separate refresh timers for different days', async () => {
   expect(mockGetGpsPointsForDay).toHaveBeenCalledTimes(2);
   expect(mockReconcileDayRouteHistory).toHaveBeenCalledWith(4, derived);
   expect(mockReconcileDayRouteHistory).toHaveBeenCalledWith(5, derived);
+});
+
+it('serializes same-day refreshes and coalesces in-flight calls into one follow-up', async () => {
+  const olderPoints = points;
+  const newerPoints = [{
+    ...points[0],
+    timestamp: '2026-07-23T05:01:00.000Z',
+  }];
+  const olderRead = deferred<typeof points>();
+  const newerRead = deferred<typeof newerPoints>();
+  const olderDerived = {stops: [{key: 'older'}], segments: []};
+  const newerDerived = {stops: [{key: 'newer'}], segments: []};
+  mockGetGpsPointsForDay
+    .mockImplementationOnce(() => olderRead.promise)
+    .mockImplementationOnce(() => newerRead.promise);
+  mockDeriveRouteDay
+    .mockReturnValueOnce(olderDerived)
+    .mockReturnValueOnce(newerDerived);
+
+  const first = refreshRouteDay(4);
+  const second = refreshRouteDay(4);
+  const third = refreshRouteDay(4);
+  const readsStartedBeforeFirstCompleted =
+    mockGetGpsPointsForDay.mock.calls.length;
+
+  olderRead.resolve(olderPoints);
+  newerRead.resolve(newerPoints);
+  await Promise.all([first, second, third]);
+
+  expect(readsStartedBeforeFirstCompleted).toBe(1);
+  expect(mockGetGpsPointsForDay).toHaveBeenCalledTimes(2);
+  expect(mockReconcileDayRouteHistory.mock.calls).toEqual([
+    [4, olderDerived],
+    [4, newerDerived],
+  ]);
+});
+
+it('allows different days to refresh independently', async () => {
+  const dayFourRead = deferred<typeof points>();
+  const dayFiveRead = deferred<typeof points>();
+  mockGetGpsPointsForDay.mockImplementation((dayId: number) =>
+    dayId === 4 ? dayFourRead.promise : dayFiveRead.promise,
+  );
+
+  const dayFour = refreshRouteDay(4);
+  const dayFive = refreshRouteDay(5);
+
+  expect(mockGetGpsPointsForDay.mock.calls).toEqual([[4], [5]]);
+  dayFiveRead.resolve(points.map(point => ({...point, day_id: 5})));
+  await dayFive;
+  expect(mockReconcileDayRouteHistory).toHaveBeenCalledWith(5, derived);
+  expect(mockReconcileDayRouteHistory).not.toHaveBeenCalledWith(4, derived);
+
+  dayFourRead.resolve(points);
+  await dayFour;
+  expect(mockReconcileDayRouteHistory).toHaveBeenCalledWith(4, derived);
 });
 
 it('checks only raw day IDs returned inside the retention window', async () => {

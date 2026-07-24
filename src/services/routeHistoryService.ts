@@ -14,8 +14,12 @@ import {diag} from './diag';
 
 const REFRESH_DELAY_MS = 15_000;
 const refreshTimers = new Map<number, ReturnType<typeof setTimeout>>();
+const activeRefreshes = new Map<
+  number,
+  {promise: Promise<void>; pending: boolean}
+>();
 
-export async function refreshRouteDay(dayId: number): Promise<void> {
+async function refreshRouteDayOnce(dayId: number): Promise<void> {
   const [points, locations, namedPlaces] = await Promise.all([
     getGpsPointsForDay(dayId),
     getLocations(),
@@ -40,6 +44,28 @@ export async function refreshRouteDay(dayId: number): Promise<void> {
     })),
   ];
   await reconcileDayRouteHistory(dayId, deriveRouteDay(points, anchors));
+}
+
+export function refreshRouteDay(dayId: number): Promise<void> {
+  const active = activeRefreshes.get(dayId);
+  if (active) {
+    active.pending = true;
+    return active.promise;
+  }
+
+  const state = {promise: Promise.resolve(), pending: false};
+  activeRefreshes.set(dayId, state);
+  state.promise = (async () => {
+    try {
+      do {
+        state.pending = false;
+        await refreshRouteDayOnce(dayId);
+      } while (state.pending);
+    } finally {
+      activeRefreshes.delete(dayId);
+    }
+  })();
+  return state.promise;
 }
 
 export async function refreshRouteDayIfStale(
