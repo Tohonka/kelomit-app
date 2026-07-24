@@ -1,7 +1,7 @@
 # Persistent route segments and historical place names
 
 **Date:** 2026-07-24
-**Status:** approved in chat; awaiting written-spec review
+**Status:** approved
 
 ## Problem
 
