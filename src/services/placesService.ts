@@ -45,6 +45,8 @@ function isCandidate(value: unknown): value is PlaceCandidate {
 
 async function getCachedCandidates(
   cell: string,
+  lat: number,
+  lng: number,
 ): Promise<PlaceCandidate[] | undefined> {
   const result = await getDB().execute(
     'SELECT candidates_json FROM place_cache WHERE cell = ?;',
@@ -56,9 +58,20 @@ async function getCachedCandidates(
   }
   try {
     const parsed: unknown = JSON.parse(value);
-    return Array.isArray(parsed) && parsed.every(isCandidate)
-      ? parsed
-      : undefined;
+    if (!Array.isArray(parsed) || !parsed.every(isCandidate)) {
+      return undefined;
+    }
+    return parsed
+      .map(candidate => ({
+        ...candidate,
+        distanceM: distanceMeters(
+          lat,
+          lng,
+          candidate.latitude,
+          candidate.longitude,
+        ),
+      }))
+      .sort((a, b) => a.distanceM - b.distanceM);
   } catch {
     return undefined;
   }
@@ -163,7 +176,7 @@ export async function resolvePlaceCandidates(
   lng: number,
 ): Promise<PlaceCandidate[]> {
   const cell = cellFor(lat, lng);
-  const cached = await getCachedCandidates(cell);
+  const cached = await getCachedCandidates(cell, lat, lng);
   if (cached !== undefined) {
     return cached;
   }

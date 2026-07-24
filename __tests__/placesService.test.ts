@@ -54,9 +54,42 @@ describe('places service', () => {
   it('returns cached candidates without a network request', async () => {
     mockDatabase({candidates_json: JSON.stringify(cachedCandidates)});
 
-    await expect(resolvePlaceCandidates(60.17, 24.94)).resolves.toEqual(
-      cachedCandidates,
-    );
+    const candidates = await resolvePlaceCandidates(60.17, 24.94);
+
+    expect(candidates[0]).toEqual({
+      ...cachedCandidates[0],
+      distanceM: expect.any(Number),
+    });
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('recomputes cached distances and order for another origin in the same cell', async () => {
+    const cached = [
+      {
+        placeId: 'south-id',
+        name: 'South',
+        latitude: 60.17001,
+        longitude: 24.94,
+        distanceM: 0,
+      },
+      {
+        placeId: 'north-id',
+        name: 'North',
+        latitude: 60.17004,
+        longitude: 24.94,
+        distanceM: 3.3,
+      },
+    ];
+    mockDatabase({candidates_json: JSON.stringify(cached)});
+
+    const candidates = await resolvePlaceCandidates(60.17004, 24.94);
+
+    expect(candidates.map(candidate => candidate.placeId)).toEqual([
+      'north-id',
+      'south-id',
+    ]);
+    expect(candidates[0].distanceM).toBeCloseTo(0);
+    expect(candidates[1].distanceM).toBeGreaterThan(3);
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
