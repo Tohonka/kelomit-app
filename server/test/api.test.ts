@@ -1,0 +1,92 @@
+import {test, beforeEach, afterEach} from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtempSync, rmSync, existsSync, readFileSync} from 'node:fs';
+import {join} from 'node:path';
+import {tmpdir} from 'node:os';
+import Database from 'better-sqlite3';
+import {apiRoutes} from '../src/routes/api.ts';
+
+let dataDir: string;
+let app: ReturnType<typeof apiRoutes>;
+const TOKEN = 'test-token';
+
+function validDbBuffer(): Buffer {
+  const p = join(dataDir, 'fixture.db');
+  const db = new Database(p);
+  db.exec('CREATE TABLE schema_version (version INTEGER PRIMARY KEY)');
+  db.exec('INSERT INTO schema_version (version) VALUES (21)');
+  db.close();
+  const buf = readFileSync(p);
+  rmSync(p);
+  return buf;
+}
+
+function authed(path: string, init: RequestInit = {}): Request {
+  return new Request(`http://localhost${path}`, {
+    ...init,
+    headers: {Authorization: `Bearer ${TOKEN}`, ...(init.headers ?? {})},
+  });
+}
+
+beforeEach(() => {
+  dataDir = mkdtempSync(join(tmpdir(), 'kelomit-api-'));
+  app = apiRoutes({dataDir, token: TOKEN});
+});
+
+afterEach(() => {
+  rmSync(dataDir, {recursive: true, force: true});
+});
+
+test('manifest requires a token', async () => {
+  const res = await app.fetch(new Request('http://localhost/api/media/manifest'));
+  assert.equal(res.status, 401);
+});
+
+test('manifest rejects a wrong token', async () => {
+  const res = await app.fetch(
+    new Request('http://localhost/api/media/manifest', {
+      headers: {Authorization: 'Bearer wrong'},
+    }),
+  );
+  assert.equal(res.status, 401);
+});
+
+test('manifest lists uploaded media', async () => {
+  await app.fetch(authed('/api/media/photo.jpg', {method: 'POST', body: 'bytes'}));
+  const res = await app.fetch(authed('/api/media/manifest'));
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), {files: ['photo.jpg']});
+});
+
+test('media upload rejects traversal', async () => {
+  const res = await app.fetch(
+    authed('/api/media/..%2F..%2Fetc%2Fpasswd', {method: 'POST', body: 'x'}),
+  );
+  assert.equal(res.status, 400);
+  assert.ok(!existsSync(join(dataDir, '..', 'passwd')));
+});
+
+test('media upload rejects video', async () => {
+  const res = await app.fetch(authed('/api/media/clip.mp4', {method: 'POST', body: 'x'}));
+  assert.equal(res.status, 400);
+});
+
+test('sync installs a valid database', async () => {
+  const res = await app.fetch(
+    authed('/api/sync', {method: 'POST', body: validDbBuffer()}),
+  );
+  assert.equal(res.status, 200);
+  assert.ok(existsSync(join(dataDir, 'current.db')));
+});
+
+test('sync rejects garbage without touching current.db', async () => {
+  await app.fetch(authed('/api/sync', {method: 'POST', body: validDbBuffer()}));
+  const before = readFileSync(join(dataDir, 'current.db'));
+
+  const res = await app.fetch(
+    authed('/api/sync', {method: 'POST', body: 'not a database'}),
+  );
+
+  assert.equal(res.status, 400);
+  assert.deepEqual(readFileSync(join(dataDir, 'current.db')), before);
+});
