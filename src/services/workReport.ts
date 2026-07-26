@@ -1,7 +1,7 @@
 import {format, parseISO} from 'date-fns';
 import {enUS, fi as fiLocale} from 'date-fns/locale';
 import type {Day, Entry} from '../types';
-import {formatTime, parseTimestamp} from '../utils/dateUtils';
+import {formatTime, parseTimestamp} from '../utils/timeFormat';
 import {calcDayWorkBreakdown, entryTrackedSeconds} from '../utils/hoursUtils';
 
 export type ReportLanguage = 'fi' | 'en';

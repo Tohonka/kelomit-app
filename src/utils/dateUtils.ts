@@ -8,6 +8,10 @@ import {
   getISOWeekYear,
 } from 'date-fns';
 import i18n, {getDateFnsLocale} from '../i18n';
+import {parseTimestamp, localDateOf, formatTime} from './timeFormat';
+
+// Re-exported so existing callers keep importing these from dateUtils.
+export {parseTimestamp, localDateOf, formatTime};
 
 export function todayDate(): string {
   return format(new Date(), 'yyyy-MM-dd');
@@ -22,28 +26,6 @@ export function formatDate(isoDate: string): string {
     return i18n.t('dates.yesterday');
   }
   return format(d, 'EEE, MMM d', {locale: getDateFnsLocale(i18n.resolvedLanguage === 'fi' ? 'fi' : 'en')});
-}
-
-/**
- * Parse a stored timestamp to a Date (absolute instant).
- * App-written values are ISO 8601 with a zone (`toISOString()` → ends in `Z`).
- * SQLite `datetime('now')` returns `YYYY-MM-DD HH:MM:SS` in UTC with no zone
- * marker — without this it would be misread as local time and shown hours off.
- */
-export function parseTimestamp(value: string): Date {
-  if (value.includes('T')) {
-    return parseISO(value);
-  }
-  return new Date(value.replace(' ', 'T') + 'Z');
-}
-
-/** Local YYYY-MM-DD for a stored timestamp (used for date grouping/headers). */
-export function localDateOf(value: string): string {
-  return format(parseTimestamp(value), 'yyyy-MM-dd');
-}
-
-export function formatTime(isoDatetime: string): string {
-  return format(parseTimestamp(isoDatetime), 'HH:mm');
 }
 
 export function formatDuration(seconds: number): string {

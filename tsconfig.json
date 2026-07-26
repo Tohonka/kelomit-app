@@ -10,5 +10,7 @@
     }
   },
   "include": ["**/*.ts", "**/*.tsx"],
-  "exclude": ["**/node_modules", "**/Pods"]
+  // server/ has its own tsconfig (different lib/module target, no RN types);
+  // .worktrees/ holds separate checkouts that type-check themselves.
+  "exclude": ["**/node_modules", "**/Pods", "server", ".worktrees"]
 }
