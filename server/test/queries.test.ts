@@ -1,6 +1,6 @@
 import {test, beforeEach, afterEach} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync, rmSync} from 'node:fs';
+import {mkdtempSync, rmSync, statSync, utimesSync, renameSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import Database from 'better-sqlite3';
@@ -84,4 +84,48 @@ test('the handle is read-only', () => {
   seed().close();
   const db = openCurrent(dataDir)!;
   assert.throws(() => db.exec("INSERT INTO days (date) VALUES ('2026-07-27')"), /readonly/i);
+});
+
+test('openCurrent detects a sync swap even with an identical mtime', () => {
+  seed().close();
+  const currentPath = join(dataDir, 'current.db');
+  const firstMtime = statSync(currentPath).mtimeMs;
+
+  const first = openCurrent(dataDir)!;
+  assert.deepEqual(listDays(first, 10).map(d => d.date), ['2026-07-26', '2026-07-25']);
+
+  // Build a second, different database at a temp path, then force its mtime
+  // to match the first file's exactly before swapping it in — this is what
+  // would defeat an mtime-only cache key.
+  const secondPath = join(dataDir, 'incoming.db');
+  const second = new Database(secondPath);
+  second.exec(`
+    CREATE TABLE schema_version (version INTEGER PRIMARY KEY);
+    INSERT INTO schema_version VALUES (21);
+    CREATE TABLE days (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL UNIQUE,
+      started_at TEXT, ended_at TEXT, notes TEXT,
+      created_at TEXT, updated_at TEXT
+    );
+    CREATE TABLE entries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, day_id INTEGER NOT NULL,
+      entry_type TEXT NOT NULL, activity_type TEXT NOT NULL DEFAULT 'work',
+      title TEXT, body TEXT, project_id INTEGER, file_path TEXT,
+      thumbnail_path TEXT, duration_sec INTEGER, time_from TEXT, time_to TEXT,
+      latitude REAL, longitude REAL, location_label TEXT,
+      created_at TEXT, updated_at TEXT
+    );
+    INSERT INTO days (id, date, started_at, ended_at) VALUES
+      (1, '2026-09-01', '2026-09-01T08:00:00.000Z', NULL);
+  `);
+  second.close();
+
+  const secondMtimeSeconds = firstMtime / 1000;
+  utimesSync(secondPath, secondMtimeSeconds, secondMtimeSeconds);
+  renameSync(secondPath, currentPath);
+  utimesSync(currentPath, secondMtimeSeconds, secondMtimeSeconds);
+  assert.equal(statSync(currentPath).mtimeMs, firstMtime);
+
+  const reopened = openCurrent(dataDir)!;
+  assert.deepEqual(listDays(reopened, 10).map(d => d.date), ['2026-09-01']);
 });
