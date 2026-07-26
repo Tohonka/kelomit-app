@@ -66,3 +66,33 @@ test('parses token-scoped workday decisions', () => {
     timestamp: 1784812700000,
   });
 });
+
+test('parses only supported persisted activity transitions', () => {
+  expect(parseNativeEvent(JSON.stringify({
+    sequence: 9,
+    type: 'activity',
+    activity: 'vehicle',
+    transition: 'enter',
+    timestamp: 1785085200000,
+  }))).toEqual({
+    sequence: 9,
+    type: 'activity',
+    activity: 'vehicle',
+    transition: 'enter',
+    timestamp: 1785085200000,
+  });
+  expect(parseNativeEvent(JSON.stringify({
+    sequence: 10,
+    type: 'activity',
+    activity: 'car',
+    transition: 'enter',
+    timestamp: 1785085200000,
+  }))).toBeNull();
+  expect(parseNativeEvent(JSON.stringify({
+    sequence: 11,
+    type: 'activity',
+    activity: 'walking',
+    transition: 'pause',
+    timestamp: 1785085200000,
+  }))).toBeNull();
+});

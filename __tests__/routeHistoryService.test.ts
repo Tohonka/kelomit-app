@@ -1,5 +1,6 @@
 const mockGetGpsPointsForDay = jest.fn();
 const mockGetGpsDayIdsWithinRetention = jest.fn();
+const mockGetActivityEventsThrough = jest.fn();
 const mockGetLocations = jest.fn();
 const mockGetNamedPlaces = jest.fn();
 const mockGetLatestRawTimestamp = jest.fn();
@@ -29,6 +30,10 @@ jest.mock('../src/db/gps', () => ({
   getGpsPointsForDay: (...args: unknown[]) => mockGetGpsPointsForDay(...args),
   getGpsDayIdsWithinRetention: (...args: unknown[]) =>
     mockGetGpsDayIdsWithinRetention(...args),
+}));
+jest.mock('../src/db/activityEvents', () => ({
+  getActivityEventsThrough: (...args: unknown[]) =>
+    mockGetActivityEventsThrough(...args),
 }));
 jest.mock('../src/db/entries', () => ({
   getEntriesForDay: (...args: unknown[]) => mockGetEntriesForDay(...args),
@@ -95,6 +100,11 @@ const namedPlaces = [{
   updated_at: '',
 }];
 const derived = {stops: [], segments: []};
+const activityEvents = [{
+  activity: 'walking' as const,
+  transition: 'enter' as const,
+  timestamp: '2026-07-23T04:55:00.000Z',
+}];
 
 function deferred<T>(): {
   promise: Promise<T>;
@@ -112,6 +122,7 @@ beforeEach(() => {
   jest.useRealTimers();
   mockGetGpsPointsForDay.mockResolvedValue(points);
   mockGetGpsDayIdsWithinRetention.mockResolvedValue([]);
+  mockGetActivityEventsThrough.mockResolvedValue(activityEvents);
   mockGetLocations.mockResolvedValue(locations);
   mockGetNamedPlaces.mockResolvedValue(namedPlaces);
   mockGetLatestRawTimestamp.mockResolvedValue('2026-07-23T05:00:00.000Z');
@@ -176,6 +187,8 @@ it('derives and reconciles a day from raw points and both anchor sources', async
   await refreshRouteDay(4);
 
   expect(mockGetGpsPointsForDay).toHaveBeenCalledWith(4);
+  expect(mockGetActivityEventsThrough)
+    .toHaveBeenCalledWith('2026-07-23T05:00:00.000Z');
   expect(mockDeriveRouteDay).toHaveBeenCalledWith(points, [
     {
       id: 2,
@@ -193,7 +206,7 @@ it('derives and reconciles a day from raw points and both anchor sources', async
       longitude: 24.7,
       radiusM: 45,
     },
-  ]);
+  ], activityEvents);
   expect(mockDeriveRouteDay).toHaveBeenCalledTimes(1);
   expect(mockReconcileDayRouteHistory).toHaveBeenCalledWith(4, derived);
   expect(mockReconcileDayRouteHistory).toHaveBeenCalledTimes(1);
@@ -206,6 +219,14 @@ it('preserves existing history when a refresh has no retained raw points', async
 
   expect(mockDeriveRouteDay).not.toHaveBeenCalled();
   expect(mockReconcileDayRouteHistory).not.toHaveBeenCalled();
+});
+
+it('force-refreshes history even when the GPS watermark is unchanged', async () => {
+  mockGetLatestDerivedRawTimestamp.mockResolvedValue(points[0].timestamp);
+
+  await refreshRouteDay(4, {force: true});
+
+  expect(mockReconcileDayRouteHistory).toHaveBeenCalledWith(4, derived);
 });
 
 it.each([
@@ -345,6 +366,21 @@ it('serializes same-day refreshes and coalesces in-flight calls into one follow-
   ]);
 });
 
+it('coalesces a force request into an in-flight follow-up without losing force', async () => {
+  const firstRead = deferred<typeof points>();
+  mockGetGpsPointsForDay
+    .mockImplementationOnce(() => firstRead.promise)
+    .mockResolvedValueOnce(points);
+  mockGetLatestDerivedRawTimestamp.mockResolvedValue(points[0].timestamp);
+
+  const first = refreshRouteDay(4);
+  const forced = refreshRouteDay(4, {force: true});
+  firstRead.resolve(points);
+  await Promise.all([first, forced]);
+
+  expect(mockReconcileDayRouteHistory).toHaveBeenCalledWith(4, derived);
+});
+
 it('allows different days to refresh independently', async () => {
   const dayFourRead = deferred<typeof points>();
   const dayFiveRead = deferred<typeof points>();
@@ -378,6 +414,19 @@ it('checks only raw day IDs returned inside the retention window', async () => {
     [4],
     [9],
     [4],
+  ]);
+});
+
+it('force-refreshes every retained day when requested', async () => {
+  mockGetGpsDayIdsWithinRetention.mockResolvedValue([9, 4]);
+  mockGetLatestDerivedRawTimestamp.mockResolvedValue(points[0].timestamp);
+
+  await reconcileRecentRouteDays(true);
+
+  expect(mockGetGpsPointsForDay.mock.calls).toEqual([[9], [4]]);
+  expect(mockReconcileDayRouteHistory.mock.calls).toEqual([
+    [9, derived],
+    [4, derived],
   ]);
 });
 

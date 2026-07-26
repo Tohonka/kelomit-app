@@ -359,4 +359,20 @@ export const migrations: Migration[] = [
       "INSERT OR IGNORE INTO settings (key, value) VALUES ('sync_last_error', '')",
     ],
   },
+  {
+    version: 22,
+    up: [
+      `CREATE TABLE IF NOT EXISTS activity_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        activity TEXT NOT NULL
+          CHECK (activity IN ('still','walking','running','on_foot','bicycle','vehicle')),
+        transition TEXT NOT NULL
+          CHECK (transition IN ('enter','exit')),
+        timestamp TEXT NOT NULL,
+        UNIQUE(activity, transition, timestamp)
+      )`,
+      'CREATE INDEX IF NOT EXISTS idx_activity_events_ts ON activity_events(timestamp)',
+      "INSERT OR IGNORE INTO settings (key, value) VALUES ('route_derivation_version', '1')",
+    ],
+  },
 ];

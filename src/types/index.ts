@@ -139,6 +139,22 @@ export interface GpsPoint {
   timestamp: string;
 }
 
+export type ActivityKind =
+  | 'still'
+  | 'walking'
+  | 'running'
+  | 'on_foot'
+  | 'bicycle'
+  | 'vehicle';
+
+export type ActivityTransition = 'enter' | 'exit';
+
+export interface ActivityEvent {
+  activity: ActivityKind;
+  transition: ActivityTransition;
+  timestamp: string;
+}
+
 export type RouteStopNameSource =
   | 'saved'
   | 'reusable'

@@ -8,6 +8,7 @@ import {GestureHandlerRootView} from 'react-native-gesture-handler';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
 import {initDB} from './src/db/database';
 import {pruneGpsTracksOlderThan} from './src/db/gps';
+import {pruneActivityEventsOlderThan} from './src/db/activityEvents';
 import {pruneDiagLog, diag} from './src/services/diag';
 import {getAllSettings} from './src/db/settings';
 import {getLocations} from './src/db/locations';
@@ -54,6 +55,7 @@ function AppContent() {
         useSessionStore.getState().reconcile().catch(() => {});
         // Drop raw trail points past the retention window (best-effort).
         pruneGpsTracksOlderThan().catch(() => {});
+        pruneActivityEventsOlderThan().catch(() => {});
         // Prune old diagnostic-log rows (the flat file self-trims).
         pruneDiagLog().catch(() => {});
         diag('app.launch', '');

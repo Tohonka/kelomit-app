@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.ActivityRecognitionResult
@@ -11,12 +12,49 @@ import com.google.android.gms.location.ActivityTransition
 import com.google.android.gms.location.ActivityTransitionResult
 import com.google.android.gms.location.DetectedActivity
 
+internal val TRACKED_ACTIVITY_TYPES = listOf(
+  DetectedActivity.STILL,
+  DetectedActivity.WALKING,
+  DetectedActivity.RUNNING,
+  DetectedActivity.ON_FOOT,
+  DetectedActivity.ON_BICYCLE,
+  DetectedActivity.IN_VEHICLE,
+)
+
+internal val TRACKED_TRANSITION_TYPES = listOf(
+  ActivityTransition.ACTIVITY_TRANSITION_ENTER,
+  ActivityTransition.ACTIVITY_TRANSITION_EXIT,
+)
+
+internal fun activityName(type: Int): String? = when (type) {
+  DetectedActivity.STILL -> "still"
+  DetectedActivity.WALKING -> "walking"
+  DetectedActivity.RUNNING -> "running"
+  DetectedActivity.ON_FOOT -> "on_foot"
+  DetectedActivity.ON_BICYCLE -> "bicycle"
+  DetectedActivity.IN_VEHICLE -> "vehicle"
+  else -> null
+}
+
+internal fun transitionName(type: Int): String? = when (type) {
+  ActivityTransition.ACTIVITY_TRANSITION_ENTER -> "enter"
+  ActivityTransition.ACTIVITY_TRANSITION_EXIT -> "exit"
+  else -> null
+}
+
+internal fun transitionWallTimeMs(
+  eventElapsedNs: Long,
+  nowElapsedNs: Long,
+  nowWallMs: Long,
+): Long = nowWallMs - maxOf(0L, nowElapsedNs - eventElapsedNs) / 1_000_000L
+
 /**
  * Wakes the [LocationService] the moment the OS activity-recognition engine
  * reports the user is moving (walking/cycling/vehicle). Two delivery paths land
  * here:
- *  - TRANSITION events (registered for the service lifetime): we only register
- *    ENTER transitions for moving activities, so any event means "started moving".
+ *  - TRANSITION events (registered for the service lifetime): every supported
+ *    ENTER/EXIT is journaled as durable route-derivation evidence; moving ENTER
+ *    events also wake fast tracking.
  *  - Periodic SAMPLING results (registered only while in slow mode): the
  *    transition API can batch or miss gradual pace changes, so a confident
  *    moving sample is treated as the same wake.
@@ -38,8 +76,33 @@ class ActivityTransitionReceiver : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {
     if (ActivityTransitionResult.hasResult(intent)) {
       val result = ActivityTransitionResult.extractResult(intent) ?: return
-      val startedMoving = result.transitionEvents.any {
-        it.transitionType == ActivityTransition.ACTIVITY_TRANSITION_ENTER
+      val nowElapsedNs = SystemClock.elapsedRealtimeNanos()
+      val nowWallMs = System.currentTimeMillis()
+      val journal = NativeEventJournal(context)
+      var startedMoving = false
+      result.transitionEvents
+        .sortedBy { it.elapsedRealTimeNanos }
+        .forEach { event ->
+        val activity = activityName(event.activityType) ?: return@forEach
+        val transition = transitionName(event.transitionType) ?: return@forEach
+        journal.append(
+          "activity",
+          mapOf(
+            "activity" to activity,
+            "transition" to transition,
+            "timestamp" to transitionWallTimeMs(
+              event.elapsedRealTimeNanos,
+              nowElapsedNs,
+              nowWallMs,
+            ),
+          ),
+        )
+        if (
+          event.transitionType == ActivityTransition.ACTIVITY_TRANSITION_ENTER &&
+          event.activityType in MOVING_TYPES
+        ) {
+          startedMoving = true
+        }
       }
       if (startedMoving) {
         Log.d("KelomitLoc", "activity-transition wake")

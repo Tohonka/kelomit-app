@@ -4,6 +4,8 @@ const mockStopTracking = jest.fn();
 const mockStopNative = jest.fn();
 const mockReconcile = jest.fn();
 const mockReconcileRouteDays = jest.fn();
+const mockGetSetting = jest.fn();
+const mockSetSetting = jest.fn();
 let nativeListener: (() => void) | null = null;
 
 jest.mock('../src/native/backgroundLocation', () => ({
@@ -24,6 +26,10 @@ jest.mock('../src/services/nativeEventSync', () => ({
 jest.mock('../src/services/routeHistoryService', () => ({
   reconcileRecentRouteDays: (...args: unknown[]) =>
     mockReconcileRouteDays(...args),
+}));
+jest.mock('../src/db/settings', () => ({
+  getSetting: (...args: unknown[]) => mockGetSetting(...args),
+  setSetting: (...args: unknown[]) => mockSetSetting(...args),
 }));
 
 import {
@@ -48,6 +54,8 @@ const locations = [{
 beforeEach(() => {
   jest.clearAllMocks();
   nativeListener = null;
+  mockGetSetting.mockResolvedValue('2');
+  mockSetSetting.mockResolvedValue(undefined);
 });
 
 it('syncs the full place set before starting native background tracking', async () => {
@@ -96,10 +104,23 @@ it('reconciles on foreground calls and live native events', async () => {
   expect(sub.remove).toEqual(expect.any(Function));
 });
 
-it('reconciles recent route days on startup', async () => {
+it('uses ordinary stale checks after version 2 is recorded', async () => {
   mockReconcileRouteDays.mockResolvedValue(undefined);
 
   await reconcileRouteHistory();
 
-  expect(mockReconcileRouteDays).toHaveBeenCalledTimes(1);
+  expect(mockReconcileRouteDays).toHaveBeenCalledWith(false);
+  expect(mockSetSetting).not.toHaveBeenCalled();
+});
+
+it('forces retained route derivation once per algorithm version', async () => {
+  mockGetSetting.mockResolvedValue('1');
+  mockReconcileRouteDays.mockResolvedValue(undefined);
+
+  await reconcileRouteHistory();
+
+  expect(mockReconcileRouteDays).toHaveBeenCalledWith(true);
+  expect(mockSetSetting).toHaveBeenCalledWith('route_derivation_version', '2');
+  expect(mockReconcileRouteDays.mock.invocationCallOrder[0])
+    .toBeLessThan(mockSetSetting.mock.invocationCallOrder[0]);
 });

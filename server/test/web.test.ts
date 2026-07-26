@@ -95,7 +95,7 @@ test('day page escapes entry titles', async () => {
 
 test('day page links media by basename', async () => {
   seed();
-  const html = await app.fetch(new Request('http://localhost/day/2026-07-25')).then(r => r.text());
+  const html = await (await app.fetch(new Request('http://localhost/day/2026-07-25'))).text();
   assert.match(html, /\/media\/shot\.jpg/);
   assert.ok(!html.includes('/data/user/0/app/files'));
 });
@@ -108,25 +108,25 @@ test('unknown day returns 404', async () => {
 
 test('summary totals hours over a range', async () => {
   seed();
-  const html = await app
-    .fetch(new Request('http://localhost/summary?from=2026-07-01&to=2026-07-31'))
-    .then(r => r.text());
+  const html = await (await app.fetch(
+    new Request('http://localhost/summary?from=2026-07-01&to=2026-07-31'),
+  )).text();
   assert.match(html, /8h/);
   assert.match(html, /2026-07-25/);
 });
 
 test('summary excludes days outside the range', async () => {
   seed();
-  const html = await app
-    .fetch(new Request('http://localhost/summary?from=2026-08-01&to=2026-08-31'))
-    .then(r => r.text());
+  const html = await (await app.fetch(
+    new Request('http://localhost/summary?from=2026-08-01&to=2026-08-31'),
+  )).text();
   assert.ok(!html.includes('2026-07-25'));
   assert.match(html, /0h/);
 });
 
 test('day page hours match hoursUtils for the same day', async () => {
   seed();
-  const html = await app.fetch(new Request('http://localhost/day/2026-07-25')).then(r => r.text());
+  const html = await (await app.fetch(new Request('http://localhost/day/2026-07-25'))).text();
   // The day's legs run 08:00–16:00, so the baseline is 8 h. The work entry
   // (08:00–12:00) falls inside the legs and therefore adds nothing — this is
   // the "work day is the minimum" model in docs/hours-model.md. Asserting 8h
@@ -145,7 +145,7 @@ test('day page deducts a work-activity entry on a personal project', async () =>
               '2026-07-25T09:00:00.000Z', '2026-07-25T10:00:00.000Z', '2026-07-25T09:00:00.000Z');
   `);
   db.close();
-  const html = await app.fetch(new Request('http://localhost/day/2026-07-25')).then(r => r.text());
+  const html = await (await app.fetch(new Request('http://localhost/day/2026-07-25'))).text();
   // Legs run 08:00-16:00 (8h baseline). The new entry is activity_type 'work'
   // but attached to a 'personal'-type project, so the app's model
   // (hoursUtils.dayWorkActivity) treats it as personal and deducts its 1h

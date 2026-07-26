@@ -8,6 +8,9 @@ import {
 import {startTracking, stopTracking} from './gpsService';
 import {reconcileNativeEvents} from './nativeEventSync';
 import {reconcileRecentRouteDays} from './routeHistoryService';
+import {getSetting, setSetting} from '../db/settings';
+
+const ROUTE_DERIVATION_VERSION = '2';
 
 export interface TrackingState {
   gps_enabled: boolean;
@@ -51,7 +54,12 @@ export async function reconcileTrackingJournal(): Promise<void> {
 }
 
 export async function reconcileRouteHistory(): Promise<void> {
-  await reconcileRecentRouteDays();
+  const previous = await getSetting('route_derivation_version');
+  const force = previous !== ROUTE_DERIVATION_VERSION;
+  await reconcileRecentRouteDays(force);
+  if (force) {
+    await setSetting('route_derivation_version', ROUTE_DERIVATION_VERSION);
+  }
 }
 
 export function subscribeTrackingJournal(): {remove: () => void} {

@@ -1,4 +1,5 @@
 import {NativeModules, DeviceEventEmitter} from 'react-native';
+import type {ActivityKind, ActivityTransition} from '../types';
 
 /**
  * Wrapper over the native `BackgroundLocation` module: starts/stops the
@@ -118,6 +119,13 @@ export type NativeJournalEvent =
     }
   | {
       sequence: number;
+      type: 'activity';
+      activity: ActivityKind;
+      transition: ActivityTransition;
+      timestamp: number;
+    }
+  | {
+      sequence: number;
       type: 'day_end_prompted' | 'day_end_confirmed' | 'day_end_rejected' |
         'day_end_assumed' | 'day_end_cancelled';
       token: string;
@@ -132,6 +140,15 @@ const dayEndTypes = new Set([
   'day_end_assumed',
   'day_end_cancelled',
 ]);
+const activityKinds = new Set<ActivityKind>([
+  'still',
+  'walking',
+  'running',
+  'on_foot',
+  'bicycle',
+  'vehicle',
+]);
+const activityTransitions = new Set<ActivityTransition>(['enter', 'exit']);
 
 export function parseNativeEvent(line: string): NativeJournalEvent | null {
   try {
@@ -151,6 +168,17 @@ export function parseNativeEvent(line: string): NativeJournalEvent | null {
           !Number.isSafeInteger(event.generation) ||
           !(event.latitude === null || typeof event.latitude === 'number') ||
           !(event.longitude === null || typeof event.longitude === 'number')) {
+        return null;
+      }
+      return event as NativeJournalEvent;
+    }
+    if (event.type === 'activity') {
+      if (
+        typeof event.activity !== 'string' ||
+        !activityKinds.has(event.activity as ActivityKind) ||
+        typeof event.transition !== 'string' ||
+        !activityTransitions.has(event.transition as ActivityTransition)
+      ) {
         return null;
       }
       return event as NativeJournalEvent;

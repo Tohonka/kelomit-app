@@ -1,5 +1,5 @@
 import {distanceMeters} from '../services/locationUtils';
-import type {GpsPoint, RouteCoordinate} from '../types';
+import type {ActivityEvent, GpsPoint, RouteCoordinate} from '../types';
 
 export interface RouteAnchor {
   id: number;
@@ -33,35 +33,34 @@ export interface DerivedRouteSegment {
   rawLastTs: string;
 }
 
-interface PointCluster {
-  points: GpsPoint[];
-  latitude: number;
-  longitude: number;
+interface StopRange {
+  start: number;
+  end: number;
 }
 
-interface ActiveAnchor extends PointCluster {
-  anchor: RouteAnchor;
-  key: string;
-}
-
-const UNKNOWN_RADIUS_M = 70;
-const UNKNOWN_DWELL_SEC = 300;
-const EXIT_RADIUS_MULTIPLIER = 1.25;
+const STOP_WINDOW_MS = 5 * 60_000;
+const STOP_RADIUS_M = 150;
+const GO_SPEED_MPS = 3;
+const GO_SPEED_FIXES = 2;
 
 export function deriveRouteDay(
   points: GpsPoint[],
   anchors: RouteAnchor[],
+  activityEvents: ActivityEvent[] = [],
 ): {stops: DerivedRouteStop[]; segments: DerivedRouteSegment[]} {
   const ordered = [...points].sort(
     (a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp),
   );
   const rawLastTs = ordered[ordered.length - 1]?.timestamp ?? '';
+  const ranges = findStopRanges(
+    ordered,
+    vehicleStateAtPoints(ordered, activityEvents),
+  );
   const stops: DerivedRouteStop[] = [];
   const segments: DerivedRouteSegment[] = [];
   let movement: GpsPoint[] = [];
   let originStopKey: string | null = null;
-  let unknown: PointCluster | null = null;
-  let activeAnchor: ActiveAnchor | null = null;
+  let cursor = 0;
 
   const flushMovement = (destinationStopKey: string | null) => {
     if (movement.length >= 2) {
@@ -78,121 +77,36 @@ export function deriveRouteDay(
     movement = [];
   };
 
-  const flushUnknown = () => {
-    if (!unknown) {
-      return;
-    }
-    const first = unknown.points[0];
-    const last = unknown.points[unknown.points.length - 1];
-    if (secondsBetween(first, last) >= UNKNOWN_DWELL_SEC) {
-      const stop: DerivedRouteStop = {
-        key: `unknown:${first.timestamp}`,
-        startTs: first.timestamp,
-        endTs: last.timestamp,
-        latitude: unknown.latitude,
-        longitude: unknown.longitude,
-        anchor: null,
-      };
-      movement.push(first);
-      flushMovement(stop.key);
-      stops.push(stop);
-      originStopKey = stop.key;
-    } else {
-      movement.push(...unknown.points);
-    }
-    unknown = null;
-  };
-
-  const closeActiveAnchor = () => {
-    if (!activeAnchor) {
-      return;
-    }
-    const first = activeAnchor.points[0];
-    const last = activeAnchor.points[activeAnchor.points.length - 1];
+  for (const range of ranges) {
+    const dwell = ordered.slice(range.start, range.end + 1);
+    const center = centroid(dwell);
+    const anchor = nearestAnchor(center, anchors);
+    const first = dwell[0];
+    const last = dwell[dwell.length - 1];
+    const key = anchor
+      ? `${anchor.type}:${anchor.id}:${first.timestamp}`
+      : `unknown:${first.timestamp}`;
+    movement.push(...ordered.slice(cursor, range.start + 1));
+    flushMovement(key);
     stops.push({
-      key: activeAnchor.key,
+      key,
       startTs: first.timestamp,
       endTs: last.timestamp,
-      latitude: activeAnchor.latitude,
-      longitude: activeAnchor.longitude,
-      anchor: activeAnchor.anchor,
+      latitude: center.latitude,
+      longitude: center.longitude,
+      anchor,
     });
-    originStopKey = activeAnchor.key;
-    activeAnchor = null;
-  };
-
-  for (const point of ordered) {
-    const entered = nearestAnchor(point, anchors);
-    if (activeAnchor) {
-      const activeDistance = distanceMeters(
-        point.latitude,
-        point.longitude,
-        activeAnchor.anchor.latitude,
-        activeAnchor.anchor.longitude,
-      );
-      const entersNearerAnchor =
-        entered != null &&
-        (entered.type !== activeAnchor.anchor.type ||
-          entered.id !== activeAnchor.anchor.id) &&
-        distanceMeters(
-          point.latitude,
-          point.longitude,
-          entered.latitude,
-          entered.longitude,
-        ) < activeDistance;
-      if (
-        !entersNearerAnchor &&
-        activeDistance <= activeAnchor.anchor.radiusM * EXIT_RADIUS_MULTIPLIER
-      ) {
-        extendCluster(activeAnchor, point);
-        continue;
-      }
-      closeActiveAnchor();
-    }
-
-    if (entered) {
-      flushUnknown();
-      const key = `${entered.type}:${entered.id}:${point.timestamp}`;
-      movement.push(point);
-      flushMovement(key);
-      activeAnchor = {
-        anchor: entered,
-        key,
-        points: [point],
-        latitude: point.latitude,
-        longitude: point.longitude,
-      };
-      continue;
-    }
-
-    if (
-      unknown &&
-      distanceMeters(
-        unknown.latitude,
-        unknown.longitude,
-        point.latitude,
-        point.longitude,
-      ) <= UNKNOWN_RADIUS_M
-    ) {
-      extendCluster(unknown, point);
-    } else {
-      flushUnknown();
-      unknown = {
-        points: [point],
-        latitude: point.latitude,
-        longitude: point.longitude,
-      };
-    }
+    originStopKey = key;
+    cursor = range.end + 1;
   }
 
-  closeActiveAnchor();
-  flushUnknown();
+  movement.push(...ordered.slice(cursor));
   flushMovement(null);
   return {stops, segments};
 }
 
 function nearestAnchor(
-  point: GpsPoint,
+  point: {latitude: number; longitude: number},
   anchors: RouteAnchor[],
 ): RouteAnchor | null {
   let best: {anchor: RouteAnchor; distance: number} | null = null;
@@ -210,11 +124,150 @@ function nearestAnchor(
   return best?.anchor ?? null;
 }
 
-function extendCluster(cluster: PointCluster, point: GpsPoint): void {
-  const count = cluster.points.length + 1;
-  cluster.latitude += (point.latitude - cluster.latitude) / count;
-  cluster.longitude += (point.longitude - cluster.longitude) / count;
-  cluster.points.push(point);
+function vehicleStateAtPoints(
+  points: GpsPoint[],
+  events: ActivityEvent[],
+): boolean[] {
+  const ordered = [...events].sort(
+    (a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp),
+  );
+  let cursor = 0;
+  let inVehicle = false;
+  return points.map(point => {
+    while (
+      cursor < ordered.length &&
+      Date.parse(ordered[cursor].timestamp) <= Date.parse(point.timestamp)
+    ) {
+      const event = ordered[cursor++];
+      if (event.activity === 'vehicle') {
+        inVehicle = event.transition === 'enter';
+      }
+    }
+    return inVehicle;
+  });
+}
+
+function findStopRanges(
+  points: GpsPoint[],
+  vehicleAtPoint: boolean[],
+): StopRange[] {
+  const ranges: StopRange[] = [];
+  let scanStart = 0;
+  let confirmedStart: number | null = null;
+  let lastContained = -1;
+  let fastStart: number | null = null;
+  let index = 0;
+
+  while (index < points.length) {
+    if (vehicleAtPoint[index]) {
+      if (confirmedStart != null && index > confirmedStart) {
+        ranges.push({start: confirmedStart, end: index - 1});
+      }
+      confirmedStart = null;
+      lastContained = -1;
+      fastStart = null;
+      scanStart = index + 1;
+      index += 1;
+      continue;
+    }
+
+    const speed = points[index].speed;
+    const isFast =
+      speed != null && Number.isFinite(speed) && speed >= GO_SPEED_MPS;
+    if (isFast) {
+      fastStart ??= index;
+      if (index - fastStart + 1 >= GO_SPEED_FIXES) {
+        if (confirmedStart != null && fastStart > confirmedStart) {
+          ranges.push({start: confirmedStart, end: fastStart - 1});
+        }
+        confirmedStart = null;
+        lastContained = -1;
+        fastStart = null;
+        scanStart = index + 1;
+        index += 1;
+        continue;
+      }
+    } else {
+      fastStart = null;
+    }
+
+    if (confirmedStart != null) {
+      const suffixStart = narrowestWindowStart(points, confirmedStart, index);
+      if (
+        suffixStart != null &&
+        isCompact(points.slice(suffixStart, index + 1))
+      ) {
+        lastContained = index;
+        index += 1;
+        continue;
+      }
+
+      ranges.push({start: confirmedStart, end: lastContained});
+      scanStart = lastContained + 1;
+      confirmedStart = null;
+      lastContained = -1;
+      fastStart = null;
+      index = scanStart;
+      continue;
+    }
+
+    const suffixStart = narrowestWindowStart(points, scanStart, index);
+    if (
+      suffixStart != null &&
+      isCompact(points.slice(suffixStart, index + 1))
+    ) {
+      confirmedStart = suffixStart;
+      lastContained = index;
+    }
+    index += 1;
+  }
+
+  if (confirmedStart != null) {
+    ranges.push({start: confirmedStart, end: lastContained});
+  }
+  return ranges;
+}
+
+function narrowestWindowStart(
+  points: GpsPoint[],
+  floor: number,
+  end: number,
+): number | null {
+  const endMs = Date.parse(points[end].timestamp);
+  for (let start = end - 1; start >= floor; start -= 1) {
+    if (endMs - Date.parse(points[start].timestamp) >= STOP_WINDOW_MS) {
+      return start;
+    }
+  }
+  return null;
+}
+
+function isCompact(points: GpsPoint[]): boolean {
+  const center = centroid(points);
+  return points.every(point =>
+    distanceMeters(
+      center.latitude,
+      center.longitude,
+      point.latitude,
+      point.longitude,
+    ) <= STOP_RADIUS_M + Math.max(0, point.accuracy ?? 0),
+  );
+}
+
+function centroid(
+  points: Array<{latitude: number; longitude: number}>,
+): {latitude: number; longitude: number} {
+  const sum = points.reduce(
+    (result, point) => ({
+      latitude: result.latitude + point.latitude,
+      longitude: result.longitude + point.longitude,
+    }),
+    {latitude: 0, longitude: 0},
+  );
+  return {
+    latitude: sum.latitude / points.length,
+    longitude: sum.longitude / points.length,
+  };
 }
 
 function secondsBetween(first: GpsPoint, last: GpsPoint): number {

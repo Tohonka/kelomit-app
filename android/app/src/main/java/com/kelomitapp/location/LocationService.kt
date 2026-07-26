@@ -24,7 +24,6 @@ import com.google.android.gms.location.ActivityRecognition
 import com.google.android.gms.location.ActivityRecognitionClient
 import com.google.android.gms.location.ActivityTransition
 import com.google.android.gms.location.ActivityTransitionRequest
-import com.google.android.gms.location.DetectedActivity
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
@@ -228,18 +227,13 @@ class LocationService : Service() {
       DiagLog.write(this, "activity.skip", "no-permission")
       return
     }
-    val moving = listOf(
-      DetectedActivity.WALKING,
-      DetectedActivity.RUNNING,
-      DetectedActivity.ON_FOOT,
-      DetectedActivity.ON_BICYCLE,
-      DetectedActivity.IN_VEHICLE,
-    )
-    val transitions = moving.map {
-      ActivityTransition.Builder()
-        .setActivityType(it)
-        .setActivityTransition(ActivityTransition.ACTIVITY_TRANSITION_ENTER)
-        .build()
+    val transitions = TRACKED_ACTIVITY_TYPES.flatMap { activity ->
+      TRACKED_TRANSITION_TYPES.map { transition ->
+        ActivityTransition.Builder()
+          .setActivityType(activity)
+          .setActivityTransition(transition)
+          .build()
+      }
     }
     activityClient?.requestActivityTransitionUpdates(
       ActivityTransitionRequest(transitions),

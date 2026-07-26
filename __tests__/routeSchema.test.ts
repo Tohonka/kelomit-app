@@ -3,6 +3,8 @@ import {migrations} from '../src/db/migrations';
 describe('route schema migration', () => {
   const migration = migrations.find(item => item.version === 20);
   const up = migration?.up.join('\n') ?? '';
+  const activityMigration = migrations.find(item => item.version === 22);
+  const activityUp = activityMigration?.up.join('\n') ?? '';
 
   it('creates the route history tables and place candidates cache', () => {
     expect(up).toContain('CREATE TABLE IF NOT EXISTS named_places');
@@ -23,5 +25,16 @@ describe('route schema migration', () => {
     expect(up).toContain('idx_route_stops_named ON day_route_stops(named_place_id)');
     expect(up).toContain('idx_route_segments_origin ON day_route_segments(origin_stop_id)');
     expect(up).toContain('idx_route_segments_destination ON day_route_segments(destination_stop_id)');
+  });
+
+  it('stores deduplicated activity evidence and a route derivation version', () => {
+    expect(activityUp).toContain('CREATE TABLE IF NOT EXISTS activity_events');
+    expect(activityUp).toContain(
+      "CHECK (activity IN ('still','walking','running','on_foot','bicycle','vehicle'))",
+    );
+    expect(activityUp).toContain("CHECK (transition IN ('enter','exit'))");
+    expect(activityUp).toContain('UNIQUE(activity, transition, timestamp)');
+    expect(activityUp).toContain('idx_activity_events_ts');
+    expect(activityUp).toContain("'route_derivation_version', '1'");
   });
 });

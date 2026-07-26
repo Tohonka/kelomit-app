@@ -36,215 +36,130 @@ const anchor = (
 });
 
 describe('deriveRouteDay', () => {
-  it('splits a short known-place stop at both boundaries', () => {
-    const office = anchor(1, 'Office', 0, 50);
-    const yard = anchor(2, 'Training Yard', 1000, 50);
-    const out = deriveRouteDay(
-      [
-        p(0, 0),
-        p(10, 100),
-        p(40, 500),
-        p(60, 1000),
-        p(240, 1000),
-        p(250, 900),
-        p(300, 500),
-        p(360, 0),
-      ],
-      [office, yard],
-    );
+  it('keeps a real-data-shaped walking supermarket visit as one stop', () => {
+    const points = [
+      p(0, 0, 0, 1.4),
+      p(120, 65, 0, 1.5),
+      p(300, 110, 0, 0.8),
+      p(600, 70, 40, 1.2),
+      p(900, 15, 30, 0.7),
+      p(1200, -20, 10, 1.4),
+    ];
+    const out = deriveRouteDay(points, [], [{
+      activity: 'walking',
+      transition: 'enter',
+      timestamp: p(30, 0).timestamp,
+    }]);
 
-    const yardStop = out.stops.find(stop => stop.anchor?.id === yard.id);
-    expect(out.segments).toHaveLength(2);
-    expect(yardStop).toMatchObject({
-      startTs: p(60, 1000).timestamp,
-      endTs: p(240, 1000).timestamp,
+    expect(out.stops).toHaveLength(1);
+    expect(out.stops[0]).toMatchObject({
+      startTs: points[0].timestamp,
+      endTs: points.at(-1)?.timestamp,
     });
-    expect(out.segments[0].destinationStopKey).toBe(yardStop?.key);
-    expect(out.segments[1].originStopKey).toBe(yardStop?.key);
   });
 
-  it('keeps a 299-second unknown cluster in one trip', () => {
+  it('does not turn a traffic light into a stop while vehicle is active', () => {
+    const points = Array.from({length: 7}, (_, index) =>
+      p(index * 60, 0, 0, 0),
+    );
+
+    expect(deriveRouteDay(points, [], [{
+      activity: 'vehicle',
+      transition: 'enter',
+      timestamp: p(0, 0).timestamp,
+    }]).stops).toEqual([]);
+  });
+
+  it('requires five minutes even inside a known place', () => {
+    const office = anchor(1, 'Office', 0, 70);
+    const out = deriveRouteDay([p(0, 0), p(299, 0)], [office]);
+
+    expect(out.stops).toEqual([]);
+  });
+
+  it('backdates a confirmed known stop to the first qualifying point', () => {
+    const office = anchor(1, 'Office', 0, 70);
     const out = deriveRouteDay(
-      [
-        p(0, 0),
-        p(50, 500),
-        p(100, 1000),
-        p(399, 1000),
-        p(410, 1500),
-        p(460, 2000),
-      ],
+      [p(0, 0), p(150, 10), p(300, -10)],
+      [office],
+    );
+
+    expect(out.stops[0]).toMatchObject({
+      startTs: p(0, 0).timestamp,
+      endTs: p(300, -10).timestamp,
+      anchor: office,
+    });
+  });
+
+  it('uses accuracy uncertainty without splitting an indoor stop', () => {
+    const points = [
+      {...p(0, 0), accuracy: 40},
+      {...p(300, 260), accuracy: 40},
+      {...p(600, 0), accuracy: 40},
+    ];
+
+    expect(deriveRouteDay(points, []).stops).toHaveLength(1);
+  });
+
+  it('ends a stop before two consecutive fast fixes', () => {
+    const points = [
+      p(0, 0),
+      p(300, 0),
+      p(360, 5),
+      p(370, 40, 0, 3.2),
+      p(380, 90, 0, 4),
+    ];
+    const out = deriveRouteDay(points, []);
+
+    expect(out.stops[0].endTs).toBe(p(360, 5).timestamp);
+  });
+
+  it('uses the same GPS-only fallback when activity evidence is absent or empty', () => {
+    const points = [p(0, 0), p(150, 10), p(300, -10)];
+
+    expect(deriveRouteDay(points, [])).toEqual(
+      deriveRouteDay(points, [], []),
+    );
+  });
+
+  it('keeps a 299-second compact cluster in one trip', () => {
+    const out = deriveRouteDay(
+      [p(0, 0), p(100, 20), p(299, -20), p(310, 500)],
       [],
     );
 
     expect(out.stops).toEqual([]);
     expect(out.segments).toHaveLength(1);
-    expect(out.segments[0].coordinates).toHaveLength(6);
+    expect(out.segments[0].coordinates).toHaveLength(4);
   });
 
-  it('splits a 300-second unknown cluster at its first point', () => {
+  it('splits a 300-second compact cluster at its arrival point', () => {
     const out = deriveRouteDay(
       [
-        p(0, 0),
-        p(50, 500),
-        p(100, 1000),
-        p(400, 1000),
-        p(450, 1500),
-        p(500, 2000),
+        p(0, -500),
+        p(50, -100),
+        p(100, 0),
+        p(400, 20),
+        p(450, 500),
+        p(500, 1000),
       ],
       [],
     );
 
     expect(out.stops).toHaveLength(1);
     expect(out.stops[0]).toMatchObject({
-      startTs: p(100, 1000).timestamp,
-      endTs: p(400, 1000).timestamp,
+      startTs: p(100, 0).timestamp,
+      endTs: p(400, 20).timestamp,
       anchor: null,
     });
     expect(out.segments).toHaveLength(2);
     expect(out.segments[0].coordinates).toEqual([
-      {latitude: p(0, 0).latitude, longitude: 0},
-      {latitude: p(50, 500).latitude, longitude: 0},
-      {latitude: p(100, 1000).latitude, longitude: 0},
+      {latitude: p(0, -500).latitude, longitude: 0},
+      {latitude: p(50, -100).latitude, longitude: 0},
+      {latitude: p(100, 0).latitude, longitude: 0},
     ]);
     expect(out.segments[0].destinationStopKey).toBe(out.stops[0].key);
     expect(out.segments[1].originStopKey).toBe(out.stops[0].key);
-  });
-
-  it('ends a sparse incoming trip at the first point inside an anchor', () => {
-    const destination = anchor(1, 'Destination', 1000, 100);
-
-    const out = deriveRouteDay(
-      [p(0, 0), p(50, 500), p(100, 1000)],
-      [destination],
-    );
-
-    expect(out.segments[0].coordinates).toEqual([
-      {latitude: p(0, 0).latitude, longitude: 0},
-      {latitude: p(50, 500).latitude, longitude: 0},
-      {latitude: p(100, 1000).latitude, longitude: 0},
-    ]);
-  });
-
-  it('keeps the exact 70 m unknown-cluster boundary in the backdated stop', () => {
-    const out = deriveRouteDay(
-      [
-        p(0, 0),
-        p(10, 500),
-        p(20, 1000),
-        p(320, 1070),
-        p(330, 1500),
-        p(340, 2000),
-      ],
-      [],
-    );
-
-    expect(out.stops).toHaveLength(1);
-    expect(out.stops[0]).toMatchObject({
-      startTs: p(20, 1000).timestamp,
-      endTs: p(320, 1070).timestamp,
-    });
-    expect(out.segments[0].coordinates.at(-1)).toEqual({
-      latitude: p(20, 1000).latitude,
-      longitude: 0,
-    });
-  });
-
-  it('includes exact entry and hysteresis boundaries for a 100 m anchor', () => {
-    const place = anchor(1, 'Place', 0, 100);
-
-    const out = deriveRouteDay(
-      [p(0, 200), p(10, 100), p(20, 125), p(30, 126), p(40, 200)],
-      [place],
-    );
-
-    expect(out.stops).toHaveLength(1);
-    expect(out.stops[0]).toMatchObject({
-      startTs: p(10, 100).timestamp,
-      endTs: p(20, 125).timestamp,
-    });
-    expect(out.segments[0].coordinates.at(-1)).toEqual({
-      latitude: p(10, 100).latitude,
-      longitude: 0,
-    });
-    expect(out.segments[1].coordinates[0]).toEqual({
-      latitude: p(30, 126).latitude,
-      longitude: 0,
-    });
-  });
-
-  it.each(['saved', 'reusable'] as const)(
-    'uses entry radius and 1.25 exit hysteresis for a %s anchor',
-    type => {
-      const place = anchor(1, 'Place', 0, 100, type);
-      const out = deriveRouteDay(
-        [p(0, 200), p(10, 101), p(20, 99), p(30, 110), p(40, 126), p(50, 200)],
-        [place],
-      );
-
-      expect(out.stops).toHaveLength(1);
-      expect(out.stops[0]).toMatchObject({
-        startTs: p(20, 99).timestamp,
-        endTs: p(30, 110).timestamp,
-        anchor: place,
-      });
-      expect(out.segments).toHaveLength(2);
-      expect(out.segments[0].coordinates.map(point => point.latitude)).toEqual([
-        p(0, 200).latitude,
-        p(10, 101).latitude,
-        p(20, 99).latitude,
-      ]);
-      expect(out.segments[1].coordinates.map(point => point.latitude)).toEqual([
-        p(40, 126).latitude,
-        p(50, 200).latitude,
-      ]);
-    },
-  );
-
-  it('selects the nearest center when anchor entry radii overlap', () => {
-    const farther = anchor(1, 'Farther', 0, 100);
-    const nearer = anchor(2, 'Nearer', 20, 100, 'reusable');
-
-    const out = deriveRouteDay([p(0, 18)], [farther, nearer]);
-
-    expect(out.stops).toHaveLength(1);
-    expect(out.stops[0].anchor).toBe(nearer);
-  });
-
-  it('transitions to a nearer containing anchor inside overlapping radii', () => {
-    const first = anchor(1, 'First', 0, 100);
-    const second = anchor(2, 'Second', 100, 100, 'reusable');
-
-    const out = deriveRouteDay(
-      [p(0, 0), p(10, 40), p(20, 70), p(30, 100)],
-      [first, second],
-    );
-
-    expect(out.stops.map(stop => stop.anchor?.id)).toEqual([1, 2]);
-    expect(out.stops[0]).toMatchObject({
-      startTs: p(0, 0).timestamp,
-      endTs: p(10, 40).timestamp,
-    });
-    expect(out.stops[1]).toMatchObject({
-      startTs: p(20, 70).timestamp,
-      endTs: p(30, 100).timestamp,
-    });
-  });
-
-  it('keeps the arrival point but omits subsequent anchor dwell geometry', () => {
-    const place = anchor(1, 'Place', 0, 50);
-    const out = deriveRouteDay(
-      [p(0, 200), p(10, 100), p(20, 10), p(30, -10), p(40, 100), p(50, 200)],
-      [place],
-    );
-
-    expect(out.segments).toHaveLength(2);
-    expect(
-      out.segments.flatMap(segment =>
-        segment.coordinates.map(point =>
-          Math.round(point.latitude * METRES_PER_DEGREE),
-        ),
-      ),
-    ).toEqual([200, 100, 10, 100, 200]);
   });
 
   it('does not create a boundary for a GPS time gap without spatial dwell', () => {
@@ -255,27 +170,6 @@ describe('deriveRouteDay', () => {
 
     expect(out.stops).toEqual([]);
     expect(out.segments).toHaveLength(1);
-  });
-
-  it('emits a partial route with a null origin', () => {
-    const destination = anchor(1, 'Destination', 1000, 50);
-    const out = deriveRouteDay(
-      [p(0, 0), p(50, 500), p(100, 1000)],
-      [destination],
-    );
-
-    expect(out.segments).toHaveLength(1);
-    expect(out.segments[0].originStopKey).toBeNull();
-    expect(out.segments[0].destinationStopKey).toBe(out.stops[0].key);
-  });
-
-  it('emits a partial route with a null destination', () => {
-    const origin = anchor(1, 'Origin', 0, 50);
-    const out = deriveRouteDay([p(0, 0), p(50, 500), p(100, 1000)], [origin]);
-
-    expect(out.segments).toHaveLength(1);
-    expect(out.segments[0].originStopKey).toBe(out.stops[0].key);
-    expect(out.segments[0].destinationStopKey).toBeNull();
   });
 
   it('keeps independently day-scoped calls from crossing midnight', () => {

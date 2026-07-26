@@ -10,13 +10,15 @@ import {
   createOrReplaceNativeConfirmation,
   resolveNativeConfirmation,
 } from '../db/dayConfirmations';
+import {insertActivityEvent} from '../db/activityEvents';
 import {recordCrossing} from './crossingStore';
+import {refreshRouteDay} from './routeHistoryService';
 
 function dateForTimestamp(timestamp: number): string {
   return format(new Date(timestamp), 'yyyy-MM-dd');
 }
 
-async function persistEvent(event: NativeJournalEvent): Promise<void> {
+async function persistEvent(event: NativeJournalEvent): Promise<number | null> {
   if (event.type === 'crossing') {
     const day = await getOrCreateDay(event.localDate);
     const time = new Date(event.timestamp).toISOString();
@@ -34,14 +36,23 @@ async function persistEvent(event: NativeJournalEvent): Promise<void> {
         started_at_source: 'auto',
       });
     }
-    return;
+    return null;
+  }
+
+  if (event.type === 'activity') {
+    await insertActivityEvent({
+      activity: event.activity,
+      transition: event.transition,
+      timestamp: new Date(event.timestamp).toISOString(),
+    });
+    return (await getOrCreateDay(dateForTimestamp(event.timestamp))).id;
   }
 
   const proposedEnd = new Date(event.exitTimestamp).toISOString();
   const day = await getOrCreateDay(dateForTimestamp(event.exitTimestamp));
   if (event.type === 'day_end_prompted') {
     await createOrReplaceNativeConfirmation(day.id, proposedEnd, event.token);
-    return;
+    return null;
   }
 
   const accepted = event.type === 'day_end_confirmed' ||
@@ -53,6 +64,7 @@ async function persistEvent(event: NativeJournalEvent): Promise<void> {
       ended_at_source: 'auto',
     });
   }
+  return null;
 }
 
 async function reconcileOnce(): Promise<void> {
@@ -74,8 +86,15 @@ async function reconcileOnce(): Promise<void> {
     }
   }
 
+  const routeDays = new Set<number>();
   for (const event of events) {
-    await persistEvent(event);
+    const dayId = await persistEvent(event);
+    if (dayId !== null) {
+      routeDays.add(dayId);
+    }
+  }
+  for (const dayId of routeDays) {
+    await refreshRouteDay(dayId, {force: true});
   }
   await ackNativeEvents(events[events.length - 1].sequence);
 }

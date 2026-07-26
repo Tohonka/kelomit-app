@@ -5,6 +5,8 @@ const mockUpdateDay = jest.fn();
 const mockRecordCrossing = jest.fn();
 const mockCreateOrReplaceNativeConfirmation = jest.fn();
 const mockResolveNativeConfirmation = jest.fn();
+const mockInsertActivityEvent = jest.fn();
+const mockRefreshRouteDay = jest.fn();
 
 jest.mock('../src/native/backgroundLocation', () => ({
   ...jest.requireActual('../src/native/backgroundLocation'),
@@ -23,6 +25,13 @@ jest.mock('../src/db/dayConfirmations', () => ({
     mockCreateOrReplaceNativeConfirmation(...args),
   resolveNativeConfirmation: (...args: unknown[]) =>
     mockResolveNativeConfirmation(...args),
+}));
+jest.mock('../src/db/activityEvents', () => ({
+  insertActivityEvent: (...args: unknown[]) =>
+    mockInsertActivityEvent(...args),
+}));
+jest.mock('../src/services/routeHistoryService', () => ({
+  refreshRouteDay: (...args: unknown[]) => mockRefreshRouteDay(...args),
 }));
 
 import {reconcileNativeEvents} from '../src/services/nativeEventSync';
@@ -50,6 +59,8 @@ beforeEach(() => {
     started_at_source: null,
     ended_at_source: null,
   });
+  mockInsertActivityEvent.mockResolvedValue(true);
+  mockRefreshRouteDay.mockResolvedValue(undefined);
 });
 
 it('persists an ordered work crossing, sets only the first start, then acknowledges', async () => {
@@ -181,4 +192,27 @@ it('does not acknowledge malformed, out-of-order, or failed persistence', async 
   mockRecordCrossing.mockRejectedValueOnce(new Error('disk full'));
   await expect(reconcileNativeEvents()).rejects.toThrow('disk full');
   expect(mockAckNativeEvents).not.toHaveBeenCalled();
+});
+
+it('persists activity evidence and refreshes its route before acknowledging', async () => {
+  mockReadNativeEvents.mockResolvedValue([JSON.stringify({
+    sequence: 40,
+    type: 'activity',
+    activity: 'walking',
+    transition: 'enter',
+    timestamp: Date.parse('2026-07-26T17:00:00.000Z'),
+  })]);
+
+  await reconcileNativeEvents();
+
+  expect(mockInsertActivityEvent).toHaveBeenCalledWith({
+    activity: 'walking',
+    transition: 'enter',
+    timestamp: '2026-07-26T17:00:00.000Z',
+  });
+  expect(mockRefreshRouteDay).toHaveBeenCalledWith(7, {force: true});
+  expect(mockInsertActivityEvent.mock.invocationCallOrder[0])
+    .toBeLessThan(mockRefreshRouteDay.mock.invocationCallOrder[0]);
+  expect(mockRefreshRouteDay.mock.invocationCallOrder[0])
+    .toBeLessThan(mockAckNativeEvents.mock.invocationCallOrder[0]);
 });
