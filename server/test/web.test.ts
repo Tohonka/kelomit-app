@@ -18,6 +18,13 @@ function seed(): void {
       id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL UNIQUE,
       started_at TEXT, ended_at TEXT, notes TEXT, created_at TEXT, updated_at TEXT
     );
+    CREATE TABLE projects (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE,
+      type TEXT NOT NULL DEFAULT 'work' CHECK(type IN ('work','personal','other')),
+      archived INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
     CREATE TABLE entries (
       id INTEGER PRIMARY KEY AUTOINCREMENT, day_id INTEGER NOT NULL,
       entry_type TEXT NOT NULL, activity_type TEXT NOT NULL DEFAULT 'work',
@@ -126,4 +133,25 @@ test('day page hours match hoursUtils for the same day', async () => {
   // rather than the entry's 4h is what proves calcDayWorkSecs is really being
   // called instead of a naive entry sum.
   assert.match(html, /8h/);
+});
+
+test('day page deducts a work-activity entry on a personal project', async () => {
+  seed();
+  const db = new Database(join(dataDir, 'current.db'));
+  db.exec(`
+    INSERT INTO projects (id, name, type) VALUES (1, 'Home', 'personal');
+    INSERT INTO entries (day_id, entry_type, activity_type, project_id, title, time_from, time_to, created_at)
+      VALUES (1, 'note', 'work', 1, 'painting the fence',
+              '2026-07-25T09:00:00.000Z', '2026-07-25T10:00:00.000Z', '2026-07-25T09:00:00.000Z');
+  `);
+  db.close();
+  const html = await app.fetch(new Request('http://localhost/day/2026-07-25')).then(r => r.text());
+  // Legs run 08:00-16:00 (8h baseline). The new entry is activity_type 'work'
+  // but attached to a 'personal'-type project, so the app's model
+  // (hoursUtils.dayWorkActivity) treats it as personal and deducts its 1h
+  // from the baseline: 8h - 1h = 7h. If the server fed bare rows (no
+  // entry.project), it would stay 'work' and add nothing, still showing 8h
+  // — this test only distinguishes the two when the join is present.
+  assert.match(html, /7h worked/);
+  assert.ok(!html.includes('8h worked'));
 });

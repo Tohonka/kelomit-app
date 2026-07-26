@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import type {Day, Entry} from '../../src/types/index.ts';
+import type {Day, Entry, Project} from '../../src/types/index.ts';
 
 export interface DaySummary {
   date: string;
@@ -73,10 +73,56 @@ export function getDay(db: Database.Database, date: string): Day | null {
   return (row as Day | undefined) ?? null;
 }
 
+/** Raw join row: entry columns plus the project's own columns, prefixed.
+ *  `hoursUtils.dayWorkActivity` only reads `project.type`, but the app always
+ *  attaches a full `Project`, so this mirrors that shape rather than a cast. */
+interface EntryProjectRow extends Entry {
+  project_name: string | null;
+  project_type: Project['type'] | null;
+  project_archived: number | null;
+  project_created_at: string | null;
+  project_updated_at: string | null;
+}
+
 export function getEntries(db: Database.Database, dayId: number): Entry[] {
-  return db
-    .prepare('SELECT * FROM entries WHERE day_id = ? ORDER BY COALESCE(time_from, created_at)')
-    .all(dayId) as Entry[];
+  const rows = db
+    .prepare(
+      `SELECT e.*,
+              p.name AS project_name,
+              p.type AS project_type,
+              p.archived AS project_archived,
+              p.created_at AS project_created_at,
+              p.updated_at AS project_updated_at
+         FROM entries e
+         LEFT JOIN projects p ON p.id = e.project_id
+        WHERE e.day_id = ?
+        ORDER BY COALESCE(e.time_from, e.created_at)`,
+    )
+    .all(dayId) as EntryProjectRow[];
+
+  return rows.map(
+    ({
+      project_name,
+      project_type,
+      project_archived,
+      project_created_at,
+      project_updated_at,
+      ...entry
+    }): Entry => ({
+      ...entry,
+      project:
+        entry.project_id != null && project_type != null
+          ? {
+              id: entry.project_id,
+              name: project_name ?? '',
+              type: project_type,
+              archived: Boolean(project_archived),
+              created_at: project_created_at ?? '',
+              updated_at: project_updated_at ?? '',
+            }
+          : null,
+    }),
+  );
 }
 
 export function getEntryMedia(db: Database.Database, dayId: number): MediaRow[] {

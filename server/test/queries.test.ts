@@ -19,6 +19,13 @@ function seed(): Database.Database {
       started_at TEXT, ended_at TEXT, notes TEXT,
       created_at TEXT, updated_at TEXT
     );
+    CREATE TABLE projects (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE,
+      type TEXT NOT NULL DEFAULT 'work' CHECK(type IN ('work','personal','other')),
+      archived INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
     CREATE TABLE entries (
       id INTEGER PRIMARY KEY AUTOINCREMENT, day_id INTEGER NOT NULL,
       entry_type TEXT NOT NULL, activity_type TEXT NOT NULL DEFAULT 'work',
