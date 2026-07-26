@@ -228,7 +228,7 @@ export function webRoutes(opts: {dataDir: string}): Hono {
     return c.html(
       layout(
         'Days',
-        `<h1>Days</h1><p><a class="link" href="/summary">Summary &rarr;</a></p>` +
+        `<h1>Days</h1><p><a class="link" href="/summary">Summary &rarr;</a> &nbsp; <a class="link" href="/report">Report &rarr;</a></p>` +
           (rows || '<p class="empty">No days recorded yet.</p>'),
       ),
     );

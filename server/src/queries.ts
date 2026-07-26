@@ -84,8 +84,13 @@ interface EntryProjectRow extends Entry {
   project_updated_at: string | null;
 }
 
-/** One query for the whole day's tags, grouped by entry — not one per entry. */
-function tagsByEntry(db: Database.Database, dayId: number): Map<number, Tag[]> {
+/** One query for the whole selection's tags, grouped by entry — not one per
+ *  entry. `scope` is a WHERE fragment over `e`, never interpolated user input. */
+function tagsByEntry(
+  db: Database.Database,
+  scope: string,
+  params: unknown[],
+): Map<number, Tag[]> {
   const rows = db
     .prepare(
       `SELECT et.entry_id AS entryId, t.id AS id, t.name AS name,
@@ -93,10 +98,10 @@ function tagsByEntry(db: Database.Database, dayId: number): Map<number, Tag[]> {
          FROM entry_tags et
          JOIN tags t ON t.id = et.tag_id
          JOIN entries e ON e.id = et.entry_id
-        WHERE e.day_id = ?
+        WHERE ${scope}
         ORDER BY t.name COLLATE NOCASE`,
     )
-    .all(dayId) as (Tag & {entryId: number})[];
+    .all(...params) as (Tag & {entryId: number})[];
 
   const map = new Map<number, Tag[]>();
   for (const {entryId, ...tag} of rows) {
@@ -110,7 +115,14 @@ function tagsByEntry(db: Database.Database, dayId: number): Map<number, Tag[]> {
   return map;
 }
 
-export function getEntries(db: Database.Database, dayId: number): Entry[] {
+/** Entries with their project and tags attached, exactly as the app builds them
+ *  — `hoursUtils` reclassifies by `project.type`, so bare rows give wrong hours.
+ *  `scope` is a fixed WHERE fragment chosen by the caller; values are bound. */
+function loadEntries(
+  db: Database.Database,
+  scope: string,
+  params: unknown[],
+): Entry[] {
   const rows = db
     .prepare(
       `SELECT e.*,
@@ -121,12 +133,12 @@ export function getEntries(db: Database.Database, dayId: number): Entry[] {
               p.updated_at AS project_updated_at
          FROM entries e
          LEFT JOIN projects p ON p.id = e.project_id
-        WHERE e.day_id = ?
+        WHERE ${scope}
         ORDER BY COALESCE(e.time_from, e.created_at)`,
     )
-    .all(dayId) as EntryProjectRow[];
+    .all(...params) as EntryProjectRow[];
 
-  const tags = tagsByEntry(db, dayId);
+  const tags = tagsByEntry(db, scope, params);
 
   return rows.map(
     ({
@@ -152,6 +164,43 @@ export function getEntries(db: Database.Database, dayId: number): Entry[] {
           : null,
     }),
   );
+}
+
+export function getEntries(db: Database.Database, dayId: number): Entry[] {
+  return loadEntries(db, 'e.day_id = ?', [dayId]);
+}
+
+/** Every entry across a date range, for the work-hours report. */
+export function getEntriesInRange(
+  db: Database.Database,
+  from: string,
+  to: string,
+): Entry[] {
+  return loadEntries(
+    db,
+    'e.day_id IN (SELECT id FROM days WHERE date >= ? AND date <= ?)',
+    [from, to],
+  );
+}
+
+/** Full day rows (not the list summaries) across a range. */
+export function getDaysInRange(
+  db: Database.Database,
+  from: string,
+  to: string,
+): Day[] {
+  return db
+    .prepare('SELECT * FROM days WHERE date >= ? AND date <= ? ORDER BY date')
+    .all(from, to) as Day[];
+}
+
+/** A settings value from the synced database — the report's person and company
+ *  names are whatever the phone has set. */
+export function getSetting(db: Database.Database, key: string): string | null {
+  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as
+    | {value: string | null}
+    | undefined;
+  return row?.value ?? null;
 }
 
 export function getEntryMedia(db: Database.Database, dayId: number): MediaRow[] {
