@@ -1,0 +1,13 @@
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    container_name: kelomit_web
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./data:/data
+    environment:
+      KELOMIT_SYNC_TOKEN: ${KELOMIT_SYNC_TOKEN:?set KELOMIT_SYNC_TOKEN in .env}
