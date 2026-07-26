@@ -1,0 +1,9 @@
+*
+!server
+!server/**
+server/node_modules
+!src
+!src/utils
+!src/utils/**
+!src/types
+!src/types/**

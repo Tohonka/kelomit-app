@@ -350,4 +350,13 @@ export const migrations: Migration[] = [
       'CREATE INDEX IF NOT EXISTS idx_route_segments_destination ON day_route_segments(destination_stop_id)',
     ],
   },
+  {
+    version: 21,
+    up: [
+      "INSERT OR IGNORE INTO settings (key, value) VALUES ('sync_url', '')",
+      "INSERT OR IGNORE INTO settings (key, value) VALUES ('sync_token', '')",
+      "INSERT OR IGNORE INTO settings (key, value) VALUES ('sync_last_at', '')",
+      "INSERT OR IGNORE INTO settings (key, value) VALUES ('sync_last_error', '')",
+    ],
+  },
 ];
