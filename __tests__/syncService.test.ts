@@ -63,6 +63,15 @@ describe('runSync guard clauses', () => {
     expect(rnfs.uploadFiles).not.toHaveBeenCalled();
     expect(mockError).not.toHaveBeenCalled();
   });
+
+  it('does not record an error when a sync is already running', async () => {
+    rnfs.readDir.mockResolvedValue([dirEntry('new.jpg')]);
+    const first = runSync();
+    const second = runSync();
+    await expect(second).resolves.toBe('failed');
+    await first;
+    expect(mockError).not.toHaveBeenCalled();
+  });
 });
 
 describe('snapshot', () => {
@@ -87,6 +96,7 @@ describe('media diff', () => {
       dirEntry('already.jpg'),
       dirEntry('new.jpg'),
       dirEntry('voice.m4a'),
+      dirEntry('voice2.wav'),
       dirEntry('clip.mp4'),
     ]);
 
@@ -95,6 +105,7 @@ describe('media diff', () => {
     const uploaded = rnfs.uploadFiles.mock.calls.map(c => c[0].toUrl as string);
     expect(uploaded).toContain('https://kelmi.pico.fi/api/media/new.jpg');
     expect(uploaded).toContain('https://kelmi.pico.fi/api/media/voice.m4a');
+    expect(uploaded).toContain('https://kelmi.pico.fi/api/media/voice2.wav');
     expect(uploaded).not.toContain('https://kelmi.pico.fi/api/media/already.jpg');
     expect(uploaded.some(u => u.endsWith('clip.mp4'))).toBe(false);
   });
@@ -147,6 +158,16 @@ describe('failure handling', () => {
     globalThis.fetch = jest.fn(() => Promise.reject(new Error('offline'))) as unknown as typeof fetch;
     await runSync();
     expect(rnfs.unlink).toHaveBeenCalledWith('/mock/caches/kelomit-sync.db');
+  });
+
+  it('does not push the database when the media directory read fails for a real reason', async () => {
+    rnfs.readDir.mockRejectedValue(Object.assign(new Error('Permission denied'), {code: 'EACCES'}));
+
+    await expect(runSync()).resolves.toBe('failed');
+
+    expect(rnfs.uploadFiles).not.toHaveBeenCalled();
+    expect(mockSuccess).not.toHaveBeenCalled();
+    expect(mockError).toHaveBeenCalledWith(expect.stringContaining('Permission denied'));
   });
 
   it('records success with an ISO timestamp on a clean run', async () => {

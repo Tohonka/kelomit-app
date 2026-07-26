@@ -10,7 +10,7 @@ import {
 export type SyncResult = 'done' | 'not_configured' | 'failed';
 
 /** Extensions we push. Video is deliberately excluded — see the design doc. */
-export const SYNCABLE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'm4a'] as const;
+export const SYNCABLE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'wav', 'm4a'] as const;
 
 const MEDIA_DIR = `${RNFS.DocumentDirectoryPath}/kelomit/media`;
 const SNAPSHOT_PATH = `${RNFS.CachesDirectoryPath}/kelomit-sync.db`;
@@ -47,6 +47,7 @@ const MIME_TYPES: Record<string, string> = {
   jpg: 'image/jpeg',
   jpeg: 'image/jpeg',
   png: 'image/png',
+  wav: 'audio/wav',
   m4a: 'audio/mp4',
   db: 'application/octet-stream',
 };
@@ -78,7 +79,14 @@ async function uploadMissingMedia(
   let items: Awaited<ReturnType<typeof RNFS.readDir>>;
   try {
     items = await RNFS.readDir(MEDIA_DIR);
-  } catch {
+  } catch (e) {
+    const err = e as {code?: string; message?: string};
+    const notFound =
+      err.code === 'ENOENT' ||
+      /ENOENT|not exist|No such file/i.test(err.message ?? '');
+    if (!notFound) {
+      throw e;
+    }
     // Media directory doesn't exist yet — nothing to upload.
     return;
   }
@@ -98,6 +106,7 @@ export async function runSync(): Promise<SyncResult> {
     return 'not_configured';
   }
   if (running) {
+    // Benign overlap, not a failure — leave the recorded status alone.
     return 'failed';
   }
   running = true;
