@@ -1,7 +1,8 @@
 import type {MiddlewareHandler} from 'hono';
 
-/** Constant-time-ish bearer check. The token is a single shared secret; there
- *  is one user. */
+/** Plain string-equality bearer check. Not timing-safe, but there is a single
+ *  shared secret and a single user, so a timing side-channel is not a
+ *  meaningful risk here. */
 export function bearerAuth(token: string): MiddlewareHandler {
   return async (c, next) => {
     const header = c.req.header('Authorization') ?? '';

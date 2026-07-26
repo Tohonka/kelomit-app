@@ -6,7 +6,7 @@ const SAFE_NAME = /^[A-Za-z0-9._-]+$/;
 
 /** Hostile input gate: the filename arrives straight off the wire. */
 export function isSafeMediaName(name: string): boolean {
-  if (!name || !SAFE_NAME.test(name) || name.includes('..')) {
+  if (!name || name.length > 200 || !SAFE_NAME.test(name) || name.includes('..')) {
     return false;
   }
   const ext = name.split('.').pop()?.toLowerCase() ?? '';

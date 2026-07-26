@@ -35,6 +35,20 @@ test('rejects extensions we do not sync', () => {
   assert.ok(!isSafeMediaName('noextension'));
 });
 
+test('rejects a bare allowed-extension word with no dot', () => {
+  // 'jpg'.split('.').pop() === 'jpg', which IS in the allowlist -- this
+  // pins the `ext !== name.toLowerCase()` guard against regression.
+  assert.ok(!isSafeMediaName('jpg'));
+  assert.ok(!isSafeMediaName('wav'));
+});
+
+test('rejects filenames longer than 200 characters', () => {
+  const longName = 'a'.repeat(197) + '.jpg'; // 201 chars total
+  assert.ok(!isSafeMediaName(longName));
+  const okName = 'a'.repeat(196) + '.jpg'; // 200 chars total
+  assert.ok(isSafeMediaName(okName));
+});
+
 test('saveMedia writes into the media dir', () => {
   saveMedia(dataDir, 'photo.jpg', Buffer.from('bytes'));
   assert.equal(readFileSync(join(dataDir, 'media', 'photo.jpg'), 'utf8'), 'bytes');
