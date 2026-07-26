@@ -13,6 +13,7 @@ import {getAllSettings} from './src/db/settings';
 import {getLocations} from './src/db/locations';
 import {stopTracking} from './src/services/gpsService';
 import {ensureNotificationChannel, requestNotificationPermission} from './src/services/notificationService';
+import {maybeAutoSync} from './src/services/syncService';
 import {
   reconcileRouteHistory,
   reconcileTrackingJournal,
@@ -102,6 +103,8 @@ function AppContent() {
           .catch(resumeError => diag('track.resume.fail', String(resumeError)));
         // A widget may have started/stopped a session while we were backgrounded.
         useSessionStore.getState().reconcile().catch(() => {});
+        // Fire and forget — sync failures never surface here.
+        maybeAutoSync().catch(() => {});
       } else if (
         appState.current === 'active' &&
         nextState.match(/inactive|background/)

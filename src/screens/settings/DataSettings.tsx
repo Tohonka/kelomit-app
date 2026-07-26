@@ -1,10 +1,11 @@
-import React, {useMemo, useState} from 'react';
+import React, {useEffect, useMemo, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
+  TextInput,
   StyleSheet,
   Alert,
   Platform,
@@ -14,6 +15,8 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import {subDays, format} from 'date-fns';
 import {exportToCsv} from '../../utils/exportUtils';
 import {exportBackup, importBackup} from '../../services/backupService';
+import {runSync} from '../../services/syncService';
+import {getSyncConfig, setSyncConfig, getSyncStatus} from '../../services/syncSettings';
 import {useTheme, typography, spacing, radius} from '../../theme';
 import {getDateFnsLocale} from '../../i18n';
 import {useSettingsStore} from '../../store/settingsStore';
@@ -70,6 +73,24 @@ const makeLocalStyles = (c: Colors) =>
       fontSize: typography.sizes.base,
       fontWeight: typography.weights.semibold,
     },
+    syncInput: {
+      marginHorizontal: spacing.lg,
+      marginBottom: spacing.sm,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      backgroundColor: c.bgCard,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: c.border,
+      color: c.textPrimary,
+      fontSize: typography.sizes.base,
+    },
+    syncStatus: {
+      marginHorizontal: spacing.lg,
+      marginBottom: spacing.sm,
+      fontSize: typography.sizes.sm,
+      color: c.textMuted,
+    },
   });
 
 export default function DataSettings(_props: Props) {
@@ -84,6 +105,59 @@ export default function DataSettings(_props: Props) {
   const [exportState, setExportState] = useState<ExportState>('hidden');
   const [exporting, setExporting] = useState(false);
   const [backupBusy, setBackupBusy] = useState(false);
+  const [syncUrl, setSyncUrl] = useState('');
+  const [syncToken, setSyncToken] = useState('');
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [syncStatusText, setSyncStatusText] = useState('');
+
+  const refreshSyncStatus = async () => {
+    const {lastAt, lastError} = await getSyncStatus();
+    if (lastError) {
+      setSyncStatusText(t('settings.syncFailed', {error: lastError}));
+    } else if (lastAt) {
+      setSyncStatusText(
+        t('settings.syncLastAt', {
+          when: format(new Date(lastAt), 'd.M.yyyy HH:mm', {
+            locale: getDateFnsLocale(language),
+          }),
+        }),
+      );
+    } else {
+      setSyncStatusText(t('settings.syncNeverRun'));
+    }
+  };
+
+  useEffect(() => {
+    (async () => {
+      const config = await getSyncConfig();
+      if (config) {
+        setSyncUrl(config.url);
+        setSyncToken(config.token);
+      }
+      await refreshSyncStatus();
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleSaveSync = async () => {
+    await setSyncConfig(syncUrl, syncToken);
+  };
+
+  const handleSyncNow = async () => {
+    setSyncBusy(true);
+    try {
+      await handleSaveSync();
+      const result = await runSync();
+      if (result === 'not_configured') {
+        Alert.alert(t('settings.syncSection'), t('settings.syncNotConfigured'));
+      } else if (result === 'done') {
+        Alert.alert(t('settings.syncSection'), t('settings.syncDone'));
+      }
+      await refreshSyncStatus();
+    } finally {
+      setSyncBusy(false);
+    }
+  };
 
   const handleBackup = async () => {
     setBackupBusy(true);
@@ -215,6 +289,40 @@ export default function DataSettings(_props: Props) {
             <Text style={styles.rowSubLabel}>{t('settings.restoreSubtitle')}</Text>
           </View>
           <Text style={styles.rowCaret}>›</Text>
+        </TouchableOpacity>
+
+        <Text style={styles.sectionHeader}>{t('settings.syncSection')}</Text>
+
+        <TextInput
+          style={local.syncInput}
+          value={syncUrl}
+          onChangeText={setSyncUrl}
+          onBlur={handleSaveSync}
+          placeholder={t('settings.syncServerUrl')}
+          placeholderTextColor={colors.textMuted}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="url"
+        />
+        <TextInput
+          style={local.syncInput}
+          value={syncToken}
+          onChangeText={setSyncToken}
+          onBlur={handleSaveSync}
+          placeholder={t('settings.syncToken')}
+          placeholderTextColor={colors.textMuted}
+          autoCapitalize="none"
+          autoCorrect={false}
+          secureTextEntry
+        />
+
+        <Text style={local.syncStatus}>{syncStatusText}</Text>
+
+        <TouchableOpacity style={styles.row} onPress={handleSyncNow} disabled={syncBusy}>
+          <Text style={styles.rowLabel}>
+            {syncBusy ? t('settings.syncing') : t('settings.syncNow')}
+          </Text>
+          <Text style={styles.rowCaret}>{syncBusy ? '…' : '›'}</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
