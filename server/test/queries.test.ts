@@ -26,6 +26,15 @@ function seed(): Database.Database {
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+    CREATE TABLE tags (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE entry_tags (
+      entry_id INTEGER NOT NULL, tag_id INTEGER NOT NULL,
+      PRIMARY KEY (entry_id, tag_id)
+    );
     CREATE TABLE entries (
       id INTEGER PRIMARY KEY AUTOINCREMENT, day_id INTEGER NOT NULL,
       entry_type TEXT NOT NULL, activity_type TEXT NOT NULL DEFAULT 'work',

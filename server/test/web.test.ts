@@ -33,6 +33,15 @@ function seed(): void {
       latitude REAL, longitude REAL, location_label TEXT,
       created_at TEXT, updated_at TEXT
     );
+    CREATE TABLE tags (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE entry_tags (
+      entry_id INTEGER NOT NULL, tag_id INTEGER NOT NULL,
+      PRIMARY KEY (entry_id, tag_id)
+    );
     CREATE TABLE entry_media (
       id INTEGER PRIMARY KEY AUTOINCREMENT, entry_id INTEGER NOT NULL,
       media_type TEXT NOT NULL, file_path TEXT NOT NULL, thumbnail_path TEXT,
@@ -100,6 +109,43 @@ test('day page links media by basename', async () => {
   assert.ok(!html.includes('/data/user/0/app/files'));
 });
 
+test('day page shows an entry\u2019s tags and project', async () => {
+  seed();
+  const db = new Database(join(dataDir, 'current.db'));
+  db.exec(`
+    INSERT INTO projects (id, name, type) VALUES (7, 'Roofing', 'work');
+    INSERT INTO tags (id, name) VALUES (1, 'invoiced'), (2, 'urgent');
+    INSERT INTO entries (id, day_id, entry_type, activity_type, project_id, title,
+                         time_from, time_to, created_at)
+      VALUES (50, 1, 'note', 'work', 7, 'Gutter run',
+              '2026-07-25T13:00:00.000Z', '2026-07-25T14:00:00.000Z', '2026-07-25T13:00:00.000Z');
+    INSERT INTO entry_tags (entry_id, tag_id) VALUES (50, 1), (50, 2);
+  `);
+  db.close();
+  const html = await app.fetch(new Request('http://localhost/day/2026-07-25')).then(r => r.text());
+  assert.match(html, /#invoiced/);
+  assert.match(html, /#urgent/);
+  assert.match(html, /Roofing/);
+});
+
+test('section labels are not double-escaped', async () => {
+  seed();
+  const db = new Database(join(dataDir, 'current.db'));
+  db.exec(`
+    INSERT INTO day_route_segments (day_id, sequence, start_ts, end_ts, coordinates_json,
+                                    distance_m, duration_sec, average_speed_mps,
+                                    maximum_speed_mps, raw_last_ts)
+      VALUES (1, 0, '2026-07-25T10:00:00.000Z', '2026-07-25T10:20:00.000Z', '[]',
+              12300, 1200, 10, 20, '2026-07-25T10:20:00.000Z');
+  `);
+  db.close();
+  const html = await app.fetch(new Request('http://localhost/day/2026-07-25')).then(r => r.text());
+  // section() escapes its label, so an HTML entity in the label would surface
+  // to the reader as a literal `&middot;`.
+  assert.ok(!html.includes('&amp;middot;'));
+  assert.match(html, /Route .* 1 trip, 12\.3 km/);
+});
+
 test('unknown day returns 404', async () => {
   seed();
   const res = await app.fetch(new Request('http://localhost/day/1999-01-01'));
@@ -132,7 +178,7 @@ test('day page hours match hoursUtils for the same day', async () => {
   // the "work day is the minimum" model in docs/hours-model.md. Asserting 8h
   // rather than the entry's 4h is what proves calcDayWorkSecs is really being
   // called instead of a naive entry sum.
-  assert.match(html, /8h/);
+  assert.match(html, /class="hours-big">8h</);
 });
 
 test('day page deducts a work-activity entry on a personal project', async () => {
@@ -152,6 +198,6 @@ test('day page deducts a work-activity entry on a personal project', async () =>
   // from the baseline: 8h - 1h = 7h. If the server fed bare rows (no
   // entry.project), it would stay 'work' and add nothing, still showing 8h
   // — this test only distinguishes the two when the join is present.
-  assert.match(html, /7h worked/);
-  assert.ok(!html.includes('8h worked'));
+  assert.match(html, /class="hours-big">7h</);
+  assert.ok(!html.includes('class="hours-big">8h<'));
 });

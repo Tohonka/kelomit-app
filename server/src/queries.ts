@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import type {Day, Entry, Project} from '../../src/types/index.ts';
+import type {Day, Entry, Project, Tag} from '../../src/types/index.ts';
 
 export interface DaySummary {
   date: string;
@@ -84,6 +84,32 @@ interface EntryProjectRow extends Entry {
   project_updated_at: string | null;
 }
 
+/** One query for the whole day's tags, grouped by entry — not one per entry. */
+function tagsByEntry(db: Database.Database, dayId: number): Map<number, Tag[]> {
+  const rows = db
+    .prepare(
+      `SELECT et.entry_id AS entryId, t.id AS id, t.name AS name,
+              t.created_at AS created_at
+         FROM entry_tags et
+         JOIN tags t ON t.id = et.tag_id
+         JOIN entries e ON e.id = et.entry_id
+        WHERE e.day_id = ?
+        ORDER BY t.name COLLATE NOCASE`,
+    )
+    .all(dayId) as (Tag & {entryId: number})[];
+
+  const map = new Map<number, Tag[]>();
+  for (const {entryId, ...tag} of rows) {
+    const list = map.get(entryId);
+    if (list) {
+      list.push(tag);
+    } else {
+      map.set(entryId, [tag]);
+    }
+  }
+  return map;
+}
+
 export function getEntries(db: Database.Database, dayId: number): Entry[] {
   const rows = db
     .prepare(
@@ -100,6 +126,8 @@ export function getEntries(db: Database.Database, dayId: number): Entry[] {
     )
     .all(dayId) as EntryProjectRow[];
 
+  const tags = tagsByEntry(db, dayId);
+
   return rows.map(
     ({
       project_name,
@@ -110,6 +138,7 @@ export function getEntries(db: Database.Database, dayId: number): Entry[] {
       ...entry
     }): Entry => ({
       ...entry,
+      tags: tags.get(entry.id) ?? [],
       project:
         entry.project_id != null && project_type != null
           ? {
