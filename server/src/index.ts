@@ -1,6 +1,7 @@
 import {serve} from '@hono/node-server';
 import {Hono} from 'hono';
 import {apiRoutes} from './routes/api.ts';
+import {webRoutes} from './routes/web.ts';
 
 const dataDir = process.env.KELOMIT_DATA_DIR ?? '/data';
 const token = process.env.KELOMIT_SYNC_TOKEN;
@@ -12,6 +13,7 @@ if (!token) {
 
 const app = new Hono();
 app.route('/', apiRoutes({dataDir, token}));
+app.route('/', webRoutes({dataDir}));
 app.get('/healthz', c => c.text('ok'));
 
 serve({fetch: app.fetch, port});
