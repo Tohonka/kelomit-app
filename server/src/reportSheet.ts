@@ -14,6 +14,11 @@ const DIVIDER = '#D6E0EA';
 /** The page box, matching WorkReportLayout: A4 with a 42pt margin. */
 export const PAGE_MARGIN_PT = 42;
 
+// Date, work time, regular, remote/other, overtime, total — WorkReportLayout's
+// *_COLUMN_WIDTH constants, in order.
+const COLUMN_WIDTHS_PT = [88, 104, 58, 88, 58, 68];
+const TABLE_WIDTH_PT = COLUMN_WIDTHS_PT.reduce((a, b) => a + b, 0);
+
 export const SHEET_CSS = `
 .sheet {
   color: ${NAVY};
@@ -51,38 +56,49 @@ export const SHEET_CSS = `
   padding-bottom: 8pt;
   white-space: nowrap;
 }
-.sheet-table { width: 100%; border-collapse: collapse; margin-top: 18pt; }
-.sheet-table col:nth-child(1) { width: 19%; }
-.sheet-table col:nth-child(2) { width: 22%; }
-.sheet-table col:nth-child(3) { width: 12%; }
-.sheet-table col:nth-child(4) { width: 19%; }
-.sheet-table col:nth-child(5) { width: 12%; }
-.sheet-table col:nth-child(6) { width: 16%; }
+/* Column widths, the table's right edge and the 5pt cell gap are
+   WorkReportLayout's own constants — the table stops well short of the right
+   margin on paper, exactly as the app draws it. */
+.sheet-table {
+  table-layout: fixed;
+  width: ${TABLE_WIDTH_PT}pt;
+  border-collapse: collapse;
+  margin-top: 18pt;
+  line-height: 11pt;
+}
+${COLUMN_WIDTHS_PT.map(
+  (w, i) => `.sheet-table col:nth-child(${i + 1}) { width: ${w}pt; }`,
+).join('\n')}
 .sheet-table th {
   background: ${PALE_BLUE};
-  font-size: 9pt;
+  font-size: 8pt;
   font-weight: 700;
   text-align: left;
-  padding: 8pt 10pt;
+  height: 32pt;
+  padding: 5.5pt 5pt 0 0;
+  vertical-align: top;
 }
 .sheet-table th.right, .sheet-table td.right { text-align: right; }
-.sheet-table td { padding: 7pt 10pt 0; vertical-align: top; }
+/* 28pt is the app's minimum row height; a wrapped date or work-time grows it. */
+.sheet-table td { font-size: 9pt; height: 28pt; padding: 6pt 5pt 0 0; vertical-align: top; }
+/* Durations sit lower in the row than the date, as on paper. */
+.sheet-table td.right { font-size: 8.5pt; padding-top: 10.5pt; }
 .sheet-table td.total { font-weight: 700; }
-/* One day = its date row plus the detail/headline row underneath. The hairline
-   closes the pair, so it belongs to the LAST row of the group. */
-.sheet-table tr.close td { padding-bottom: 7pt; border-bottom: 0.75pt solid ${DIVIDER}; }
-.sheet-detail { color: ${BLUE}; font-size: 9pt; margin: 0; }
-.sheet-headlines { list-style: none; margin: 5pt 0 0; padding: 0; }
+/* One day = its row plus the headline row underneath. The hairline closes the
+   pair, so it belongs to the LAST row of the group. */
+.sheet-table tr.close td { padding-bottom: 4pt; border-bottom: 0.75pt solid ${DIVIDER}; }
+.sheet-table td.headlines { height: auto; padding: 0 0 5pt; }
+.sheet-headlines { list-style: none; margin: 0; padding: 0; }
 .sheet-headlines li {
   font-size: 9.5pt;
   line-height: 14pt;
-  padding-left: 12pt;
+  padding-left: 22pt;
   position: relative;
 }
 .sheet-headlines li::before {
   content: '';
   position: absolute;
-  left: 0;
+  left: 8pt;
   top: 5pt;
   width: 4pt;
   height: 4pt;
@@ -140,7 +156,9 @@ export function sheetHtml(model: WorkReportModel): string {
           <td class="right num">${esc(d.overtime)}</td>
           <td class="right total num">${esc(d.total)}</td>
         </tr>` +
-        (headlines ? `<tr class="close"><td colspan="6">${headlines}</td></tr>` : '')
+        (headlines
+          ? `<tr class="close"><td class="headlines" colspan="6">${headlines}</td></tr>`
+          : '')
       );
     })
     .join('');
