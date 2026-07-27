@@ -25,6 +25,7 @@ import TagChip from '../components/entries/TagChip';
 import ProjectPicker from '../components/entries/ProjectPicker';
 import TimePicker from '../components/ui/TimePicker';
 import AttachmentsSection, {type EditorMedia} from '../components/media/AttachmentsSection';
+import LeaveEditor from '../components/entries/LeaveEditor';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import {deleteMediaFile, ensureMediaDir} from '../utils/mediaUtils';
 import {getLastKnownPosition} from '../services/gpsService';
@@ -57,6 +58,28 @@ const makeStyles = (c: Colors) =>
   StyleSheet.create({
     container: {flex: 1, backgroundColor: c.bg},
     content: {padding: spacing.lg, paddingBottom: spacing.xxl},
+    tabRow: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+      marginBottom: spacing.sm,
+    },
+    tab: {
+      flex: 1,
+      minHeight: 44,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: radius.pill,
+      borderWidth: 1.5,
+      borderColor: c.border,
+      backgroundColor: c.bgCard,
+    },
+    tabActive: {borderColor: c.primary, backgroundColor: c.primary + '15'},
+    tabText: {
+      color: c.textMuted,
+      fontSize: typography.sizes.sm,
+      fontWeight: typography.weights.semibold,
+    },
+    tabTextActive: {color: c.primary},
     sectionLabel: {
       fontSize: typography.sizes.sm,
       fontWeight: typography.weights.semibold,
@@ -222,9 +245,10 @@ const makeStyles = (c: Colors) =>
 
 export default function AddEntryModal({navigation, route}: Props) {
   const {t: translate} = useTranslation();
-  const {dayId, entryId} = route.params;
+  const {dayId, entryId, leaveRangeId, initialTab} = route.params;
   const entryDate = route.params.date ?? todayDate();
   const isEdit = entryId != null;
+  const canSwitchTabs = entryId == null && leaveRangeId == null;
   const {addEntry, editEntry, loadEntriesForDay} = useEntryStore();
   const {projects, loaded: projectsLoaded, load: loadProjects, add: addProject} = useProjectStore();
   const {tags, loaded: tagsLoaded, load: loadTags, getOrCreate} = useTagStore();
@@ -238,6 +262,10 @@ export default function AddEntryModal({navigation, route}: Props) {
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const [activityType, setActivityType] = useState<ActivityType>('work');
+  const [isOvertime, setIsOvertime] = useState(false);
+  const [editorTab, setEditorTab] = useState<'note' | 'leave'>(
+    leaveRangeId != null ? 'leave' : initialTab ?? 'note',
+  );
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
@@ -346,6 +374,7 @@ export default function AddEntryModal({navigation, route}: Props) {
     getEntry(entryId).then(e => {
       if (!e) { return; }
       setActivityType(e.activity_type);
+      setIsOvertime(e.is_overtime);
       setTitle(e.title ?? '');
       setBody(e.body ?? '');
       setSelectedProjectId(e.project_id);
@@ -452,6 +481,7 @@ export default function AddEntryModal({navigation, route}: Props) {
           entryId,
           {
             activity_type: activityType,
+            is_overtime: isOvertime,
             title: title.trim() || null,
             body: body.trim() || null,
             project_id: selectedProjectId,
@@ -477,6 +507,7 @@ export default function AddEntryModal({navigation, route}: Props) {
           day_id: targetDayId,
           entry_type: 'note',
           activity_type: activityType,
+          is_overtime: isOvertime,
           title: title.trim() || null,
           body: body.trim() || null,
           project_id: selectedProjectId,
@@ -522,6 +553,47 @@ export default function AddEntryModal({navigation, route}: Props) {
     return null;
   }
 
+  const tabs = canSwitchTabs && (
+    <View style={styles.tabRow}>
+      {(['note', 'leave'] as const).map(tab => (
+        <TouchableOpacity
+          key={tab}
+          style={[styles.tab, editorTab === tab && styles.tabActive]}
+          onPress={() => setEditorTab(tab)}
+          accessibilityRole="tab"
+          accessibilityState={{selected: editorTab === tab}}
+          accessibilityLabel={translate(`entries.${tab}Tab`)}>
+          <Text style={[
+            styles.tabText,
+            editorTab === tab && styles.tabTextActive,
+          ]}>
+            {translate(`entries.${tab}Tab`)}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+
+  if (editorTab === 'leave') {
+    return (
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView
+          style={styles.container}
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled">
+          {tabs}
+          <LeaveEditor
+            initialDate={entryDate}
+            leaveRangeId={leaveRangeId}
+            onSaved={() => navigation.goBack()}
+          />
+        </ScrollView>
+      </KeyboardAvoidingView>
+    );
+  }
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -533,13 +605,19 @@ export default function AddEntryModal({navigation, route}: Props) {
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag">
 
+      {tabs}
       <Text style={styles.sectionLabel}>{translate('entries.activity')}</Text>
       <View style={styles.activityRow}>
         {ACTIVITY_TYPES.map(({type, labelKey}) => (
           <TouchableOpacity
             key={type}
             style={[styles.activityBtn, activityType === type && styles.activityBtnActive]}
-            onPress={() => setActivityType(type)}
+            onPress={() => {
+              setActivityType(type);
+              if (type !== 'work') {
+                setIsOvertime(false);
+              }
+            }}
             activeOpacity={0.7}>
             <Text style={[styles.activityLabel, activityType === type && styles.activityLabelActive]}>
               {translate(labelKey)}
@@ -547,6 +625,25 @@ export default function AddEntryModal({navigation, route}: Props) {
           </TouchableOpacity>
         ))}
       </View>
+
+      {activityType === 'work' && (
+        <TouchableOpacity
+          style={styles.todoRow}
+          onPress={() => setIsOvertime(value => !value)}
+          accessibilityRole="checkbox"
+          accessibilityState={{checked: isOvertime}}
+          accessibilityLabel={translate('entries.overtime')}>
+          <Text style={styles.todoLabel}>{translate('entries.overtime')}</Text>
+          <View style={[styles.todoToggle, isOvertime && styles.todoToggleOn]}>
+            <Text style={[
+              styles.todoToggleText,
+              isOvertime && styles.todoToggleTextOn,
+            ]}>
+              {isOvertime ? translate('common.on') : translate('common.off')}
+            </Text>
+          </View>
+        </TouchableOpacity>
+      )}
 
       <Text style={styles.sectionLabel}>{translate('entries.attachments')}</Text>
       <AttachmentsSection media={media} onAdd={addMedia} onRemove={removeMedia} />

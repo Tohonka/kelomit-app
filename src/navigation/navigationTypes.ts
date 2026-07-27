@@ -9,7 +9,13 @@ export type RootStackParamList = {
   DayMap: {dayId: number; date: string};
   DayMapFull: {dayId: number; date: string};
   EntryDetailScreen: {entryId: number; dayId: number};
-  AddEntryModal: {date?: string; dayId: number; entryId?: number};
+  AddEntryModal: {
+    date?: string;
+    dayId: number;
+    entryId?: number;
+    leaveRangeId?: number;
+    initialTab?: 'note' | 'leave';
+  };
   QuickAddModal: {date?: string; dayId: number; entryType: EntryType};
   ProjectsScreen: undefined;
   TagsScreen: undefined;
