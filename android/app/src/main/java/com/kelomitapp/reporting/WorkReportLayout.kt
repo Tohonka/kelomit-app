@@ -7,6 +7,12 @@ object WorkReportLayout {
   const val PAGE_HEIGHT = 842
   const val MARGIN = 42f
   const val FOOTER_TOP = 806f
+  const val DATE_COLUMN_WIDTH = 88f
+  const val WORK_TIME_COLUMN_WIDTH = 104f
+  const val REGULAR_COLUMN_WIDTH = 58f
+  const val REMOTE_COLUMN_WIDTH = 88f
+  const val OVERTIME_COLUMN_WIDTH = 58f
+  const val TOTAL_COLUMN_WIDTH = 68f
 
   fun needsPageBreak(currentY: Float, blockHeight: Float): Boolean =
     currentY + blockHeight > FOOTER_TOP

@@ -98,18 +98,26 @@ object WorkReportRenderer {
     val columnsJson = root.getJSONObject("columns")
     val columns = Columns(
       date = columnsJson.requiredText("date"),
-      weekday = columnsJson.requiredText("weekday"),
-      hours = columnsJson.requiredText("hours"),
+      workTime = columnsJson.requiredText("workTime"),
+      regular = columnsJson.requiredText("regular"),
+      remoteOther = columnsJson.requiredText("remoteOther"),
+      overtime = columnsJson.requiredText("overtime"),
+      total = columnsJson.requiredText("total"),
     )
     val daysJson = root.getJSONArray("days")
     require(daysJson.length() > 0) { "Report must contain at least one day" }
     val days = daysJson.objects().map { day ->
       DayRow(
         date = day.requiredText("date"),
-        weekday = day.requiredText("weekday"),
-        hours = day.requiredText("hours"),
-        seconds = day.nonNegativeSeconds(),
-        details = day.requiredText("details"),
+        workTime = day.text("workTime"),
+        regular = day.requiredText("regular"),
+        regularSeconds = day.nonNegativeSeconds("regularSeconds"),
+        remoteOther = day.requiredText("remoteOther"),
+        remoteOtherSeconds = day.nonNegativeSeconds("remoteOtherSeconds"),
+        overtime = day.requiredText("overtime"),
+        overtimeSeconds = day.nonNegativeSeconds("overtimeSeconds"),
+        total = day.requiredText("total"),
+        totalSeconds = day.nonNegativeSeconds("totalSeconds"),
         headlines = day.getJSONArray("headlines").strings(),
       )
     }
@@ -138,8 +146,8 @@ object WorkReportRenderer {
   private fun JSONObject.requiredText(key: String): String =
     text(key).also { require(it.isNotEmpty()) { "$key must not be blank" } }
 
-  private fun JSONObject.nonNegativeSeconds(): Long {
-    val raw = get("seconds")
+  private fun JSONObject.nonNegativeSeconds(key: String = "seconds"): Long {
+    val raw = get(key)
     return parseNonNegativeSeconds(raw)
   }
 
@@ -183,16 +191,24 @@ object WorkReportRenderer {
 
   private data class Columns(
     val date: String,
-    val weekday: String,
-    val hours: String,
+    val workTime: String,
+    val regular: String,
+    val remoteOther: String,
+    val overtime: String,
+    val total: String,
   )
 
   private data class DayRow(
     val date: String,
-    val weekday: String,
-    val hours: String,
-    val seconds: Long,
-    val details: String,
+    val workTime: String,
+    val regular: String,
+    val regularSeconds: Long,
+    val remoteOther: String,
+    val remoteOtherSeconds: Long,
+    val overtime: String,
+    val overtimeSeconds: Long,
+    val total: String,
+    val totalSeconds: Long,
     val headlines: List<String>,
   )
 
@@ -375,51 +391,32 @@ object WorkReportRenderer {
     }
 
     private fun drawColumnHeadings(canvas: Canvas) {
-      fill(canvas, MARGIN, y, PAGE_RIGHT, y + 27f, PALE_BLUE)
-      val baseline = y + 18f
-      drawFittedText(
-        canvas,
-        model.columns.date,
-        DATE_X,
-        baseline,
-        9f,
-        DATE_COLUMN_WIDTH,
-        bold = true,
-      )
-      drawFittedText(
-        canvas,
-        model.columns.weekday,
-        WEEKDAY_X,
-        baseline,
-        9f,
-        WEEKDAY_COLUMN_WIDTH,
-        bold = true,
-      )
-      drawFittedText(
-        canvas,
-        model.columns.hours,
-        PAGE_RIGHT - 10f,
-        baseline,
-        9f,
-        HOURS_COLUMN_WIDTH,
-        bold = true,
-        align = Paint.Align.RIGHT,
-      )
-      y += 27f
+      fill(canvas, MARGIN, y, TABLE_RIGHT, y + HEADER_HEIGHT, PALE_BLUE)
+      drawTableText(canvas, model.columns.date, DATE_X, DATE_WIDTH, y, true)
+      drawTableText(canvas, model.columns.workTime, WORK_TIME_X, WORK_TIME_WIDTH, y, true)
+      drawTableText(canvas, model.columns.regular, REGULAR_X, REGULAR_WIDTH, y, true, true)
+      drawTableText(canvas, model.columns.remoteOther, REMOTE_X, REMOTE_WIDTH, y, true, true)
+      drawTableText(canvas, model.columns.overtime, OVERTIME_X, OVERTIME_WIDTH, y, true, true)
+      drawTableText(canvas, model.columns.total, TOTAL_X, TOTAL_WIDTH, y, true, true)
+      y += HEADER_HEIGHT
     }
 
     private fun drawDay(day: DayRow) {
-      val detailLines = wrap(day.details, PAGE_RIGHT - DETAIL_X, 9f)
+      val dateLines = wrapLimited(day.date, DATE_WIDTH - CELL_GAP, 9f, 2)
+      val workTimeLines = wrapLimited(day.workTime, WORK_TIME_WIDTH - CELL_GAP, 9f, 2)
       val headlineLines = day.headlines.map { headline ->
         wrap(headline, PAGE_RIGHT - HEADLINE_X, 9.5f)
       }
-      val blockHeight = DAY_ROW_HEIGHT +
-        detailLines.size * DETAIL_LINE_HEIGHT + 4f +
+      val rowHeight = maxOf(
+        DAY_ROW_HEIGHT,
+        maxOf(dateLines.size, workTimeLines.size) * TABLE_LINE_HEIGHT + 8f,
+      )
+      val blockHeight = rowHeight + 4f +
         headlineLines.sumOf { it.size }.toFloat() * HEADLINE_LINE_HEIGHT +
         if (headlineLines.isEmpty()) 0f else 5f
       val continuationCapacity = WorkReportLayout.FOOTER_TOP - CONTINUATION_BODY_TOP
       if (
-        WorkReportLayout.needsPageBreak(y, DAY_ROW_HEIGHT) ||
+        WorkReportLayout.needsPageBreak(y, rowHeight) ||
         (
           blockHeight <= continuationCapacity &&
             WorkReportLayout.needsPageBreak(y, blockHeight)
@@ -430,43 +427,17 @@ object WorkReportRenderer {
       }
 
       val canvas = checkNotNull(page).canvas
-      val baseline = y + 18f
-      drawFittedText(canvas, day.date, DATE_X, baseline, 10f, DATE_COLUMN_WIDTH)
-      drawFittedText(
-        canvas,
-        day.weekday,
-        WEEKDAY_X,
-        baseline,
-        10f,
-        WEEKDAY_COLUMN_WIDTH,
-      )
-      drawFittedText(
-        canvas,
-        day.hours,
-        PAGE_RIGHT - 10f,
-        baseline,
-        10f,
-        HOURS_COLUMN_WIDTH,
-        bold = true,
-        align = Paint.Align.RIGHT,
-      )
-      y += DAY_ROW_HEIGHT
-
-      detailLines.forEach { line ->
-        if (WorkReportLayout.needsPageBreak(y, DETAIL_LINE_HEIGHT)) {
-          finishPage()
-          startTimesheetContinuation()
-        }
-        drawText(
-          checkNotNull(page).canvas,
-          line,
-          DETAIL_X,
-          y + 10f,
-          9f,
-          color = BLUE,
-        )
-        y += DETAIL_LINE_HEIGHT
+      dateLines.forEachIndexed { index, line ->
+        drawText(canvas, line, DATE_X, y + 14f + index * TABLE_LINE_HEIGHT, 9f)
       }
+      workTimeLines.forEachIndexed { index, line ->
+        drawText(canvas, line, WORK_TIME_X, y + 14f + index * TABLE_LINE_HEIGHT, 9f)
+      }
+      drawDuration(canvas, day.regular, REGULAR_X, REGULAR_WIDTH, y)
+      drawDuration(canvas, day.remoteOther, REMOTE_X, REMOTE_WIDTH, y)
+      drawDuration(canvas, day.overtime, OVERTIME_X, OVERTIME_WIDTH, y)
+      drawDuration(canvas, day.total, TOTAL_X, TOTAL_WIDTH, y, true)
+      y += rowHeight
       y += 4f
 
       headlineLines.forEach { lines ->
@@ -486,6 +457,47 @@ object WorkReportRenderer {
       if (headlineLines.isNotEmpty()) y += 5f
       drawHairline(checkNotNull(page).canvas, y - 1f)
     }
+
+    private fun drawTableText(
+      canvas: Canvas,
+      text: String,
+      x: Float,
+      width: Float,
+      top: Float,
+      bold: Boolean,
+      right: Boolean = false,
+    ) {
+      wrapLimited(text, width - CELL_GAP, 8f, 2, bold = bold)
+        .forEachIndexed { index, line ->
+          drawText(
+            canvas,
+            line,
+            if (right) x + width - CELL_GAP else x,
+            top + 13f + index * TABLE_LINE_HEIGHT,
+            8f,
+            bold = bold,
+            align = if (right) Paint.Align.RIGHT else Paint.Align.LEFT,
+          )
+        }
+    }
+
+    private fun drawDuration(
+      canvas: Canvas,
+      text: String,
+      x: Float,
+      width: Float,
+      top: Float,
+      bold: Boolean = false,
+    ) = drawFittedText(
+      canvas,
+      text,
+      x + width - CELL_GAP,
+      top + 18f,
+      8.5f,
+      width - CELL_GAP,
+      bold = bold,
+      align = Paint.Align.RIGHT,
+    )
 
     private fun startStatisticsPage(statistics: Statistics) {
       val canvas = startPage()
@@ -783,20 +795,28 @@ object WorkReportRenderer {
       const val MARGIN = WorkReportLayout.MARGIN
       const val PAGE_RIGHT = WorkReportLayout.PAGE_WIDTH - MARGIN
       const val CONTENT_WIDTH = WorkReportLayout.PAGE_WIDTH - MARGIN * 2
-      const val DATE_X = MARGIN + 10f
-      const val WEEKDAY_X = 210f
-      const val HOURS_COLUMN_LEFT = 465f
-      const val DATE_COLUMN_WIDTH = WEEKDAY_X - DATE_X - 12f
-      const val WEEKDAY_COLUMN_WIDTH = HOURS_COLUMN_LEFT - WEEKDAY_X - 12f
-      const val HOURS_COLUMN_WIDTH = PAGE_RIGHT - 10f - HOURS_COLUMN_LEFT
-      const val DETAIL_X = MARGIN + 10f
+      const val DATE_X = MARGIN
+      const val DATE_WIDTH = WorkReportLayout.DATE_COLUMN_WIDTH
+      const val WORK_TIME_X = DATE_X + DATE_WIDTH
+      const val WORK_TIME_WIDTH = WorkReportLayout.WORK_TIME_COLUMN_WIDTH
+      const val REGULAR_X = WORK_TIME_X + WORK_TIME_WIDTH
+      const val REGULAR_WIDTH = WorkReportLayout.REGULAR_COLUMN_WIDTH
+      const val REMOTE_X = REGULAR_X + REGULAR_WIDTH
+      const val REMOTE_WIDTH = WorkReportLayout.REMOTE_COLUMN_WIDTH
+      const val OVERTIME_X = REMOTE_X + REMOTE_WIDTH
+      const val OVERTIME_WIDTH = WorkReportLayout.OVERTIME_COLUMN_WIDTH
+      const val TOTAL_X = OVERTIME_X + OVERTIME_WIDTH
+      const val TOTAL_WIDTH = WorkReportLayout.TOTAL_COLUMN_WIDTH
+      const val TABLE_RIGHT = TOTAL_X + TOTAL_WIDTH
+      const val CELL_GAP = 5f
       const val HEADLINE_X = MARGIN + 22f
       const val STAT_LABEL_WIDTH = CONTENT_WIDTH - 78f
       const val STAT_HOURS_WIDTH = 70f
       const val TOTAL_LABEL_WIDTH = CONTENT_WIDTH - 180f
       const val TOTAL_HOURS_WIDTH = 160f
       const val DAY_ROW_HEIGHT = 28f
-      const val DETAIL_LINE_HEIGHT = 13f
+      const val HEADER_HEIGHT = 32f
+      const val TABLE_LINE_HEIGHT = 11f
       const val HEADLINE_LINE_HEIGHT = 14f
       const val CONTINUATION_BODY_TOP = 121f
       const val SECTION_LINE_HEIGHT = 18f

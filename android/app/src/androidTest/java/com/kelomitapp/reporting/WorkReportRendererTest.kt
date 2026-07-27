@@ -33,11 +33,16 @@ class WorkReportRendererTest {
       ).forEachIndexed { index, (date, weekday) ->
         put(
           day(
-            date = date,
-            weekday = weekday,
-            hours = "7 h 30 min",
-            seconds = 27_000,
-            details = "Work periods 08:00-12:00 · 13:00-16:30 · Overtime 0:30",
+            date = "$weekday $date",
+            workTime = "08:00–12:00 · 13:00–16:30",
+            regular = "7h 00m",
+            regularSeconds = 25_200,
+            remoteOther = "0h 00m",
+            remoteOtherSeconds = 0,
+            overtime = "0h 30m",
+            overtimeSeconds = 1_800,
+            total = "7h 30m",
+            totalSeconds = 27_000,
             headlines = arrayOf(
               "Prepared customer delivery ${index + 1} and reviewed the detailed implementation notes with the project team",
               "Documented follow-up actions, open questions, and the next practical steps for the customer",
@@ -58,8 +63,11 @@ class WorkReportRendererTest {
         totalHours = "90 h 00 min",
         pageLabel = "Page",
         dateLabel = "Date",
-        weekdayLabel = "Weekday",
-        hoursLabel = "Hours",
+        workTimeLabel = "Work time",
+        regularLabel = "Hours",
+        remoteOtherLabel = "Remote / Other",
+        overtimeLabel = "Overtime",
+        totalColumnLabel = "Total",
         days = days,
       ).toString(),
       "work-report-sample-en.pdf",
@@ -85,11 +93,20 @@ class WorkReportRendererTest {
       ).forEachIndexed { index, (date, weekday) ->
         put(
           day(
-            date = date,
-            weekday = weekday,
-            hours = "8 h 00 min",
-            seconds = 28_800,
-            details = "Työajat 07:30-11:30 · 12:00-16:00",
+            date = "$weekday $date",
+            workTime = if (index == 0) {
+              "Vapaa (palkallinen)"
+            } else {
+              "07:30–11:30 · 12:00–16:00"
+            },
+            regular = "8h 00m",
+            regularSeconds = 28_800,
+            remoteOther = "0h 00m",
+            remoteOtherSeconds = 0,
+            overtime = "0h 00m",
+            overtimeSeconds = 0,
+            total = "8h 00m",
+            totalSeconds = 28_800,
             headlines = arrayOf(
               "Päivän ${index + 1} asiakastyö ja dokumentointi",
             ),
@@ -149,8 +166,11 @@ class WorkReportRendererTest {
         totalHours = "80 h 00 min",
         pageLabel = "Sivu",
         dateLabel = "Päivä",
-        weekdayLabel = "Viikonpäivä",
-        hoursLabel = "Tunnit",
+        workTimeLabel = "Työaika",
+        regularLabel = "Tunnit",
+        remoteOtherLabel = "Etä / muu",
+        overtimeLabel = "Ylityö",
+        totalColumnLabel = "Yhteensä",
         days = days,
         statistics = statistics,
       ).toString(),
@@ -182,8 +202,11 @@ class WorkReportRendererTest {
     totalHours: String,
     pageLabel: String,
     dateLabel: String,
-    weekdayLabel: String,
-    hoursLabel: String,
+    workTimeLabel: String,
+    regularLabel: String,
+    remoteOtherLabel: String,
+    overtimeLabel: String,
+    totalColumnLabel: String,
     days: JSONArray,
     statistics: JSONObject? = null,
   ): JSONObject = JSONObject()
@@ -202,25 +225,38 @@ class WorkReportRendererTest {
       "columns",
       JSONObject()
         .put("date", dateLabel)
-        .put("weekday", weekdayLabel)
-        .put("hours", hoursLabel),
+        .put("workTime", workTimeLabel)
+        .put("regular", regularLabel)
+        .put("remoteOther", remoteOtherLabel)
+        .put("overtime", overtimeLabel)
+        .put("total", totalColumnLabel),
     )
     .put("days", days)
     .apply { statistics?.let { put("statistics", it) } }
 
   private fun day(
     date: String,
-    weekday: String,
-    hours: String,
-    seconds: Int,
-    details: String,
+    workTime: String,
+    regular: String,
+    regularSeconds: Int,
+    remoteOther: String,
+    remoteOtherSeconds: Int,
+    overtime: String,
+    overtimeSeconds: Int,
+    total: String,
+    totalSeconds: Int,
     headlines: Array<String> = emptyArray(),
   ): JSONObject = JSONObject()
     .put("date", date)
-    .put("weekday", weekday)
-    .put("hours", hours)
-    .put("seconds", seconds)
-    .put("details", details)
+    .put("workTime", workTime)
+    .put("regular", regular)
+    .put("regularSeconds", regularSeconds)
+    .put("remoteOther", remoteOther)
+    .put("remoteOtherSeconds", remoteOtherSeconds)
+    .put("overtime", overtime)
+    .put("overtimeSeconds", overtimeSeconds)
+    .put("total", total)
+    .put("totalSeconds", totalSeconds)
     .put("headlines", JSONArray(headlines))
 
   private fun allocation(label: String, hours: String, seconds: Int): JSONObject =

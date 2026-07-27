@@ -13,6 +13,19 @@ class WorkReportLayoutTest {
   }
 
   @Test
+  fun payrollColumnsFitInsideThePageMargins() {
+    val width = WorkReportLayout.DATE_COLUMN_WIDTH +
+      WorkReportLayout.WORK_TIME_COLUMN_WIDTH +
+      WorkReportLayout.REGULAR_COLUMN_WIDTH +
+      WorkReportLayout.REMOTE_COLUMN_WIDTH +
+      WorkReportLayout.OVERTIME_COLUMN_WIDTH +
+      WorkReportLayout.TOTAL_COLUMN_WIDTH
+
+    assertEquals(464f, width)
+    assertTrue(width <= WorkReportLayout.PAGE_WIDTH - WorkReportLayout.MARGIN * 2)
+  }
+
+  @Test
   fun wrapsAtMeasuredWhitespace() {
     assertEquals(
       listOf("alpha", "beta", "gamma"),
