@@ -24,6 +24,11 @@ function seed(): void {
       id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL UNIQUE,
       started_at TEXT, ended_at TEXT, notes TEXT, created_at TEXT, updated_at TEXT
     );
+    CREATE TABLE leave_ranges (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT NOT NULL,
+      start_date TEXT NOT NULL, end_date TEXT NOT NULL,
+      created_at TEXT, updated_at TEXT
+    );
     CREATE TABLE projects (
       id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE,
       type TEXT NOT NULL DEFAULT 'work' CHECK(type IN ('work','personal','other')),
@@ -46,12 +51,16 @@ function seed(): void {
       title TEXT, body TEXT, project_id INTEGER, file_path TEXT,
       thumbnail_path TEXT, duration_sec INTEGER, time_from TEXT, time_to TEXT,
       latitude REAL, longitude REAL, location_label TEXT,
+      is_overtime INTEGER NOT NULL DEFAULT 0,
       created_at TEXT, updated_at TEXT
     );
     INSERT INTO days (id, date, started_at, ended_at) VALUES
       (1, '2026-07-20', '2026-07-20T08:00:00.000Z', '2026-07-20T16:00:00.000Z'),
       (2, '2026-07-21', '2026-07-21T08:00:00.000Z', '2026-07-21T12:00:00.000Z');
     INSERT INTO projects (id, name, type) VALUES (1, 'Home', 'personal');
+    INSERT INTO leave_ranges (type, start_date, end_date) VALUES
+      ('vacation', '2026-07-22', '2026-07-22'),
+      ('sick', '2026-07-22', '2026-07-22');
     INSERT INTO entries (id, day_id, entry_type, activity_type, project_id, title,
                          time_from, time_to, created_at)
       VALUES (10, 1, 'note', 'work', NULL, 'Roof',
@@ -86,8 +95,8 @@ test('totals the range using the app hours model', async () => {
   // Day 1: legs 08:00-16:00 = 8h. Day 2: legs 08:00-12:00 = 4h baseline, minus
   // the 1h entry on a 'personal'-type project = 3h. Total 11h, NOT the 12h a
   // naive leg sum would give, and not the 2h an entry sum would give.
-  assert.match(html, /11:00/);
-  assert.ok(!html.includes('12:00'));
+  assert.match(html, /11h 00m/);
+  assert.ok(!html.includes('12h 00m'));
 });
 
 test('defaults person and company from the synced settings', async () => {
@@ -95,6 +104,27 @@ test('defaults person and company from the synced settings', async () => {
   const html = await get('?from=2026-07-20&to=2026-07-21').then(r => r.text());
   assert.match(html, /Tommi/);
   assert.match(html, /Pico/);
+});
+
+test('renders the shared six-column model and leave-only dates', async () => {
+  seed();
+  const html = await get(
+    '?from=2026-07-22&to=2026-07-22&language=en',
+  ).then(r => r.text());
+
+  for (const heading of [
+    'Date',
+    'Work time',
+    'Hours',
+    'Remote / Other',
+    'Overtime',
+    'Total',
+  ]) {
+    assert.match(html, new RegExp(`>${heading}<`));
+  }
+  assert.doesNotMatch(html, />Weekday</);
+  assert.match(html, /Vacation \+ Sick/);
+  assert.match(html, /0h 00m/);
 });
 
 test('reports an empty range without throwing', async () => {
@@ -128,7 +158,7 @@ test('an unknown type or language falls back instead of throwing', async () => {
   seed();
   const res = await get('?from=2026-07-20&to=2026-07-21&type=evil&language=xx');
   assert.equal(res.status, 200);
-  assert.match(await res.text(), /11:00/);
+  assert.match(await res.text(), /11h 00m/);
 });
 
 test('statistics type adds the project and tag breakdown', async () => {
@@ -204,11 +234,11 @@ test('work periods print in the process timezone', async () => {
     process.env.TZ = 'Europe/Helsinki';
     // Day 1's legs run 08:00-16:00Z, i.e. 11:00-19:00 in Helsinki.
     const html = await get('?from=2026-07-20&to=2026-07-20&language=en').then(r => r.text());
-    assert.match(html, /11:00-19:00/);
+    assert.match(html, /11:00–19:00/);
 
     process.env.TZ = 'UTC';
     const utc = await get('?from=2026-07-20&to=2026-07-20&language=en').then(r => r.text());
-    assert.match(utc, /08:00-16:00/);
+    assert.match(utc, /08:00–16:00/);
   } finally {
     process.env.TZ = original;
   }

@@ -19,6 +19,11 @@ function seed(): void {
       started_at TEXT, ended_at TEXT, started_at_2 TEXT, ended_at_2 TEXT,
       notes TEXT, created_at TEXT, updated_at TEXT
     );
+    CREATE TABLE leave_ranges (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT NOT NULL,
+      start_date TEXT NOT NULL, end_date TEXT NOT NULL,
+      created_at TEXT, updated_at TEXT
+    );
     CREATE TABLE projects (
       id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE,
       type TEXT NOT NULL DEFAULT 'work' CHECK(type IN ('work','personal','other')),
@@ -32,6 +37,7 @@ function seed(): void {
       title TEXT, body TEXT, project_id INTEGER, file_path TEXT,
       thumbnail_path TEXT, duration_sec INTEGER, time_from TEXT, time_to TEXT,
       latitude REAL, longitude REAL, location_label TEXT,
+      is_overtime INTEGER NOT NULL DEFAULT 0,
       created_at TEXT, updated_at TEXT
     );
     CREATE TABLE tags (
@@ -93,6 +99,28 @@ test('day list shows synced days', async () => {
   seed();
   const res = await app.fetch(new Request('http://localhost/'));
   assert.match(await res.text(), /2026-07-25/);
+});
+
+test('leave-only dates and overtime badges are visible', async () => {
+  seed();
+  const db = new Database(join(dataDir, 'current.db'));
+  db.exec(`
+    INSERT INTO leave_ranges (type, start_date, end_date) VALUES
+      ('vacation', '2026-07-26', '2026-07-26'),
+      ('sick', '2026-07-26', '2026-07-26');
+    UPDATE entries SET is_overtime = 1 WHERE id = 1;
+  `);
+  db.close();
+
+  const list = await app.fetch(new Request('http://localhost/')).then(r => r.text());
+  assert.match(list, /2026-07-26/);
+  assert.match(list, /Vacation/);
+  assert.match(list, /Sick/);
+
+  const entry = await app.fetch(
+    new Request('http://localhost/day/2026-07-25'),
+  ).then(r => r.text());
+  assert.match(entry, /Overtime/);
 });
 
 test('day page shows both legs and the worked adjustments', async () => {

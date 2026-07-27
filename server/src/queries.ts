@@ -1,11 +1,12 @@
 import type Database from 'better-sqlite3';
-import type {Day, Entry, Project, Tag} from '../../src/types/index.ts';
+import type {Day, Entry, LeaveRange, Project, Tag} from '../../src/types/index.ts';
 
 export interface DaySummary {
   date: string;
   startedAt: string | null;
   endedAt: string | null;
   entryCount: number;
+  leaveRanges: LeaveRange[];
 }
 
 export interface MediaRow {
@@ -36,17 +37,16 @@ export interface RouteStopRow {
 }
 
 export function listDays(db: Database.Database, limit: number): DaySummary[] {
-  return db
-    .prepare(
-      `SELECT d.date AS date,
-              d.started_at AS startedAt,
-              d.ended_at AS endedAt,
-              (SELECT COUNT(*) FROM entries e WHERE e.day_id = d.id) AS entryCount
-         FROM days d
-        ORDER BY d.date DESC
-        LIMIT ?`,
-    )
-    .all(limit) as DaySummary[];
+  const latest = db.prepare(
+    `SELECT MAX(date) AS date FROM (
+       SELECT date FROM days
+       UNION ALL SELECT end_date FROM leave_ranges
+     )`,
+  ).get() as {date: string | null};
+  if (!latest.date) return [];
+  const from = db.prepare("SELECT date(?, '-' || ? || ' days') AS date")
+    .get(latest.date, limit - 1) as {date: string};
+  return listDaysInRange(db, from.date, latest.date).slice(0, limit);
 }
 
 /** Dates are stored as `YYYY-MM-DD` text, so string comparison is date order. */
@@ -55,7 +55,7 @@ export function listDaysInRange(
   from: string,
   to: string,
 ): DaySummary[] {
-  return db
+  const rows = db
     .prepare(
       `SELECT d.date AS date,
               d.started_at AS startedAt,
@@ -65,12 +65,49 @@ export function listDaysInRange(
         WHERE d.date >= ? AND d.date <= ?
         ORDER BY d.date DESC`,
     )
-    .all(from, to) as DaySummary[];
+    .all(from, to) as Omit<DaySummary, 'leaveRanges'>[];
+  const byDate = new Map(rows.map(row => [
+    row.date,
+    {...row, leaveRanges: [] as LeaveRange[]},
+  ]));
+  for (const range of getLeaveRangesInRange(db, from, to)) {
+    let date = range.start_date < from ? from : range.start_date;
+    const end = range.end_date > to ? to : range.end_date;
+    while (date <= end) {
+      const summary = byDate.get(date) ?? {
+        date,
+        startedAt: null,
+        endedAt: null,
+        entryCount: 0,
+        leaveRanges: [],
+      };
+      summary.leaveRanges.push(range);
+      byDate.set(date, summary);
+      date = new Date(Date.parse(`${date}T00:00:00Z`) + 86_400_000)
+        .toISOString().slice(0, 10);
+    }
+  }
+  return [...byDate.values()].sort((a, b) => b.date.localeCompare(a.date));
 }
 
 export function getDay(db: Database.Database, date: string): Day | null {
   const row = db.prepare('SELECT * FROM days WHERE date = ?').get(date);
-  return (row as Day | undefined) ?? null;
+  if (row) return row as Day;
+  return getLeaveRangesInRange(db, date, date).length > 0
+    ? {
+        id: -1,
+        date,
+        started_at: null,
+        ended_at: null,
+        started_at_2: null,
+        ended_at_2: null,
+        started_at_source: null,
+        ended_at_source: null,
+        notes: null,
+        created_at: '',
+        updated_at: '',
+      }
+    : null;
 }
 
 /** Raw join row: entry columns plus the project's own columns, prefixed.
@@ -150,6 +187,7 @@ function loadEntries(
       ...entry
     }): Entry => ({
       ...entry,
+      is_overtime: Boolean(entry.is_overtime),
       tags: tags.get(entry.id) ?? [],
       project:
         entry.project_id != null && project_type != null
@@ -192,6 +230,18 @@ export function getDaysInRange(
   return db
     .prepare('SELECT * FROM days WHERE date >= ? AND date <= ? ORDER BY date')
     .all(from, to) as Day[];
+}
+
+export function getLeaveRangesInRange(
+  db: Database.Database,
+  from: string,
+  to: string,
+): LeaveRange[] {
+  return db.prepare(
+    `SELECT * FROM leave_ranges
+      WHERE start_date <= ? AND end_date >= ?
+      ORDER BY start_date, id`,
+  ).all(to, from) as LeaveRange[];
 }
 
 /** A settings value from the synced database — the report's person and company

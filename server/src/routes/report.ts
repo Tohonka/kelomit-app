@@ -2,7 +2,12 @@ import {Hono} from 'hono';
 import type {Context} from 'hono';
 import type Database from 'better-sqlite3';
 import {openCurrent} from '../db.ts';
-import {getDaysInRange, getEntriesInRange, getSetting} from '../queries.ts';
+import {
+  getDaysInRange,
+  getEntriesInRange,
+  getLeaveRangesInRange,
+  getSetting,
+} from '../queries.ts';
 import {esc} from '../render.ts';
 import {
   footerTemplate,
@@ -109,6 +114,7 @@ function buildModel(db: Database.Database, p: ReportParams): WorkReportModel {
     type: p.type,
     days: getDaysInRange(db, p.from, p.to),
     entries: getEntriesInRange(db, p.from, p.to),
+    leaveRanges: getLeaveRangesInRange(db, p.from, p.to),
   });
 }
 

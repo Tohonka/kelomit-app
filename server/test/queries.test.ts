@@ -19,6 +19,11 @@ function seed(): Database.Database {
       started_at TEXT, ended_at TEXT, notes TEXT,
       created_at TEXT, updated_at TEXT
     );
+    CREATE TABLE leave_ranges (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT NOT NULL,
+      start_date TEXT NOT NULL, end_date TEXT NOT NULL,
+      created_at TEXT, updated_at TEXT
+    );
     CREATE TABLE projects (
       id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE,
       type TEXT NOT NULL DEFAULT 'work' CHECK(type IN ('work','personal','other')),
@@ -41,6 +46,7 @@ function seed(): Database.Database {
       title TEXT, body TEXT, project_id INTEGER, file_path TEXT,
       thumbnail_path TEXT, duration_sec INTEGER, time_from TEXT, time_to TEXT,
       latitude REAL, longitude REAL, location_label TEXT,
+      is_overtime INTEGER NOT NULL DEFAULT 0,
       created_at TEXT, updated_at TEXT
     );
     INSERT INTO days (id, date, started_at, ended_at) VALUES
@@ -88,12 +94,32 @@ test('listDaysInRange filters by date bounds inclusively', () => {
   assert.deepEqual(listDaysInRange(db, '2026-08-01', '2026-08-31'), []);
 });
 
+test('range queries include leave-only dates and combined leave categories', () => {
+  const seeded = seed();
+  seeded.exec(`
+    INSERT INTO leave_ranges (type, start_date, end_date) VALUES
+      ('vacation', '2026-07-27', '2026-07-27'),
+      ('sick', '2026-07-27', '2026-07-27');
+  `);
+  seeded.close();
+  const db = openCurrent(dataDir)!;
+
+  const [summary] = listDaysInRange(db, '2026-07-27', '2026-07-27');
+  assert.equal(summary.date, '2026-07-27');
+  assert.deepEqual(summary.leaveRanges.map(range => range.type), [
+    'vacation',
+    'sick',
+  ]);
+  assert.equal(getDay(db, '2026-07-27')?.date, '2026-07-27');
+});
+
 test('getEntries returns the day entries', () => {
   seed().close();
   const db = openCurrent(dataDir)!;
   const entries = getEntries(db, 1);
   assert.equal(entries.length, 1);
   assert.equal(entries[0].title, 'Morning');
+  assert.equal(entries[0].is_overtime, false);
 });
 
 test('the handle is read-only', () => {
@@ -123,12 +149,18 @@ test('openCurrent detects a sync swap even with an identical mtime', () => {
       started_at TEXT, ended_at TEXT, notes TEXT,
       created_at TEXT, updated_at TEXT
     );
+    CREATE TABLE leave_ranges (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT NOT NULL,
+      start_date TEXT NOT NULL, end_date TEXT NOT NULL,
+      created_at TEXT, updated_at TEXT
+    );
     CREATE TABLE entries (
       id INTEGER PRIMARY KEY AUTOINCREMENT, day_id INTEGER NOT NULL,
       entry_type TEXT NOT NULL, activity_type TEXT NOT NULL DEFAULT 'work',
       title TEXT, body TEXT, project_id INTEGER, file_path TEXT,
       thumbnail_path TEXT, duration_sec INTEGER, time_from TEXT, time_to TEXT,
       latitude REAL, longitude REAL, location_label TEXT,
+      is_overtime INTEGER NOT NULL DEFAULT 0,
       created_at TEXT, updated_at TEXT
     );
     INSERT INTO days (id, date, started_at, ended_at) VALUES

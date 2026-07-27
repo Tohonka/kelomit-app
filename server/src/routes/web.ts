@@ -10,17 +10,18 @@ import {
   getEntryMedia,
   getRouteSegments,
   getRouteStops,
+  getLeaveRangesInRange,
 } from '../queries.ts';
 import type {MediaRow, RouteSegmentRow, RouteStopRow} from '../queries.ts';
 import {esc, layout, mediaUrl} from '../render.ts';
 import {
   calcDayWorkBreakdown,
-  calcDayWorkSecs,
   calcHourBreakdown,
   formatHours,
   segmentWorkSecs,
 } from '../../../src/utils/hoursUtils.ts';
-import type {Day, Entry} from '../../../src/types/index.ts';
+import type {Day, Entry, LeaveRange, LeaveType} from '../../../src/types/index.ts';
+import {classifyReportDay} from '../../../src/services/workReport.ts';
 
 const NO_DATA = layout('Kelomit', '<h1>Kelomit</h1><p class="empty">No data synced yet.</p>');
 
@@ -29,6 +30,18 @@ const ACTIVITY_LABEL: Record<string, string> = {
   personal_work: 'Personal at work',
   personal: 'Personal',
 };
+const LEAVE_LABEL: Record<LeaveType, string> = {
+  paid_day_off: 'Day off (paid)',
+  unpaid_day_off: 'Day off (unpaid)',
+  vacation: 'Vacation',
+  sick: 'Sick',
+};
+
+function leaveBadges(ranges: LeaveRange[]): string {
+  return ranges.map(range =>
+    `<span class="chip badge">${esc(LEAVE_LABEL[range.type])}</span>`,
+  ).join('');
+}
 
 /** `2026-07-25` → `Sat 25 July`. Dates are plain text, so parse the parts
  *  directly rather than going through Date and inheriting a timezone shift. */
@@ -107,7 +120,14 @@ function legRow(start: string | null, end: string | null): string {
     </div>`;
 }
 
-function dayCard(day: Day, entries: Entry[]): string {
+function dayCard(day: Day, entries: Entry[], leaves: LeaveRange[]): string {
+  if (leaves.length > 0) {
+    return section(
+      'Day',
+      `<div class="card"><div class="chips">${leaveBadges(leaves)}</div>
+       <p class="meta">${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}</p></div>`,
+    );
+  }
   const legs =
     legRow(day.started_at, day.ended_at) + legRow(day.started_at_2, day.ended_at_2);
 
@@ -173,6 +193,7 @@ function entryCard(e: Entry, own: MediaRow[]): string {
 
   const chips = [
     `<span class="chip badge ${esc(e.activity_type)}">${esc(ACTIVITY_LABEL[e.activity_type] ?? e.activity_type)}</span>`,
+    ...(e.is_overtime ? ['<span class="chip badge">Overtime</span>'] : []),
     ...(e.project ? [`<span class="chip">${esc(e.project.name)}</span>`] : []),
     ...(e.tags ?? []).map(t => `<span class="chip">#${esc(t.name)}</span>`),
   ].join('');
@@ -243,11 +264,18 @@ export function webRoutes(opts: {dataDir: string}): Hono {
         const heading = month === currentMonth ? '' : `<p class="month">${esc(month)}</p>`;
         currentMonth = month;
         const day = getDay(db, d.date);
-        const hours = day ? formatHours(calcDayWorkSecs(day, getEntries(db, day.id))) : '';
+        const hours = day
+          ? formatHours(classifyReportDay(
+              day,
+              getEntries(db, day.id),
+              d.leaveRanges.length > 0,
+            ).totalSeconds)
+          : '';
         return (
           heading +
           `<a class="day-row" href="/day/${esc(d.date)}">
             <span class="day-date">${esc(formatDayLabel(d.date))}</span>
+            <span class="chips">${leaveBadges(d.leaveRanges)}</span>
             <span class="day-grow meta">${d.entryCount} ${d.entryCount === 1 ? 'entry' : 'entries'}</span>
             <span class="day-hours">${esc(hours)}</span>
           </a>`
@@ -275,9 +303,12 @@ export function webRoutes(opts: {dataDir: string}): Hono {
     }
 
     const entries = getEntries(db, day.id);
+    const leaves = getLeaveRangesInRange(db, day.date, day.date);
     const media = getEntryMedia(db, day.id);
     // The app's own hours model — never reimplement here.
-    const hours = formatHours(calcDayWorkSecs(day, entries));
+    const hours = formatHours(
+      classifyReportDay(day, entries, leaves.length > 0).totalSeconds,
+    );
     const segments = getRouteSegments(db, day.id);
     const stops = getRouteStops(db, day.id);
 
@@ -290,9 +321,10 @@ export function webRoutes(opts: {dataDir: string}): Hono {
         day.date,
         `<p><a class="link" href="/">&larr; Days</a></p>
          <h1>${esc(formatDayLabel(day.date))}</h1>
+         <div class="chips">${leaveBadges(leaves)}</div>
          <p class="hours-big">${esc(hours)}</p>
          <p class="meta">worked</p>` +
-          dayCard(day, entries) +
+          dayCard(day, entries, leaves) +
           splitBar(entries) +
           section('Entries', entriesHtml) +
           routeSection(segments, stops),
@@ -316,12 +348,16 @@ export function webRoutes(opts: {dataDir: string}): Hono {
         if (!day) {
           return [];
         }
-        const secs = calcDayWorkSecs(day, getEntries(db, day.id));
+        const secs = classifyReportDay(
+          day,
+          getEntries(db, day.id),
+          d.leaveRanges.length > 0,
+        ).totalSeconds;
         total += secs;
         return [
           `<a class="day-row" href="/day/${esc(d.date)}">
             <span class="day-date">${esc(formatDayLabel(d.date))}</span>
-            <span class="day-grow"></span>
+            <span class="day-grow chips">${leaveBadges(d.leaveRanges)}</span>
             <span class="day-hours">${esc(formatHours(secs))}</span>
           </a>`,
         ];

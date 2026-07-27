@@ -52,6 +52,12 @@ export const SHEET_CSS = `
   white-space: nowrap;
 }
 .sheet-table { width: 100%; border-collapse: collapse; margin-top: 18pt; }
+.sheet-table col:nth-child(1) { width: 19%; }
+.sheet-table col:nth-child(2) { width: 22%; }
+.sheet-table col:nth-child(3) { width: 12%; }
+.sheet-table col:nth-child(4) { width: 19%; }
+.sheet-table col:nth-child(5) { width: 12%; }
+.sheet-table col:nth-child(6) { width: 16%; }
 .sheet-table th {
   background: ${PALE_BLUE};
   font-size: 9pt;
@@ -61,7 +67,7 @@ export const SHEET_CSS = `
 }
 .sheet-table th.right, .sheet-table td.right { text-align: right; }
 .sheet-table td { padding: 7pt 10pt 0; vertical-align: top; }
-.sheet-table td.hours { font-weight: 700; }
+.sheet-table td.total { font-weight: 700; }
 /* One day = its date row plus the detail/headline row underneath. The hairline
    closes the pair, so it belongs to the LAST row of the group. */
 .sheet-table tr.close td { padding-bottom: 7pt; border-bottom: 0.75pt solid ${DIVIDER}; }
@@ -122,18 +128,19 @@ function allocRows(list: AllocationRow[]): string {
 export function sheetHtml(model: WorkReportModel): string {
   const rows = model.days
     .map(d => {
-      const extra = d.details || d.headlines.length;
-      const detail = d.details ? `<p class="sheet-detail">${esc(d.details)}</p>` : '';
       const headlines = d.headlines.length
         ? `<ul class="sheet-headlines">${d.headlines.map(h => `<li>${esc(h)}</li>`).join('')}</ul>`
         : '';
       return (
-        `<tr${extra ? '' : ' class="close"'}>
+        `<tr${headlines ? '' : ' class="close"'}>
           <td>${esc(d.date)}</td>
-          <td>${esc(d.weekday)}</td>
-          <td class="right hours num">${esc(d.hours)}</td>
+          <td>${esc(d.workTime)}</td>
+          <td class="right num">${esc(d.regular)}</td>
+          <td class="right num">${esc(d.remoteOther)}</td>
+          <td class="right num">${esc(d.overtime)}</td>
+          <td class="right total num">${esc(d.total)}</td>
         </tr>` +
-        (extra ? `<tr class="close"><td colspan="3">${detail}${headlines}</td></tr>` : '')
+        (headlines ? `<tr class="close"><td colspan="6">${headlines}</td></tr>` : '')
       );
     })
     .join('');
@@ -162,11 +169,15 @@ export function sheetHtml(model: WorkReportModel): string {
       <span class="sheet-total-hours num">${esc(model.meta.totalHours)}</span>
     </div>
     <table class="sheet-table">
+      <colgroup><col><col><col><col><col><col></colgroup>
       <thead>
         <tr>
           <th>${esc(model.columns.date)}</th>
-          <th>${esc(model.columns.weekday)}</th>
-          <th class="right">${esc(model.columns.hours)}</th>
+          <th>${esc(model.columns.workTime)}</th>
+          <th class="right">${esc(model.columns.regular)}</th>
+          <th class="right">${esc(model.columns.remoteOther)}</th>
+          <th class="right">${esc(model.columns.overtime)}</th>
+          <th class="right">${esc(model.columns.total)}</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
@@ -255,4 +266,3 @@ ${SHEET_CSS}
 export function reportLayout(title: string, body: string): string {
   return layout(title, body).replace('</style>', `${REPORT_CSS}</style>`);
 }
-

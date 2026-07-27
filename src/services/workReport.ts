@@ -1,7 +1,6 @@
-import {format, parseISO} from 'date-fns';
+import {eachDayOfInterval, format, parseISO} from 'date-fns';
 import {enUS, fi as fiLocale} from 'date-fns/locale';
 import type {Day, Entry, LeaveRange, LeaveType} from '../types';
-import {leavesByDate} from '../db/leaveRanges';
 import {formatTime, parseTimestamp} from '../utils/timeFormat';
 import {calcDayWorkBreakdown, entryTrackedSeconds} from '../utils/hoursUtils';
 
@@ -62,6 +61,23 @@ export interface ReportHourBuckets {
   remoteOtherSeconds: number;
   overtimeSeconds: number;
   totalSeconds: number;
+}
+
+function reportLeavesByDate(
+  ranges: LeaveRange[],
+  startDate: string,
+  endDate: string,
+): Record<string, LeaveRange[]> {
+  const result: Record<string, LeaveRange[]> = {};
+  for (const range of ranges) {
+    const start = range.start_date < startDate ? startDate : range.start_date;
+    const end = range.end_date > endDate ? endDate : range.end_date;
+    if (start > end) continue;
+    for (const day of eachDayOfInterval({start: parseISO(start), end: parseISO(end)})) {
+      (result[format(day, 'yyyy-MM-dd')] ??= []).push(range);
+    }
+  }
+  return result;
 }
 
 export function classifyReportDay(
@@ -362,7 +378,7 @@ export function buildWorkReport(input: WorkReportInput): WorkReportModel {
 
   const copy = COPY[input.language];
   const locale = input.language === 'fi' ? fiLocale : enUS;
-  const leaveByDate = leavesByDate(
+  const leaveByDate = reportLeavesByDate(
     input.leaveRanges,
     input.startDate,
     input.endDate,
