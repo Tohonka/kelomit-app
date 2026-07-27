@@ -1,6 +1,6 @@
 {
   "name": "KelomitApp",
-  "version": "0.3.83",
+  "version": "0.3.84",
   "private": true,
   "scripts": {
     "android": "react-native run-android",
