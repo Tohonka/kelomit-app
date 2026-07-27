@@ -42,6 +42,30 @@ const STOP_WINDOW_MS = 5 * 60_000;
 const STOP_RADIUS_M = 150;
 const GO_SPEED_MPS = 3;
 const GO_SPEED_FIXES = 2;
+// ponytail: 70 m/s rejects clear GPS spikes; make transport-specific only if
+// collected real routes show this ceiling hides legitimate data.
+const MAX_PLAUSIBLE_SPEED_MPS = 70;
+
+export function filteredMaximumSpeedMps(
+  recordedSpeeds: number[],
+  fallbackLegSpeedMps: number,
+): number {
+  const valid = recordedSpeeds.filter(
+    speed =>
+      Number.isFinite(speed) &&
+      speed >= 0 &&
+      speed <= MAX_PLAUSIBLE_SPEED_MPS,
+  );
+  if (valid.length === 0) return fallbackLegSpeedMps;
+  if (valid.length < 3) return Math.max(...valid);
+  let maximum = 0;
+  for (let index = 1; index < valid.length - 1; index += 1) {
+    const median = [valid[index - 1], valid[index], valid[index + 1]]
+      .sort((left, right) => left - right)[1];
+    maximum = Math.max(maximum, median);
+  }
+  return maximum;
+}
 
 export function deriveRouteDay(
   points: GpsPoint[],
@@ -307,10 +331,7 @@ function makeSegment(
   );
   const recordedSpeeds = points
     .map(point => point.speed)
-    .filter(
-      (speed): speed is number =>
-        speed != null && Number.isFinite(speed) && speed >= 0,
-    );
+    .filter((speed): speed is number => speed != null);
 
   return {
     sequence,
@@ -325,10 +346,10 @@ function makeSegment(
     distanceM,
     durationSec,
     averageSpeedMps: durationSec > 0 ? distanceM / durationSec : 0,
-    maximumSpeedMps:
-      recordedSpeeds.length > 0
-        ? Math.max(...recordedSpeeds)
-        : maximumLegSpeedMps,
+    maximumSpeedMps: filteredMaximumSpeedMps(
+      recordedSpeeds,
+      maximumLegSpeedMps,
+    ),
     rawLastTs,
   };
 }

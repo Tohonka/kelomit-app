@@ -1,4 +1,8 @@
-import {deriveRouteDay, type RouteAnchor} from '../src/utils/routeSegments';
+import {
+  deriveRouteDay,
+  filteredMaximumSpeedMps,
+  type RouteAnchor,
+} from '../src/utils/routeSegments';
 import type {GpsPoint} from '../src/types';
 
 const METRES_PER_DEGREE = 111194.92664455874;
@@ -18,6 +22,19 @@ const p = (
   altitude: null,
   speed,
   timestamp: new Date(baseMs + seconds * 1000).toISOString(),
+});
+
+describe('filteredMaximumSpeedMps', () => {
+  it('filters isolated spikes with centered three-sample medians', () => {
+    expect(filteredMaximumSpeedMps([10, 11, 60, 12, 11], 0)).toBe(12);
+    expect(filteredMaximumSpeedMps([10, 11, 12], 0)).toBe(11);
+  });
+
+  it('uses short valid sequences and falls back when none remain', () => {
+    expect(filteredMaximumSpeedMps([10, 11], 0)).toBe(11);
+    expect(filteredMaximumSpeedMps([], 7)).toBe(7);
+    expect(filteredMaximumSpeedMps([-1, Number.NaN, Infinity, 71], 8)).toBe(8);
+  });
 });
 
 const anchor = (
