@@ -19,10 +19,15 @@ import {getDateFnsLocale} from '../i18n';
 import type {Colors} from '../theme';
 import {useSettingsStore} from '../store/settingsStore';
 import {getWorkSecondsByDay, getUpcomingTodos} from '../db/entries';
+import {
+  getLeaveRangesInRange,
+  leavesByDate,
+} from '../db/leaveRanges';
 import {formatHours} from '../utils/hoursUtils';
 import {formatDate} from '../utils/dateUtils';
 import EntryListItem from '../components/entries/EntryListItem';
-import type {Entry} from '../types';
+import LeaveBadges from '../components/entries/LeaveBadges';
+import type {Entry, LeaveRange} from '../types';
 import type {TabScreenProps} from '../navigation/navigationTypes';
 
 type CalendarView = 'month' | 'week' | 'range';
@@ -147,6 +152,7 @@ export default function CalendarScreen({navigation}: Props) {
   const [viewMode, setViewMode] = useState<CalendarView>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [hoursMap, setHoursMap] = useState<Record<string, number>>({});
+  const [leaveMap, setLeaveMap] = useState<Record<string, LeaveRange[]>>({});
   const [loading, setLoading] = useState(false);
   const [rangeFrom, setRangeFrom] = useState<Date>(() => subDays(new Date(), 6));
   const [rangeTo, setRangeTo] = useState<Date>(new Date());
@@ -171,8 +177,12 @@ export default function CalendarScreen({navigation}: Props) {
   const loadHours = useCallback(async () => {
     setLoading(true);
     try {
-      const map = await getWorkSecondsByDay(rangeStart, rangeEnd);
-      setHoursMap(map);
+      const [hours, leaves] = await Promise.all([
+        getWorkSecondsByDay(rangeStart, rangeEnd),
+        getLeaveRangesInRange(rangeStart, rangeEnd),
+      ]);
+      setHoursMap(hours);
+      setLeaveMap(leavesByDate(leaves, rangeStart, rangeEnd));
     } finally {
       setLoading(false);
     }
@@ -330,6 +340,7 @@ export default function CalendarScreen({navigation}: Props) {
           <MonthGrid
             currentDate={currentDate}
             hoursMap={hoursMap}
+            leaveMap={leaveMap}
             showWeekNumbers={show_week_numbers}
             language={language}
             onDayPress={navigateToDay}
@@ -338,6 +349,7 @@ export default function CalendarScreen({navigation}: Props) {
           <WeekView
             currentDate={currentDate}
             hoursMap={hoursMap}
+            leaveMap={leaveMap}
             showWeekNumbers={show_week_numbers}
             language={language}
             onDayPress={navigateToDay}
@@ -348,6 +360,7 @@ export default function CalendarScreen({navigation}: Props) {
             rangeFrom={rangeFrom}
             rangeTo={rangeTo}
             hoursMap={hoursMap}
+            leaveMap={leaveMap}
             language={language}
             onDayPress={navigateToDay}
           />
@@ -410,9 +423,10 @@ const makeGridStyles = (c: Colors) =>
     },
   });
 
-function MonthGrid({currentDate, hoursMap, showWeekNumbers, onDayPress}: {
+function MonthGrid({currentDate, hoursMap, leaveMap, showWeekNumbers, onDayPress}: {
   currentDate: Date;
   hoursMap: Record<string, number>;
+  leaveMap: Record<string, LeaveRange[]>;
   showWeekNumbers: boolean;
   language: 'en' | 'fi';
   onDayPress: (d: Date) => void;
@@ -474,6 +488,9 @@ function MonthGrid({currentDate, hoursMap, showWeekNumbers, onDayPress}: {
                 {workSecs > 0 && inMonth
                   ? <Text style={gridStyles.hours}>{formatHours(workSecs)}</Text>
                   : null}
+                {inMonth && (
+                  <LeaveBadges ranges={leaveMap[dateStr] ?? []} compact />
+                )}
               </TouchableOpacity>
             );
           })}
@@ -536,9 +553,10 @@ const makeWeekStyles = (c: Colors) =>
     },
   });
 
-function WeekView({currentDate, hoursMap, showWeekNumbers, language, onDayPress, onOpenEntry}: {
+function WeekView({currentDate, hoursMap, leaveMap, showWeekNumbers, language, onDayPress, onOpenEntry}: {
   currentDate: Date;
   hoursMap: Record<string, number>;
+  leaveMap: Record<string, LeaveRange[]>;
   showWeekNumbers: boolean;
   language: 'en' | 'fi';
   onDayPress: (d: Date) => void;
@@ -591,6 +609,7 @@ function WeekView({currentDate, hoursMap, showWeekNumbers, language, onDayPress,
                 ? <Text style={weekStyles.hours}>{formatHours(workSecs)}</Text>
                 : <Text style={weekStyles.hoursEmpty}>–</Text>
               }
+              <LeaveBadges ranges={leaveMap[dateStr] ?? []} compact />
             </TouchableOpacity>
           );
         })}
@@ -637,10 +656,11 @@ const makeRangeStyles = (c: Colors) =>
     empty: {fontSize: typography.sizes.md, color: c.textMuted},
   });
 
-function RangeView({rangeFrom, rangeTo, hoursMap, language, onDayPress}: {
+function RangeView({rangeFrom, rangeTo, hoursMap, leaveMap, language, onDayPress}: {
   rangeFrom: Date;
   rangeTo: Date;
   hoursMap: Record<string, number>;
+  leaveMap: Record<string, LeaveRange[]>;
   language: 'en' | 'fi';
   onDayPress: (d: Date) => void;
 }) {
@@ -668,6 +688,7 @@ function RangeView({rangeFrom, rangeTo, hoursMap, language, onDayPress}: {
               <Text style={[rangeStyles.date, today && rangeStyles.today]}>
                 {format(d, 'MMM d', {locale: dateLocale})}
               </Text>
+              <LeaveBadges ranges={leaveMap[dateStr] ?? []} />
             </View>
             <Text style={workSecs > 0 ? rangeStyles.hours : rangeStyles.empty}>
               {workSecs > 0 ? formatHours(workSecs) : '—'}

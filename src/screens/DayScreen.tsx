@@ -53,6 +53,11 @@ export default function DayScreen({navigation, route}: Props) {
         date={currentDate}
         onRequestDate={setCurrentDate}
         onOpenEntry={entry => navigation.navigate('EntryDetailScreen', {entryId: entry.id, dayId: entry.day_id})}
+        onOpenLeave={range => day && navigation.navigate('AddEntryModal', {
+          dayId: day.id,
+          date: currentDate,
+          leaveRangeId: range.id,
+        })}
         onDayLoaded={setDay}
       />
       {/* Keep the floating pill present on the day screen too. Its + adds to the

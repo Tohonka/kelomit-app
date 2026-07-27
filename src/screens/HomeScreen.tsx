@@ -13,6 +13,7 @@ export default function HomeScreen({navigation}: Props) {
   const [date, setDate] = useState(todayDate());
   const loadToday = useDayStore(s => s.loadToday);
   const loadEntriesForDay = useEntryStore(s => s.loadEntriesForDay);
+  const today = useDayStore(s => s.today);
 
   const refreshToday = useCallback(async () => {
     const day = await loadToday();
@@ -47,6 +48,11 @@ export default function HomeScreen({navigation}: Props) {
       date={date}
       onRequestDate={d => navigation.navigate('DayScreen', {date: d})}
       onOpenEntry={entry => navigation.navigate('EntryDetailScreen', {entryId: entry.id, dayId: entry.day_id})}
+      onOpenLeave={range => today && navigation.navigate('AddEntryModal', {
+        dayId: today.id,
+        date,
+        leaveRangeId: range.id,
+      })}
     />
   );
 }

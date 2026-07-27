@@ -23,16 +23,19 @@ import EntryListItem from '../entries/EntryListItem';
 import {useShellPadding} from '../../navigation/shellMetrics';
 import {useKeyboardHeight} from '../../hooks/useKeyboardHeight';
 import {getUpcomingTodos} from '../../db/entries';
+import {getLeaveRangesInRange} from '../../db/leaveRanges';
 import {formatDate, nextDayDates, shiftDate} from '../../utils/dateUtils';
 import {calcDayWorkSecs, calcHourBreakdown} from '../../utils/hoursUtils';
 import {getCurrentGeofenceDetection, type GeofenceDetection} from '../../services/gpsService';
-import type {Day, Entry, Project, Tag} from '../../types';
+import type {Day, Entry, LeaveRange, Project, Tag} from '../../types';
+import LeaveBadges from '../entries/LeaveBadges';
 
 interface Props {
   date: string;
   variant: 'today' | 'detail';
   onRequestDate: (date: string) => void;
   onOpenEntry: (entry: Entry) => void;
+  onOpenLeave?: (range: LeaveRange) => void;
   onDayLoaded?: (day: Day | null) => void;
 }
 
@@ -70,7 +73,14 @@ const makeStyles = (c: Colors) =>
     },
   });
 
-export default function DayView({date, variant, onRequestDate, onOpenEntry, onDayLoaded}: Props) {
+export default function DayView({
+  date,
+  variant,
+  onRequestDate,
+  onOpenEntry,
+  onOpenLeave,
+  onDayLoaded,
+}: Props) {
   const {t, i18n} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -83,6 +93,7 @@ export default function DayView({date, variant, onRequestDate, onOpenEntry, onDa
   const [detected, setDetected] = useState<GeofenceDetection>('unknown');
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
+  const [leaveRanges, setLeaveRanges] = useState<LeaveRange[]>([]);
 
   const {loadDay, daysCache, updateDayTimes} = useDayStore();
   const {entriesByDay, loadEntriesForDay} = useEntryStore();
@@ -94,6 +105,13 @@ export default function DayView({date, variant, onRequestDate, onOpenEntry, onDa
   useEffect(() => { loadDay(date); }, [date, loadDay]);
   useEffect(() => { if (day) { loadEntriesForDay(day.id); } }, [day, loadEntriesForDay]);
   useEffect(() => { onDayLoaded?.(day ?? null); }, [day, onDayLoaded]);
+  useFocusEffect(
+    useCallback(() => {
+      getLeaveRangesInRange(date, date)
+        .then(setLeaveRanges)
+        .catch(() => setLeaveRanges([]));
+    }, [date]),
+  );
 
   // Reset filters when the viewed date changes (detail swipe).
   useEffect(() => { setSelectedProjectId(null); setSelectedTagIds([]); }, [date]);
@@ -229,6 +247,11 @@ export default function DayView({date, variant, onRequestDate, onOpenEntry, onDa
           )}
           {isToday && <DayEndConfirmBanner />}
           {isToday && <QuickTimerCard />}
+          {leaveRanges.length > 0 && (
+            <View style={styles.header}>
+              <LeaveBadges ranges={leaveRanges} onPress={onOpenLeave} />
+            </View>
+          )}
           {day && (
             <DaySummaryCard day={day} entries={allEntries} onUpdateTimes={fields => updateDayTimes(date, fields)} />
           )}

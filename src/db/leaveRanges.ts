@@ -1,5 +1,6 @@
 import {getDB} from './database';
 import type {LeaveRange, LeaveType} from '../types';
+import {eachDayOfInterval, format, parseISO} from 'date-fns';
 
 type Row = Record<string, unknown>;
 
@@ -36,6 +37,28 @@ export function canLeaveTypesOverlap(
     (left === 'vacation' && right === 'sick') ||
     (left === 'sick' && right === 'vacation')
   );
+}
+
+export function leavesByDate(
+  ranges: LeaveRange[],
+  startDate: string,
+  endDate: string,
+): Record<string, LeaveRange[]> {
+  validateLeaveRange(startDate, endDate);
+  const result: Record<string, LeaveRange[]> = {};
+  for (const range of ranges) {
+    const start = range.start_date < startDate ? startDate : range.start_date;
+    const end = range.end_date > endDate ? endDate : range.end_date;
+    if (start > end) { continue; }
+    for (const day of eachDayOfInterval({
+      start: parseISO(start),
+      end: parseISO(end),
+    })) {
+      const key = format(day, 'yyyy-MM-dd');
+      (result[key] ??= []).push(range);
+    }
+  }
+  return result;
 }
 
 export async function getLeaveRange(id: number): Promise<LeaveRange | null> {

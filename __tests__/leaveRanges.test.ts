@@ -11,6 +11,7 @@ import {
   canLeaveTypesOverlap,
   createLeaveRange,
   getLeaveRangesInRange,
+  leavesByDate,
   updateLeaveRange,
   validateLeaveRange,
 } from '../src/db/leaveRanges';
@@ -145,5 +146,38 @@ it('excludes the edited range from overlap validation', async () => {
     '2026-09-10',
     '2026-09-01',
     9,
+  ]);
+});
+
+it('projects intersecting ranges onto inclusive dates without creating days', () => {
+  const ranges = [
+    {
+      id: 1,
+      type: 'vacation' as const,
+      start_date: '2026-07-10',
+      end_date: '2026-07-12',
+      created_at: '',
+      updated_at: '',
+    },
+    {
+      id: 2,
+      type: 'sick' as const,
+      start_date: '2026-07-11',
+      end_date: '2026-07-11',
+      created_at: '',
+      updated_at: '',
+    },
+  ];
+
+  const result = leavesByDate(ranges, '2026-07-01', '2026-07-31');
+
+  expect(Object.keys(result)).toEqual([
+    '2026-07-10',
+    '2026-07-11',
+    '2026-07-12',
+  ]);
+  expect(result['2026-07-11'].map(range => range.type)).toEqual([
+    'vacation',
+    'sick',
   ]);
 });
