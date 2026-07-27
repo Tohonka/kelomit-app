@@ -5,6 +5,7 @@ import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import Database from 'better-sqlite3';
 import {reportRoutes} from '../src/routes/report.ts';
+import {chromiumPath} from '../src/pdf.ts';
 
 let dataDir: string;
 let app: ReturnType<typeof reportRoutes>;
@@ -145,4 +146,70 @@ test('carries an A4 print stylesheet', async () => {
   assert.match(html, /@page \{ size: A4/);
   // The form must not print — it is screen chrome, not part of the document.
   assert.match(html, /@media print/);
+});
+
+test('the allocation bars are scaled against the largest row', async () => {
+  seed();
+  const html = await get(
+    '?from=2026-07-20&to=2026-07-21&type=statistics&language=en',
+  ).then(r => r.text());
+  // Widest row is always 100%; nothing may exceed it.
+  const widths = [...html.matchAll(/sheet-bar"><span style="width:([\d.]+)%/g)].map(m =>
+    Number(m[1]),
+  );
+  assert.ok(widths.length > 0, 'expected at least one allocation bar');
+  assert.equal(Math.max(...widths), 100);
+  assert.ok(widths.every(w => w >= 0 && w <= 100));
+});
+
+function getPdf(query: string): Promise<Response> {
+  return app.fetch(new Request(`http://localhost/report.pdf${query}`));
+}
+
+test('the PDF route reports a bad range instead of launching a browser', async () => {
+  seed();
+  const res = await getPdf('?from=2026-07-21&to=2026-07-20');
+  assert.equal(res.status, 400);
+  assert.match(await res.text(), /start date is after the end date/i);
+});
+
+test('the PDF route 404s before the first sync', async () => {
+  const res = await getPdf('?from=2026-07-20&to=2026-07-21');
+  assert.equal(res.status, 404);
+});
+
+// Needs a real browser. The image installs Alpine's chromium; on a dev machine
+// this picks up an installed Chrome. Without one there is nothing to assert.
+test('the PDF route returns a real PDF file', {skip: chromiumPath() === null}, async () => {
+  seed();
+  const res = await getPdf('?from=2026-07-20&to=2026-07-21&type=statistics&language=en');
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('content-type'), 'application/pdf');
+  assert.match(
+    res.headers.get('content-disposition') ?? '',
+    /attachment; filename="work-report-2026-07-20-to-2026-07-21\.pdf"/,
+  );
+  const bytes = Buffer.from(await res.arrayBuffer());
+  assert.equal(bytes.subarray(0, 5).toString('latin1'), '%PDF-');
+  assert.ok(bytes.length > 1000, `suspiciously small PDF: ${bytes.length} bytes`);
+});
+
+// Work-period times are wall-clock, so they follow the process timezone. The
+// image pins TZ for exactly this reason; a UTC container silently shifts every
+// printed time by the offset.
+test('work periods print in the process timezone', async () => {
+  seed();
+  const original = process.env.TZ;
+  try {
+    process.env.TZ = 'Europe/Helsinki';
+    // Day 1's legs run 08:00-16:00Z, i.e. 11:00-19:00 in Helsinki.
+    const html = await get('?from=2026-07-20&to=2026-07-20&language=en').then(r => r.text());
+    assert.match(html, /11:00-19:00/);
+
+    process.env.TZ = 'UTC';
+    const utc = await get('?from=2026-07-20&to=2026-07-20&language=en').then(r => r.text());
+    assert.match(utc, /08:00-16:00/);
+  } finally {
+    process.env.TZ = original;
+  }
 });

@@ -1,7 +1,17 @@
 import {Hono} from 'hono';
+import type {Context} from 'hono';
+import type Database from 'better-sqlite3';
 import {openCurrent} from '../db.ts';
 import {getDaysInRange, getEntriesInRange, getSetting} from '../queries.ts';
-import {esc, reportLayout} from '../render.ts';
+import {esc} from '../render.ts';
+import {
+  footerTemplate,
+  PAGE_MARGIN_PT,
+  reportDocument,
+  reportLayout,
+  sheetHtml,
+} from '../reportSheet.ts';
+import {CHROMIUM_MISSING, htmlToPdf} from '../pdf.ts';
 import {buildWorkReport} from '../../../src/services/workReport.ts';
 import type {
   ReportLanguage,
@@ -62,68 +72,49 @@ function form(values: {
   </form>`;
 }
 
-function reportHtml(model: WorkReportModel): string {
-  const rows = model.days
-    .map(
-      d =>
-        `<tr>
-          <td>${esc(d.date)}</td>
-          <td>${esc(d.weekday)}</td>
-          <td class="num right">${esc(d.hours)}</td>
-        </tr>` +
-        (d.details || d.headlines.length
-          ? `<tr class="detail"><td colspan="3">
-              ${d.details ? `<span class="muted">${esc(d.details)}</span>` : ''}
-              ${d.headlines.length ? `<ul>${d.headlines.map(h => `<li>${esc(h)}</li>`).join('')}</ul>` : ''}
-            </td></tr>`
-          : ''),
-    )
-    .join('');
+/** Every knob the two report routes share, resolved from the query string. */
+interface ReportParams {
+  from: string;
+  to: string;
+  person: string;
+  company: string;
+  type: WorkReportType;
+  language: ReportLanguage;
+}
 
-  const stats = model.statistics
-    ? `<section class="stats">
-        <h2>${esc(model.statistics.title)}</h2>
-        <h3>${esc(model.statistics.byProjectTitle)}</h3>
-        <table>${model.statistics.projectRows
-          .map(r => `<tr><td>${esc(r.label)}</td><td class="num right">${esc(r.hours)}</td></tr>`)
-          .join('')}</table>
-        <h3>${esc(model.statistics.byTagTitle)}</h3>
-        <table>${model.statistics.tagRows
-          .map(r => `<tr><td>${esc(r.label)}</td><td class="num right">${esc(r.hours)}</td></tr>`)
-          .join('')}</table>
-        <p class="muted">${esc(model.statistics.nonExclusiveNote)}</p>
-      </section>`
-    : '';
+/** Reads the request and the synced settings. Must run while the database
+ *  handle is still valid, i.e. before any `await`. */
+function readParams(c: Context, db: Database.Database): ReportParams {
+  const fallback = defaultRange();
+  return {
+    from: c.req.query('from') || fallback.from,
+    to: c.req.query('to') || fallback.to,
+    // Person and company default to whatever the phone has set — the settings
+    // table rides along in the synced database.
+    person: c.req.query('person') ?? getSetting(db, 'report_person_name') ?? '',
+    company: c.req.query('company') ?? getSetting(db, 'report_company_name') ?? '',
+    type: pick(c.req.query('type'), TYPES, 'hours'),
+    language: pick(c.req.query('language'), LANGUAGES, 'fi'),
+  };
+}
 
-  return `<article class="sheet">
-    <header class="sheet-head">
-      <div>
-        <h1>${esc(model.meta.title)}</h1>
-        <p class="muted">${esc(model.meta.range)}</p>
-      </div>
-      <div class="right">
-        <p class="who">${esc(model.meta.personName)}</p>
-        <p class="muted">${esc(model.meta.companyName)}</p>
-      </div>
-    </header>
-    <table class="sheet-table">
-      <thead>
-        <tr>
-          <th>${esc(model.columns.date)}</th>
-          <th>${esc(model.columns.weekday)}</th>
-          <th class="right">${esc(model.columns.hours)}</th>
-        </tr>
-      </thead>
-      <tbody>${rows}</tbody>
-      <tfoot>
-        <tr>
-          <td colspan="2">${esc(model.meta.totalLabel)}</td>
-          <td class="num right">${esc(model.meta.totalHours)}</td>
-        </tr>
-      </tfoot>
-    </table>
-    ${stats}
-  </article>`;
+function buildModel(db: Database.Database, p: ReportParams): WorkReportModel {
+  // The app's own report model — same totals, same labels, same rules.
+  return buildWorkReport({
+    personName: p.person,
+    companyName: p.company,
+    startDate: p.from,
+    endDate: p.to,
+    language: p.language,
+    type: p.type,
+    days: getDaysInRange(db, p.from, p.to),
+    entries: getEntriesInRange(db, p.from, p.to),
+  });
+}
+
+function errorMessage(e: unknown): string {
+  const code = e instanceof Error ? e.message : String(e);
+  return ERRORS[code] ?? 'Could not build the report.';
 }
 
 export function reportRoutes(opts: {dataDir: string}): Hono {
@@ -135,41 +126,74 @@ export function reportRoutes(opts: {dataDir: string}): Hono {
       return c.html(reportLayout('Report', '<h1>Report</h1><p class="empty">No data synced yet.</p>'));
     }
 
-    const fallback = defaultRange();
-    const from = c.req.query('from') || fallback.from;
-    const to = c.req.query('to') || fallback.to;
-    // Person and company default to whatever the phone has set — the settings
-    // table rides along in the synced database.
-    const person = c.req.query('person') ?? getSetting(db, 'report_person_name') ?? '';
-    const company = c.req.query('company') ?? getSetting(db, 'report_company_name') ?? '';
-    const type = pick(c.req.query('type'), TYPES, 'hours');
-    const language = pick(c.req.query('language'), LANGUAGES, 'fi');
-
+    const params = readParams(c, db);
     const controls =
-      `<p><a class="link" href="/">&larr; Days</a></p>` +
-      form({from, to, person, company, language, type});
+      `<p><a class="link" href="/">&larr; Days</a></p>` + form(params);
 
     let body: string;
     try {
-      // The app's own report model — same totals, same labels, same rules.
-      const model = buildWorkReport({
-        personName: person,
-        companyName: company,
-        startDate: from,
-        endDate: to,
-        language,
-        type,
-        days: getDaysInRange(db, from, to),
-        entries: getEntriesInRange(db, from, to),
-      });
-      body = reportHtml(model) + '<p class="print-hint">Print this page (Ctrl/Cmd&nbsp;+&nbsp;P) and choose “Save as PDF”.</p>';
+      body =
+        `<p><a class="pdf-btn" href="/report.pdf?${esc(downloadQuery(params))}">Download PDF</a></p>` +
+        sheetHtml(buildModel(db, params));
     } catch (e) {
-      const code = e instanceof Error ? e.message : String(e);
-      body = `<p class="empty">${esc(ERRORS[code] ?? 'Could not build the report.')}</p>`;
+      body = `<p class="empty">${esc(errorMessage(e))}</p>`;
     }
 
     return c.html(reportLayout('Report', controls + body));
   });
 
+  app.get('/report.pdf', async c => {
+    const db = openCurrent(opts.dataDir);
+    if (!db) {
+      return c.text('No data synced yet.', 404);
+    }
+
+    // Everything that touches the database happens here, before the first
+    // await — the handle must not be held across one (see db.ts).
+    const params = readParams(c, db);
+    let model: WorkReportModel;
+    try {
+      model = buildModel(db, params);
+    } catch (e) {
+      return c.text(errorMessage(e), 400);
+    }
+
+    let pdf: Uint8Array<ArrayBuffer>;
+    try {
+      pdf = await htmlToPdf(reportDocument(model), {
+        footerTemplate: footerTemplate(model),
+        marginPt: PAGE_MARGIN_PT,
+      });
+    } catch (e) {
+      const missing = e instanceof Error && e.message === CHROMIUM_MISSING;
+      console.error('report.pdf failed:', e);
+      return c.text(
+        missing ? 'PDF rendering is unavailable on this server.' : 'Could not render the PDF.',
+        missing ? 501 : 500,
+      );
+    }
+
+    return new Response(pdf, {
+      headers: {
+        'content-type': 'application/pdf',
+        // Same filename the phone's export uses.
+        'content-disposition':
+          `attachment; filename="work-report-${params.from}-to-${params.to}.pdf"`,
+      },
+    });
+  });
+
   return app;
+}
+
+/** The current form state, as a query string for the PDF link. */
+function downloadQuery(p: ReportParams): string {
+  return new URLSearchParams({
+    from: p.from,
+    to: p.to,
+    person: p.person,
+    company: p.company,
+    type: p.type,
+    language: p.language,
+  }).toString();
 }
