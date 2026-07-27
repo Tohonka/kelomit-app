@@ -14,9 +14,11 @@ import {
 import type {MediaRow, RouteSegmentRow, RouteStopRow} from '../queries.ts';
 import {esc, layout, mediaUrl} from '../render.ts';
 import {
+  calcDayWorkBreakdown,
   calcDayWorkSecs,
   calcHourBreakdown,
   formatHours,
+  segmentWorkSecs,
 } from '../../../src/utils/hoursUtils.ts';
 import type {Day, Entry} from '../../../src/types/index.ts';
 
@@ -93,18 +95,46 @@ function splitBar(entries: Entry[]): string {
   return section('Split', `<div class="card"><div class="bar">${bar}</div><div class="legend">${legend}</div></div>`);
 }
 
+/** One work-day leg, or '' when that leg isn't set at all. */
+function legRow(start: string | null, end: string | null): string {
+  if (!start && !end) {
+    return '';
+  }
+  const secs = segmentWorkSecs(start, end);
+  return `<div class="entry-head">
+      <span class="num">${esc(clock(start) || '?')} &rarr; ${esc(clock(end) || '?')}</span>
+      <span class="entry-time">${secs > 0 ? esc(formatHours(secs)) : '&mdash;'}</span>
+    </div>`;
+}
+
 function dayCard(day: Day, entries: Entry[]): string {
-  const from = clock(day.started_at);
-  const to = clock(day.ended_at);
-  const span = from || to ? `${esc(from || '?')}&ndash;${esc(to || '?')}` : 'Not set';
+  const legs =
+    legRow(day.started_at, day.ended_at) + legRow(day.started_at_2, day.ended_at_2);
+
+  // Same rule as the app's DaySummaryCard: the worked total is only interesting
+  // when the model actually moved it off the leg baseline.
+  const dayWork = calcDayWorkBreakdown(day, entries);
+  const adjustments = [
+    ...(dayWork.addedWorkSeconds > 0 ? [`+${formatHours(dayWork.addedWorkSeconds)} after hours`] : []),
+    ...(dayWork.deductedPersonalSeconds > 0 ? [`−${formatHours(dayWork.deductedPersonalSeconds)} personal`] : []),
+  ];
+  const worked =
+    dayWork.hasDayLegs && adjustments.length
+      ? `<div class="day-sep"></div>
+         <div class="entry-head">
+           <span class="entry-title">Worked</span>
+           <span class="day-hours">${esc(formatHours(dayWork.workSeconds))}</span>
+         </div>
+         <p class="meta" style="margin:0.2rem 0 0">${esc(adjustments.join('  ·  '))}</p>`
+      : '';
+
   return section(
     'Day',
     `<div class="card">
-      <div class="entry-head">
-        <span>Start &amp; end</span>
-        <span class="entry-time">${span}</span>
-      </div>
-      <p class="meta" style="margin:0.35rem 0 0">${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}</p>
+      ${legs || '<p class="empty">Start &amp; end not set.</p>'}
+      ${worked}
+      <div class="day-sep"></div>
+      <p class="meta" style="margin:0">${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}</p>
     </div>`,
   );
 }

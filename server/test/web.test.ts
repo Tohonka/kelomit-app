@@ -16,7 +16,8 @@ function seed(): void {
     INSERT INTO schema_version VALUES (21);
     CREATE TABLE days (
       id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL UNIQUE,
-      started_at TEXT, ended_at TEXT, notes TEXT, created_at TEXT, updated_at TEXT
+      started_at TEXT, ended_at TEXT, started_at_2 TEXT, ended_at_2 TEXT,
+      notes TEXT, created_at TEXT, updated_at TEXT
     );
     CREATE TABLE projects (
       id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE,
@@ -92,6 +93,29 @@ test('day list shows synced days', async () => {
   seed();
   const res = await app.fetch(new Request('http://localhost/'));
   assert.match(await res.text(), /2026-07-25/);
+});
+
+test('day page shows both legs and the worked adjustments', async () => {
+  seed();
+  const db = new Database(join(dataDir, 'current.db'));
+  db.exec(`
+    UPDATE days SET started_at_2 = '2026-07-25T17:00:00.000Z',
+                    ended_at_2   = '2026-07-25T18:00:00.000Z' WHERE id = 1;
+    INSERT INTO entries (day_id, entry_type, activity_type, title, time_from, time_to, created_at)
+      VALUES (1, 'note', 'work', 'Late call',
+              '2026-07-25T19:00:00.000Z', '2026-07-25T20:00:00.000Z', '2026-07-25T19:00:00.000Z'),
+             (1, 'note', 'personal', 'Dentist',
+              '2026-07-25T12:00:00.000Z', '2026-07-25T12:30:00.000Z', '2026-07-25T12:00:00.000Z');
+  `);
+  db.close();
+  const html = await app.fetch(new Request('http://localhost/day/2026-07-25')).then(r => r.text());
+  // Legs 08–16 and 17–18 = 9h baseline, +1h after hours, −30m personal = 9h 30m.
+  assert.match(html, /08:00 &rarr; 16:00/);
+  assert.match(html, /17:00 &rarr; 18:00/);
+  assert.match(html, /Worked/);
+  assert.match(html, /9h 30m/);
+  assert.match(html, /\+1h after hours/);
+  assert.match(html, /−0h 30m personal/);
 });
 
 test('day page escapes entry titles', async () => {

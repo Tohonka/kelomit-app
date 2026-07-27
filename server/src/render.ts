@@ -166,6 +166,7 @@ h1 { font-size: 1.55rem; margin: 0 0 0.15rem; letter-spacing: -0.01em; }
   white-space: nowrap;
 }
 .entry-body { margin: 0.4rem 0 0; color: var(--text-secondary); white-space: pre-wrap; }
+.day-sep { border-top: 1px solid var(--border); margin: 0.6rem 0; }
 
 .chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.55rem; }
 .chip {
