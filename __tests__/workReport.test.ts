@@ -38,6 +38,7 @@ function makeEntry(overrides: Partial<Entry> = {}): Entry {
     longitude: null,
     location_label: null,
     is_todo: false,
+    is_overtime: false,
     scheduled_date: null,
     completed_at: null,
     reminder_at: null,

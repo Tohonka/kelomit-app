@@ -39,6 +39,7 @@ function rowToEntry(row: RawRow, tags: Tag[], project: Project | null, media: En
     longitude: (row.longitude as number | null) ?? null,
     location_label: (row.location_label as string | null) ?? null,
     is_todo: Boolean(row.is_todo),
+    is_overtime: Boolean(row.is_overtime),
     scheduled_date: (row.scheduled_date as string | null) ?? null,
     completed_at: (row.completed_at as string | null) ?? null,
     reminder_at: (row.reminder_at as string | null) ?? null,
@@ -288,6 +289,7 @@ export interface CreateEntryParams {
   longitude?: number | null;
   location_label?: string | null;
   is_todo?: boolean;
+  is_overtime?: boolean;
   scheduled_date?: string | null;
   completed_at?: string | null;
   reminder_at?: string | null;
@@ -300,8 +302,9 @@ export async function createEntry(params: CreateEntryParams): Promise<Entry> {
     `INSERT INTO entries (
        day_id, entry_type, activity_type, project_id, title, body,
        file_path, thumbnail_path, duration_sec, time_from, time_to,
-       latitude, longitude, location_label, is_todo, scheduled_date, completed_at, reminder_at
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       latitude, longitude, location_label, is_todo, is_overtime,
+       scheduled_date, completed_at, reminder_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      RETURNING *;`,
     [
       params.day_id,
@@ -319,6 +322,11 @@ export async function createEntry(params: CreateEntryParams): Promise<Entry> {
       params.longitude ?? null,
       params.location_label ?? null,
       params.is_todo ? 1 : 0,
+      params.activity_type !== 'personal' &&
+      params.activity_type !== 'personal_work' &&
+      params.is_overtime
+        ? 1
+        : 0,
       params.scheduled_date ?? null,
       params.completed_at ?? null,
       params.reminder_at ?? null,
@@ -371,6 +379,24 @@ export async function updateEntry(
       sets.push(`${f} = ?`);
       vals.push(fields[f] ?? null);
     }
+  }
+
+  if ('is_overtime' in fields) {
+    const overtime = fields.is_overtime ? 1 : 0;
+    if (fields.activity_type !== undefined) {
+      sets.push('is_overtime = ?');
+      vals.push(fields.activity_type === 'work' ? overtime : 0);
+    } else {
+      sets.push(
+        "is_overtime = CASE WHEN activity_type = 'work' THEN ? ELSE 0 END",
+      );
+      vals.push(overtime);
+    }
+  } else if (
+    fields.activity_type !== undefined &&
+    fields.activity_type !== 'work'
+  ) {
+    sets.push('is_overtime = 0');
   }
 
   if (sets.length > 0) {

@@ -97,6 +97,7 @@ const entry = (id: number, latitude: number, longitude: number): Entry => ({
   longitude,
   location_label: null,
   is_todo: false,
+  is_overtime: false,
   scheduled_date: null,
   completed_at: null,
   reminder_at: null,

@@ -375,4 +375,23 @@ export const migrations: Migration[] = [
       "INSERT OR IGNORE INTO settings (key, value) VALUES ('route_derivation_version', '1')",
     ],
   },
+  {
+    version: 23,
+    up: [
+      `ALTER TABLE entries ADD COLUMN is_overtime INTEGER NOT NULL DEFAULT 0
+        CHECK(is_overtime IN (0, 1))`,
+      `CREATE TABLE IF NOT EXISTS leave_ranges (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        type TEXT NOT NULL
+          CHECK(type IN ('paid_day_off','unpaid_day_off','vacation','sick')),
+        start_date TEXT NOT NULL,
+        end_date TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        CHECK(start_date <= end_date)
+      )`,
+      'CREATE INDEX IF NOT EXISTS idx_leave_ranges_dates ON leave_ranges(start_date, end_date)',
+      "INSERT OR IGNORE INTO settings (key, value) VALUES ('pay_period_start_day', '1')",
+    ],
+  },
 ];

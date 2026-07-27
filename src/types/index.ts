@@ -3,6 +3,11 @@ export type EntryType = 'note' | 'photo' | 'video' | 'voice';
 /** Kinds of media that can be attached to a note (Iteration 4). */
 export type MediaType = 'photo' | 'video' | 'voice';
 export type ProjectType = 'work' | 'personal' | 'other';
+export type LeaveType =
+  | 'paid_day_off'
+  | 'unpaid_day_off'
+  | 'vacation'
+  | 'sick';
 
 export interface Project {
   id: number;
@@ -50,6 +55,7 @@ export interface Entry {
   longitude: number | null;
   location_label: string | null;
   is_todo: boolean;
+  is_overtime: boolean;
   scheduled_date: string | null;
   completed_at: string | null;
   reminder_at: string | null;
@@ -59,6 +65,15 @@ export interface Entry {
   project?: Project | null;
   /** Media attachments (Iteration 4). A note can carry 0..N. */
   media?: EntryMedia[];
+}
+
+export interface LeaveRange {
+  id: number;
+  type: LeaveType;
+  start_date: string;
+  end_date: string;
+  created_at: string;
+  updated_at: string;
 }
 
 /** A single media attachment on an entry (Iteration 4 — `entry_media` table). */
