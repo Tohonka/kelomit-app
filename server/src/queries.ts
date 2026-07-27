@@ -36,12 +36,24 @@ export interface RouteStopRow {
   display_name: string | null;
 }
 
+/** The phone pushes whole snapshots, so the server can be handed a database
+ *  older than the queries written against it. A table the snapshot predates
+ *  reads as empty instead of 500-ing the page. */
+function hasTable(db: Database.Database, name: string): boolean {
+  return (
+    db
+      .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?")
+      .get(name) != null
+  );
+}
+
 export function listDays(db: Database.Database, limit: number): DaySummary[] {
+  const sources = ['SELECT date FROM days'];
+  if (hasTable(db, 'leave_ranges')) {
+    sources.push('SELECT end_date FROM leave_ranges');
+  }
   const latest = db.prepare(
-    `SELECT MAX(date) AS date FROM (
-       SELECT date FROM days
-       UNION ALL SELECT end_date FROM leave_ranges
-     )`,
+    `SELECT MAX(date) AS date FROM (${sources.join(' UNION ALL ')})`,
   ).get() as {date: string | null};
   if (!latest.date) return [];
   const from = db.prepare("SELECT date(?, '-' || ? || ' days') AS date")
@@ -237,6 +249,7 @@ export function getLeaveRangesInRange(
   from: string,
   to: string,
 ): LeaveRange[] {
+  if (!hasTable(db, 'leave_ranges')) return [];
   return db.prepare(
     `SELECT * FROM leave_ranges
       WHERE start_date <= ? AND end_date >= ?

@@ -177,3 +177,15 @@ test('openCurrent detects a sync swap even with an identical mtime', () => {
   const reopened = openCurrent(dataDir)!;
   assert.deepEqual(listDays(reopened, 10).map(d => d.date), ['2026-09-01']);
 });
+
+// The deployed server ran a pre-leave snapshot for a day: every page 500'd on
+// `no such table: leave_ranges`. An older snapshot must degrade, not crash.
+test('a snapshot without leave_ranges still lists days', () => {
+  const seeded = seed();
+  seeded.exec('DROP TABLE leave_ranges');
+  seeded.close();
+  const db = openCurrent(dataDir)!;
+  const days = listDays(db, 30);
+  assert.ok(days.length > 0);
+  assert.deepEqual(days[0].leaveRanges, []);
+});
