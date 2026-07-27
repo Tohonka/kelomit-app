@@ -72,6 +72,7 @@ const base = {
   type: 'hours' as const,
   days: [workedDay],
   entries: workedEntries,
+  leaveRanges: [],
 };
 
 describe('buildWorkReport', () => {
@@ -104,12 +105,12 @@ describe('buildWorkReport', () => {
     });
 
     expect(report.days).toHaveLength(1);
-    expect(report.days[0].date).toBe('25 Jul 2026');
-    expect(report.days[0].weekday).toBe('Saturday');
-    expect(report.days[0].hours).toBe('8:00');
+    expect(report.days[0].date).toBe('Sat 25 Jul 2026');
+    expect(report.days[0].regular).toBe('8h 00m');
+    expect(report.days[0].total).toBe('8h 00m');
   });
 
-  it('shows both work periods and overtime in each day row', () => {
+  it('shows both work periods and classifies unmarked outside work as remote', () => {
     const day = makeDay({
       id: 2,
       started_at: new Date(2026, 6, 25, 8).toISOString(),
@@ -130,9 +131,46 @@ describe('buildWorkReport', () => {
       ],
     });
 
-    expect((report.days[0] as typeof report.days[0] & {details: string}).details)
-      .toBe('Work periods 08:00-12:00 · 13:00-17:00 · Overtime 1:30');
-    expect(report.days[0].hours).toBe('9:30');
+    expect(report.days[0].workTime).toBe('08:00–12:00 · 13:00–17:00');
+    expect(report.days[0].regular).toBe('8h 00m');
+    expect(report.days[0].remoteOther).toBe('1h 30m');
+    expect(report.days[0].overtime).toBe('0h 00m');
+    expect(report.days[0].total).toBe('9h 30m');
+  });
+
+  it('keeps leave-only dates and shows Vacation and Sick together', () => {
+    const report = buildWorkReport({
+      ...base,
+      days: [],
+      entries: [],
+      leaveRanges: [
+        {
+          id: 1,
+          type: 'vacation',
+          start_date: '2026-07-25',
+          end_date: '2026-07-25',
+          created_at: '',
+          updated_at: '',
+        },
+        {
+          id: 2,
+          type: 'sick',
+          start_date: '2026-07-25',
+          end_date: '2026-07-25',
+          created_at: '',
+          updated_at: '',
+        },
+      ],
+    });
+
+    expect(report.days[0]).toMatchObject({
+      date: 'Sat 25 Jul 2026',
+      workTime: 'Vacation + Sick',
+      regular: '0h 00m',
+      remoteOther: '0h 00m',
+      overtime: '0h 00m',
+      total: '0h 00m',
+    });
   });
 
   it('includes only eligible completed work titles as headlines', () => {
@@ -272,7 +310,7 @@ describe('buildWorkReport', () => {
       ],
     });
 
-    expect(report.meta.totalHours).toBe('10:00');
+    expect(report.meta.totalHours).toBe('10h 00m');
     expect(report.statistics!.projectRows.map(row => [row.label, row.seconds])).toEqual([
       ['Project A', 3 * H],
       ['Untracked work', 7 * H],
@@ -298,12 +336,14 @@ describe('buildWorkReport', () => {
     });
     expect(report.columns).toEqual({
       date: 'Päivä',
-      weekday: 'Viikonpäivä',
-      hours: 'Tunnit',
+      workTime: 'Työaika',
+      regular: 'Tunnit',
+      remoteOther: 'Etä / muu',
+      overtime: 'Ylityö',
+      total: 'Yhteensä',
     });
     expect(report.days[0]).toMatchObject({
-      date: '25 heinä 2026',
-      weekday: 'lauantai',
+      date: 'la 25 heinä 2026',
     });
     expect(report.statistics).toMatchObject({
       title: 'Tilastot',

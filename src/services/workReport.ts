@@ -1,8 +1,147 @@
 import {format, parseISO} from 'date-fns';
 import {enUS, fi as fiLocale} from 'date-fns/locale';
-import type {Day, Entry} from '../types';
+import type {Day, Entry, LeaveRange, LeaveType} from '../types';
+import {leavesByDate} from '../db/leaveRanges';
 import {formatTime, parseTimestamp} from '../utils/timeFormat';
 import {calcDayWorkBreakdown, entryTrackedSeconds} from '../utils/hoursUtils';
+
+type Interval = [number, number];
+
+function mergeIntervals(intervals: Interval[]): Interval[] {
+  const sorted = intervals
+    .filter(([start, end]) => end > start)
+    .sort((left, right) => left[0] - right[0]);
+  const merged: Interval[] = [];
+  for (const interval of sorted) {
+    const last = merged[merged.length - 1];
+    if (last && interval[0] <= last[1]) {
+      last[1] = Math.max(last[1], interval[1]);
+    } else {
+      merged.push([...interval]);
+    }
+  }
+  return merged;
+}
+
+function intervalSeconds(intervals: Interval[]): number {
+  return mergeIntervals(intervals)
+    .reduce((total, [start, end]) => total + end - start, 0);
+}
+
+function entryInterval(entry: Entry): Interval | null {
+  if (
+    (entry.is_todo && !entry.completed_at) ||
+    !entry.time_from ||
+    !entry.time_to
+  ) {
+    return null;
+  }
+  const start = Date.parse(entry.time_from) / 1000;
+  const end = Date.parse(entry.time_to) / 1000;
+  return Number.isFinite(start) && Number.isFinite(end) && end > start
+    ? [start, end]
+    : null;
+}
+
+function overlapSeconds(left: Interval[], right: Interval[]): number {
+  const overlaps: Interval[] = [];
+  for (const [leftStart, leftEnd] of mergeIntervals(left)) {
+    for (const [rightStart, rightEnd] of mergeIntervals(right)) {
+      const start = Math.max(leftStart, rightStart);
+      const end = Math.min(leftEnd, rightEnd);
+      if (end > start) {
+        overlaps.push([start, end]);
+      }
+    }
+  }
+  return intervalSeconds(overlaps);
+}
+
+export interface ReportHourBuckets {
+  regularSeconds: number;
+  remoteOtherSeconds: number;
+  overtimeSeconds: number;
+  totalSeconds: number;
+}
+
+export function classifyReportDay(
+  day: Day,
+  entries: Entry[],
+  hasLeave: boolean,
+): ReportHourBuckets {
+  const eligibleWork = entries.filter(entry =>
+    entry.activity_type === 'work' &&
+    entry.project?.type !== 'personal' &&
+    (!entry.is_todo || entry.completed_at != null),
+  );
+  const overtimeIntervals: Interval[] = [];
+  const normalIntervals: Interval[] = [];
+  let overtimeDuration = 0;
+  let normalDuration = 0;
+  for (const entry of eligibleWork) {
+    const interval = entryInterval(entry);
+    if (interval) {
+      (entry.is_overtime ? overtimeIntervals : normalIntervals).push(interval);
+    } else {
+      const seconds = entryTrackedSeconds(entry);
+      if (entry.is_overtime) {
+        overtimeDuration += seconds;
+      } else {
+        normalDuration += seconds;
+      }
+    }
+  }
+
+  const overtimeSeconds =
+    intervalSeconds(overtimeIntervals) + overtimeDuration;
+  if (hasLeave) {
+    const remoteOtherSeconds = Math.max(
+      0,
+      intervalSeconds(normalIntervals) -
+        overlapSeconds(normalIntervals, overtimeIntervals) +
+        normalDuration,
+    );
+    return {
+      regularSeconds: 0,
+      remoteOtherSeconds,
+      overtimeSeconds,
+      totalSeconds: remoteOtherSeconds + overtimeSeconds,
+    };
+  }
+
+  const breakdown = calcDayWorkBreakdown(day, entries);
+  const legs: Interval[] = [];
+  if (day.started_at && day.ended_at) {
+    legs.push([Date.parse(day.started_at) / 1000, Date.parse(day.ended_at) / 1000]);
+  }
+  if (day.started_at_2 && day.ended_at_2) {
+    legs.push([Date.parse(day.started_at_2) / 1000, Date.parse(day.ended_at_2) / 1000]);
+  }
+  const personalIntervals = entries
+    .filter(entry =>
+      entry.activity_type === 'personal' || entry.project?.type === 'personal',
+    )
+    .map(entryInterval)
+    .filter((interval): interval is Interval => interval != null);
+  const regularBeforeOvertime = Math.max(
+    0,
+    intervalSeconds(legs) - overlapSeconds(legs, personalIntervals),
+  );
+  const classifiedOvertime = Math.min(overtimeSeconds, breakdown.workSeconds);
+  const regularSeconds = Math.min(
+    Math.max(0, regularBeforeOvertime - overlapSeconds(legs, overtimeIntervals)),
+    breakdown.workSeconds - classifiedOvertime,
+  );
+  return {
+    regularSeconds,
+    remoteOtherSeconds: Math.max(
+      0,
+      breakdown.workSeconds - regularSeconds - classifiedOvertime,
+    ),
+    overtimeSeconds: classifiedOvertime,
+    totalSeconds: breakdown.workSeconds,
+  };
+}
 
 export type ReportLanguage = 'fi' | 'en';
 export type WorkReportType = 'hours' | 'headlines' | 'statistics';
@@ -16,6 +155,21 @@ export interface WorkReportInput {
   type: WorkReportType;
   days: Day[];
   entries: Entry[];
+  leaveRanges: LeaveRange[];
+}
+
+interface WorkReportDay {
+  date: string;
+  workTime: string;
+  regular: string;
+  regularSeconds: number;
+  remoteOther: string;
+  remoteOtherSeconds: number;
+  overtime: string;
+  overtimeSeconds: number;
+  total: string;
+  totalSeconds: number;
+  headlines: string[];
 }
 
 export interface WorkReportModel {
@@ -28,15 +182,15 @@ export interface WorkReportModel {
     totalHours: string;
     pageLabel: string;
   };
-  columns: {date: string; weekday: string; hours: string};
-  days: Array<{
+  columns: {
     date: string;
-    weekday: string;
-    hours: string;
-    seconds: number;
-    details: string;
-    headlines: string[];
-  }>;
+    workTime: string;
+    regular: string;
+    remoteOther: string;
+    overtime: string;
+    total: string;
+  };
+  days: WorkReportDay[];
   statistics: null | {
     title: string;
     byProjectTitle: string;
@@ -52,15 +206,21 @@ const COPY = {
     title: 'Work hours report',
     total: 'Total worked',
     date: 'Date',
-    weekday: 'Weekday',
-    hours: 'Hours',
+    workTime: 'Work time',
+    regular: 'Hours',
+    remoteOther: 'Remote / Other',
+    overtime: 'Overtime',
+    totalColumn: 'Total',
+    leave: {
+      paid_day_off: 'Day off (paid)',
+      unpaid_day_off: 'Day off (unpaid)',
+      vacation: 'Vacation',
+      sick: 'Sick',
+    },
     statistics: 'Statistics',
     byProject: 'By project',
     byTag: 'By tag',
     untracked: 'Untracked work',
-    periods: 'Work periods',
-    notRecorded: 'not recorded',
-    overtime: 'Overtime',
     nonExclusive: 'Tag totals are non-exclusive.',
     page: 'Page',
   },
@@ -68,15 +228,21 @@ const COPY = {
     title: 'Työaikaraportti',
     total: 'Tunteja yhteensä',
     date: 'Päivä',
-    weekday: 'Viikonpäivä',
-    hours: 'Tunnit',
+    workTime: 'Työaika',
+    regular: 'Tunnit',
+    remoteOther: 'Etä / muu',
+    overtime: 'Ylityö',
+    totalColumn: 'Yhteensä',
+    leave: {
+      paid_day_off: 'Vapaa (palkallinen)',
+      unpaid_day_off: 'Vapaa (palkaton)',
+      vacation: 'Loma',
+      sick: 'Sairaus',
+    },
     statistics: 'Tilastot',
     byProject: 'Projekteittain',
     byTag: 'Tunnisteittain',
     untracked: 'Kohdistamaton työ',
-    periods: 'Työajat',
-    notRecorded: 'ei merkitty',
-    overtime: 'Ylityö',
     nonExclusive: 'Tunnisteiden tunnit eivät sulje toisiaan pois.',
     page: 'Sivu',
   },
@@ -85,28 +251,17 @@ const COPY = {
 function formatDuration(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
-  return `${hours}:${String(minutes).padStart(2, '0')}`;
+  return `${hours}h ${String(minutes).padStart(2, '0')}m`;
 }
 
-function dayDetails(
-  day: Day,
-  overtimeSeconds: number,
-  language: ReportLanguage,
-): string {
-  const copy = COPY[language];
-  const periods = [
+function workTime(day: Day): string {
+  return [
     [day.started_at, day.ended_at],
     [day.started_at_2, day.ended_at_2],
   ]
     .filter((period): period is [string, string] => Boolean(period[0] && period[1]))
-    .map(([start, end]) => `${formatTime(start)}-${formatTime(end)}`);
-  const parts = [
-    `${copy.periods} ${periods.length > 0 ? periods.join(' · ') : copy.notRecorded}`,
-  ];
-  if (overtimeSeconds > 0) {
-    parts.push(`${copy.overtime} ${formatDuration(overtimeSeconds)}`);
-  }
-  return parts.join(' · ');
+    .map(([start, end]) => `${formatTime(start)}–${formatTime(end)}`)
+    .join(' · ');
 }
 
 function headlines(entries: Entry[]): string[] {
@@ -207,6 +362,11 @@ export function buildWorkReport(input: WorkReportInput): WorkReportModel {
 
   const copy = COPY[input.language];
   const locale = input.language === 'fi' ? fiLocale : enUS;
+  const leaveByDate = leavesByDate(
+    input.leaveRanges,
+    input.startDate,
+    input.endDate,
+  );
   const entriesByDay = new Map<number, Entry[]>();
   for (const entry of input.entries) {
     const entries = entriesByDay.get(entry.day_id) ?? [];
@@ -214,29 +374,60 @@ export function buildWorkReport(input: WorkReportInput): WorkReportModel {
     entriesByDay.set(entry.day_id, entries);
   }
 
-  const reportDays = input.days
+  const daysByDate = new Map(input.days
     .filter(day => day.date >= input.startDate && day.date <= input.endDate)
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .map(day => {
-      const entries = entriesByDay.get(day.id) ?? [];
-      const breakdown = calcDayWorkBreakdown(day, entries);
-      return {day, entries, breakdown, seconds: breakdown.workSeconds};
-    })
-    .filter(({seconds}) => seconds > 0);
+    .map(day => [day.date, day]));
+  const reportDates = [...new Set([
+    ...daysByDate.keys(),
+    ...Object.keys(leaveByDate),
+  ])].sort();
+  const reportDays = reportDates.flatMap(date => {
+    const day = daysByDate.get(date);
+    const leave = leaveByDate[date] ?? [];
+    const entries = day ? entriesByDay.get(day.id) ?? [] : [];
+    const emptyDay: Day = {
+      id: -1,
+      date,
+      started_at: null,
+      ended_at: null,
+      started_at_2: null,
+      ended_at_2: null,
+      started_at_source: null,
+      ended_at_source: null,
+      notes: null,
+      created_at: '',
+      updated_at: '',
+    };
+    const sourceDay = day ?? emptyDay;
+    const buckets = classifyReportDay(sourceDay, entries, leave.length > 0);
+    return buckets.totalSeconds > 0 || leave.length > 0
+      ? [{day: sourceDay, entries, leave, buckets}]
+      : [];
+  });
   if (reportDays.length === 0) {
     throw new Error('report_empty');
   }
-  const days = reportDays.map(({day, entries, breakdown, seconds}) => ({
-    date: format(parseISO(day.date), 'd MMM yyyy', {locale}),
-    weekday: format(parseISO(day.date), 'cccc', {locale}),
-    hours: formatDuration(seconds),
-    seconds,
-    details: dayDetails(day, breakdown.addedWorkSeconds, input.language),
+  const days = reportDays.map(({day, entries, leave, buckets}) => ({
+    date: format(parseISO(day.date), 'EEE d MMM yyyy', {locale}),
+    workTime: leave.length > 0
+      ? leave.map(item => copy.leave[item.type as LeaveType]).join(' + ')
+      : workTime(day),
+    regular: formatDuration(buckets.regularSeconds),
+    regularSeconds: buckets.regularSeconds,
+    remoteOther: formatDuration(buckets.remoteOtherSeconds),
+    remoteOtherSeconds: buckets.remoteOtherSeconds,
+    overtime: formatDuration(buckets.overtimeSeconds),
+    overtimeSeconds: buckets.overtimeSeconds,
+    total: formatDuration(buckets.totalSeconds),
+    totalSeconds: buckets.totalSeconds,
     headlines: input.type === 'headlines' || input.type === 'statistics'
       ? headlines(entries)
       : [],
   }));
-  const totalSeconds = reportDays.reduce((total, day) => total + day.seconds, 0);
+  const totalSeconds = reportDays.reduce(
+    (total, day) => total + day.buckets.totalSeconds,
+    0,
+  );
   const range = `${format(parseISO(input.startDate), 'd MMM yyyy', {locale})} – ${format(parseISO(input.endDate), 'd MMM yyyy', {locale})}`;
 
   return {
@@ -249,7 +440,14 @@ export function buildWorkReport(input: WorkReportInput): WorkReportModel {
       totalHours: formatDuration(totalSeconds),
       pageLabel: copy.page,
     },
-    columns: {date: copy.date, weekday: copy.weekday, hours: copy.hours},
+    columns: {
+      date: copy.date,
+      workTime: copy.workTime,
+      regular: copy.regular,
+      remoteOther: copy.remoteOther,
+      overtime: copy.overtime,
+      total: copy.totalColumn,
+    },
     days,
     statistics: input.type === 'statistics'
       ? buildStatistics(reportDays, totalSeconds, input.language)

@@ -1,5 +1,9 @@
 jest.mock('../src/db/days', () => ({getDaysInRange: jest.fn()}));
 jest.mock('../src/db/entries', () => ({getEntriesForDays: jest.fn()}));
+jest.mock('../src/db/leaveRanges', () => ({
+  ...jest.requireActual('../src/db/leaveRanges'),
+  getLeaveRangesInRange: jest.fn(),
+}));
 jest.mock('../src/native/workReport', () => ({createNativeWorkReport: jest.fn()}));
 jest.mock('@react-native-documents/picker', () => ({
   saveDocuments: jest.fn(),
@@ -9,6 +13,7 @@ jest.mock('@react-native-documents/picker', () => ({
 
 import {getDaysInRange} from '../src/db/days';
 import {getEntriesForDays} from '../src/db/entries';
+import {getLeaveRangesInRange} from '../src/db/leaveRanges';
 import {createNativeWorkReport} from '../src/native/workReport';
 import {errorCodes, saveDocuments} from '@react-native-documents/picker';
 import {exportWorkReport} from '../src/services/workReportExport';
@@ -16,6 +21,7 @@ import type {Day} from '../src/types';
 
 const getDaysInRangeMock = getDaysInRange as jest.MockedFunction<typeof getDaysInRange>;
 const getEntriesForDaysMock = getEntriesForDays as jest.MockedFunction<typeof getEntriesForDays>;
+const getLeaveRangesInRangeMock = getLeaveRangesInRange as jest.MockedFunction<typeof getLeaveRangesInRange>;
 const createNativeWorkReportMock = createNativeWorkReport as jest.MockedFunction<typeof createNativeWorkReport>;
 const saveDocumentsMock = saveDocuments as jest.MockedFunction<typeof saveDocuments>;
 
@@ -61,6 +67,7 @@ beforeEach(() => {
   jest.resetAllMocks();
   getDaysInRangeMock.mockResolvedValue(days);
   getEntriesForDaysMock.mockResolvedValue([]);
+  getLeaveRangesInRangeMock.mockResolvedValue([]);
   createNativeWorkReportMock.mockResolvedValue('/cache/work-report.pdf');
   saveDocumentsMock.mockResolvedValue([{
     uri: 'content://saved/work-report.pdf',
@@ -75,6 +82,7 @@ describe('exportWorkReport', () => {
 
     expect(getDaysInRange).toHaveBeenCalledWith('2026-06-26', '2026-07-25');
     expect(getEntriesForDays).toHaveBeenCalledWith([1, 2]);
+    expect(getLeaveRangesInRange).toHaveBeenCalledWith('2026-06-26', '2026-07-25');
     expect(createNativeWorkReport).toHaveBeenCalledWith(
       expect.objectContaining({days: expect.any(Array)}),
       'work-report-2026-06-26-to-2026-07-25.pdf',
