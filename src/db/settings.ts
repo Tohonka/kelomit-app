@@ -1,5 +1,6 @@
 import {getDB} from './database';
 import type {Settings, ActivityType} from '../types';
+import {parsePayPeriodStartDay} from '../utils/payPeriod';
 
 export async function getSetting(key: string): Promise<string | null> {
   const db = getDB();
@@ -46,5 +47,8 @@ export async function getAllSettings(): Promise<Settings> {
     usual_start: map.usual_start || null,
     usual_end: map.usual_end || null,
     prefill_from_usual: map.prefill_from_usual === 'true',
+    pay_period_start_day: parsePayPeriodStartDay(
+      map.pay_period_start_day,
+    ),
   };
 }

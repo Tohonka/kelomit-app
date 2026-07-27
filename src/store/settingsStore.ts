@@ -42,6 +42,7 @@ interface SettingsState extends Settings {
   setUsualStart: (hhmm: string | null) => Promise<void>;
   setUsualEnd: (hhmm: string | null) => Promise<void>;
   setPrefillFromUsual: (enabled: boolean) => Promise<void>;
+  setPayPeriodStartDay: (day: number) => Promise<void>;
   setTimeSelectorMode: (mode: TimeSelectorMode) => Promise<void>;
   setLanguage: (language: Language) => Promise<void>;
   setQuickAddDefaultProjectId: (id: number | null) => Promise<void>;
@@ -59,6 +60,7 @@ export const useSettingsStore = create<SettingsState>(set => ({
   usual_start: null,
   usual_end: null,
   prefill_from_usual: false,
+  pay_period_start_day: 1,
   theme_mode: 'system',
   show_week_numbers: false,
   show_personal_hours: false,
@@ -196,6 +198,14 @@ export const useSettingsStore = create<SettingsState>(set => ({
   setPrefillFromUsual: async enabled => {
     await setSetting('prefill_from_usual', String(enabled));
     set({prefill_from_usual: enabled});
+  },
+
+  setPayPeriodStartDay: async day => {
+    if (!Number.isInteger(day) || day < 1 || day > 28) {
+      throw new Error('pay_period_invalid_day');
+    }
+    await setSetting('pay_period_start_day', String(day));
+    set({pay_period_start_day: day});
   },
 
   setTimeSelectorMode: async mode => {

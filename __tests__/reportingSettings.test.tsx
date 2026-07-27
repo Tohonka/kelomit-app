@@ -103,6 +103,26 @@ beforeEach(() => {
   exportWorkReportMock.mockResolvedValue('saved');
 });
 
+it('defaults dates to the most recently completed saved pay period', async () => {
+  jest.useFakeTimers().setSystemTime(new Date(2026, 6, 27, 12));
+  getSettingMock.mockImplementation(async key => {
+    if (key === 'report_person_name') { return 'Matti Meikäläinen'; }
+    if (key === 'report_company_name') { return 'Kelo Design Oy'; }
+    if (key === 'pay_period_start_day') { return '26'; }
+    return null;
+  });
+
+  const renderer = await renderScreen();
+
+  expect(
+    button(renderer.root, 'Select start date').props.accessibilityValue,
+  ).toEqual({text: 'Jun 26, 2026'});
+  expect(
+    button(renderer.root, 'Select end date').props.accessibilityValue,
+  ).toEqual({text: 'Jul 25, 2026'});
+  jest.useRealTimers();
+});
+
 it('loads two identity fields and exports the selected inclusive date range', async () => {
   const renderer = await renderScreen();
   const root = renderer.root;

@@ -1,6 +1,13 @@
-import React, {useMemo} from 'react';
+import React, {useEffect, useMemo, useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import {View, Text, ScrollView, TouchableOpacity, StyleSheet} from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {format, addDays} from 'date-fns';
 import {useSettingsStore} from '../../store/settingsStore';
@@ -39,6 +46,17 @@ const makeLocalStyles = (c: Colors) =>
     },
     customSep: {color: c.textMuted, fontSize: typography.sizes.base},
     hint: {paddingHorizontal: spacing.lg, marginBottom: spacing.xs},
+    payPeriodInput: {
+      width: 72,
+      minHeight: 44,
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: 8,
+      color: c.textPrimary,
+      backgroundColor: c.bg,
+      textAlign: 'center',
+      fontSize: typography.sizes.base,
+    },
   });
 
 export default function WorkDetailsSettings() {
@@ -50,7 +68,24 @@ export default function WorkDetailsSettings() {
     usual_start, setUsualStart, usual_end, setUsualEnd,
     prefill_from_usual, setPrefillFromUsual,
     weekday_hours, setWeekdayOverride,
+    pay_period_start_day, setPayPeriodStartDay,
   } = useSettingsStore();
+  const [payPeriodInput, setPayPeriodInput] = useState(
+    String(pay_period_start_day),
+  );
+
+  useEffect(() => {
+    setPayPeriodInput(String(pay_period_start_day));
+  }, [pay_period_start_day]);
+
+  const savePayPeriod = async () => {
+    const day = Number(payPeriodInput);
+    if (!Number.isInteger(day) || day < 1 || day > 28) {
+      setPayPeriodInput(String(pay_period_start_day));
+      return;
+    }
+    await setPayPeriodStartDay(day);
+  };
 
   const today = todayDate();
   const locale = getDateFnsLocale(i18n.resolvedLanguage === 'fi' ? 'fi' : 'en');
@@ -109,6 +144,31 @@ export default function WorkDetailsSettings() {
             </Text>
           </View>
         </TouchableOpacity>
+
+        <Text style={styles.sectionHeader}>{t('settings.payPeriod')}</Text>
+        <View style={styles.row}>
+          <View style={styles.rowTextWrap}>
+            <Text style={styles.rowLabel}>{t('settings.payPeriodStart')}</Text>
+            <Text style={styles.rowSubLabel}>
+              {t('settings.payPeriodHint', {
+                start: pay_period_start_day,
+                end: pay_period_start_day === 1
+                  ? t('settings.monthEnd')
+                  : pay_period_start_day - 1,
+              })}
+            </Text>
+          </View>
+          <TextInput
+            style={local.payPeriodInput}
+            value={payPeriodInput}
+            onChangeText={setPayPeriodInput}
+            onEndEditing={savePayPeriod}
+            keyboardType="number-pad"
+            maxLength={2}
+            selectTextOnFocus
+            accessibilityLabel={t('settings.payPeriodStart')}
+          />
+        </View>
 
         <Text style={styles.sectionHeader}>{t('settings.perWeekday')}</Text>
         <Text style={[styles.rowSubLabel, local.hint]}>

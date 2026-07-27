@@ -237,4 +237,5 @@ export interface Settings {
   usual_end: string | null;
   /** When true, a newly-created day is seeded with the usual hours. */
   prefill_from_usual: boolean;
+  pay_period_start_day: number;
 }

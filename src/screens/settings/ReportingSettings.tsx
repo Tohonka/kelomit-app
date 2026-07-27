@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import {format, startOfMonth} from 'date-fns';
+import {format, parseISO} from 'date-fns';
 import {getSetting, setSetting} from '../../db/settings';
 import {getDateFnsLocale} from '../../i18n';
 import {
@@ -25,6 +25,10 @@ import type {
 import {radius, spacing, typography, useTheme} from '../../theme';
 import type {Colors} from '../../theme';
 import {makeSettingsStyles} from './settingsStyles';
+import {
+  completedPayPeriod,
+  parsePayPeriodStartDay,
+} from '../../utils/payPeriod';
 
 type Picker = 'start' | 'end' | null;
 
@@ -152,13 +156,22 @@ export default function ReportingSettings() {
 
   const [personName, setPersonName] = useState('');
   const [companyName, setCompanyName] = useState('');
-  const [startDate, setStartDate] = useState(() => startOfMonth(new Date()));
-  const [endDate, setEndDate] = useState(() => new Date());
+  const initialRange = useMemo(
+    () => completedPayPeriod(new Date(), 1),
+    [],
+  );
+  const [startDate, setStartDate] = useState(
+    () => parseISO(initialRange.startDate),
+  );
+  const [endDate, setEndDate] = useState(
+    () => parseISO(initialRange.endDate),
+  );
   const [language, setLanguage] = useState<ReportLanguage>('fi');
   const [type, setType] = useState<WorkReportType>('hours');
   const [picker, setPicker] = useState<Picker>(null);
   const [busy, setBusy] = useState(false);
   const identityDirty = useRef({person: false, company: false});
+  const rangeDirty = useRef(false);
   const mounted = useRef(true);
 
   useEffect(() => {
@@ -167,7 +180,8 @@ export default function ReportingSettings() {
     Promise.all([
       getSetting('report_person_name'),
       getSetting('report_company_name'),
-    ]).then(([savedPersonName, savedCompanyName]) => {
+      getSetting('pay_period_start_day'),
+    ]).then(([savedPersonName, savedCompanyName, savedPayPeriodStart]) => {
       if (!active) {
         return;
       }
@@ -176,6 +190,14 @@ export default function ReportingSettings() {
       }
       if (!identityDirty.current.company) {
         setCompanyName(savedCompanyName ?? '');
+      }
+      if (!rangeDirty.current) {
+        const range = completedPayPeriod(
+          new Date(),
+          parsePayPeriodStartDay(savedPayPeriodStart),
+        );
+        setStartDate(parseISO(range.startDate));
+        setEndDate(parseISO(range.endDate));
       }
     }).catch(() => {
       if (active) {
@@ -333,8 +355,10 @@ export default function ReportingSettings() {
             onChange={(_event, selectedDate) => {
               if (selectedDate) {
                 if (picker === 'start') {
+                  rangeDirty.current = true;
                   setStartDate(selectedDate);
                 } else {
+                  rangeDirty.current = true;
                   setEndDate(selectedDate);
                 }
               }
