@@ -1,5 +1,5 @@
 import React from 'react';
-import {StyleSheet, Text, View} from 'react-native';
+import {StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import {act, create, type ReactTestInstance} from 'react-test-renderer';
 
 jest.mock('react-native-maps', () => {
@@ -111,11 +111,13 @@ function text(root: ReactTestInstance): string[] {
 }
 
 it('shows chronological frozen endpoints, local times, distance, duration, and matching palette swatches', () => {
+  const onPress = jest.fn();
   let renderer!: ReturnType<typeof create>;
   act(() => {
     renderer = create(
       <TripList
         stops={stops}
+        onPress={onPress}
         segments={[
           segment(),
           segment({
@@ -157,8 +159,10 @@ it('shows chronological frozen endpoints, local times, distance, duration, and m
     accessibilityLabel:
       'Frozen origin → Frozen destination, 11:30 – 12:00, 1.3 km · 30m',
   });
-  expect(firstRow.type).toBe(View);
-  expect(firstRow.props.accessible).toBe(true);
+  expect(firstRow.type).toBe(TouchableOpacity);
+  expect(firstRow.props.accessibilityRole).toBe('button');
+  act(() => firstRow.props.onPress());
+  expect(onPress).toHaveBeenCalledWith(expect.objectContaining({id: 20}));
 });
 
 it('uses localized day boundaries for null endpoints', () => {
@@ -167,6 +171,7 @@ it('uses localized day boundaries for null endpoints', () => {
     renderer = create(
       <TripList
         stops={stops}
+        onPress={jest.fn()}
         segments={[
           segment({origin_stop_id: null, destination_stop_id: null}),
         ]}
@@ -180,7 +185,7 @@ it('uses localized day boundaries for null endpoints', () => {
 it('renders the existing no-route state without a blank card', () => {
   let renderer!: ReturnType<typeof create>;
   act(() => {
-    renderer = create(<TripList stops={[]} segments={[]} />);
+    renderer = create(<TripList stops={[]} segments={[]} onPress={jest.fn()} />);
   });
 
   expect(text(renderer.root)).toContain('Nothing tracked this day.');

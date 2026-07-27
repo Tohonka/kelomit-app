@@ -1,5 +1,5 @@
 import React, {useMemo} from 'react';
-import {StyleSheet, Text, View} from 'react-native';
+import {StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import {useTranslation} from 'react-i18next';
 import {radius, spacing, typography, useTheme} from '../../theme';
 import type {Colors} from '../../theme';
@@ -13,9 +13,11 @@ import {
 export default function TripList({
   segments,
   stops,
+  onPress,
 }: {
   segments: DayRouteSegment[];
   stops: DayRouteStop[];
+  onPress: (segment: DayRouteSegment) => void;
 }) {
   const {t} = useTranslation();
   const {colors} = useTheme();
@@ -32,24 +34,20 @@ export default function TripList({
   return (
     <View testID="trip-list" style={styles.card}>
       {segments.map((segment, index) => {
-        const origin =
-          segment.origin_stop_id == null
-            ? t('map.dayStart')
-            : stopsById.get(segment.origin_stop_id)?.display_name ??
-              t('map.unknown');
-        const destination =
-          segment.destination_stop_id == null
-            ? t('map.dayEnd')
-            : stopsById.get(segment.destination_stop_id)?.display_name ??
-              t('map.unknown');
+        const {origin, destination} = tripEndpointNames(segment, stopsById, {
+          dayStart: t('map.dayStart'),
+          dayEnd: t('map.dayEnd'),
+          unknown: t('map.unknown'),
+        });
         const endpoints = `${origin} → ${destination}`;
         const time = `${formatTime(segment.start_ts)} – ${formatTime(segment.end_ts)}`;
         const stats = `${formatDistance(segment.distance_m)} · ${formatDuration(segment.duration_sec)}`;
         return (
-          <View
+          <TouchableOpacity
             key={segment.id}
-            accessible
+            accessibilityRole="button"
             accessibilityLabel={`${endpoints}, ${time}, ${stats}`}
+            onPress={() => onPress(segment)}
             style={[
               styles.row,
               index === segments.length - 1 && styles.lastRow,
@@ -71,11 +69,26 @@ export default function TripList({
               <Text style={styles.time}>{time}</Text>
             </View>
             <Text style={styles.stats}>{stats}</Text>
-          </View>
+          </TouchableOpacity>
         );
       })}
     </View>
   );
+}
+
+export function tripEndpointNames(
+  segment: DayRouteSegment,
+  stops: Map<number, DayRouteStop>,
+  labels: {dayStart: string; dayEnd: string; unknown: string},
+): {origin: string; destination: string} {
+  return {
+    origin: segment.origin_stop_id == null
+      ? labels.dayStart
+      : stops.get(segment.origin_stop_id)?.display_name ?? labels.unknown,
+    destination: segment.destination_stop_id == null
+      ? labels.dayEnd
+      : stops.get(segment.destination_stop_id)?.display_name ?? labels.unknown,
+  };
 }
 
 const makeStyles = (colors: Colors) =>

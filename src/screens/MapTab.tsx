@@ -25,8 +25,9 @@ import PlaceNameSheet, {
   type LocalPlaceChoice,
   type PlaceNameChoice,
 } from '../components/map/PlaceNameSheet';
-import TripList from '../components/map/TripList';
-import type {DayRouteStop, Entry} from '../types';
+import TripList, {tripEndpointNames} from '../components/map/TripList';
+import TripDetailsModal from '../components/map/TripDetailsModal';
+import type {DayRouteSegment, DayRouteStop, Entry} from '../types';
 import type {PlaceCandidate} from '../services/placesService';
 import type {RootStackParamList, RootStackScreenProps} from '../navigation/navigationTypes';
 
@@ -59,6 +60,8 @@ export function MapOverview({
     reloadRouteHistory,
   } = useDayMapData(dayId);
   const [selectedStop, setSelectedStop] = useState<DayRouteStop | null>(null);
+  const [selectedSegment, setSelectedSegment] =
+    useState<DayRouteSegment | null>(null);
   const [localChoices, setLocalChoices] = useState<LocalPlaceChoice[]>([]);
   const [googleCandidates, setGoogleCandidates] = useState<PlaceCandidate[]>([]);
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -70,12 +73,24 @@ export function MapOverview({
     () => stops.filter(stop => stop.day_id === dayId),
     [dayId, stops],
   );
+  const selectedEndpoints = selectedSegment
+    ? tripEndpointNames(
+        selectedSegment,
+        new Map(activeStops.map(stop => [stop.id, stop])),
+        {
+          dayStart: t('map.dayStart'),
+          dayEnd: t('map.dayEnd'),
+          unknown: t('map.unknown'),
+        },
+      )
+    : {origin: '', destination: ''};
   const activeSelectedStop =
     selectedStop?.day_id === dayId ? selectedStop : null;
 
   useEffect(() => {
     stopOpenGeneration.current += 1;
     setSelectedStop(null);
+    setSelectedSegment(null);
     setLocalChoices([]);
     setGoogleCandidates([]);
     setGoogleError(false);
@@ -235,7 +250,19 @@ export function MapOverview({
           )}
         </View>
 
-        <Text style={styles.sectionHeader}>{t('map.places')}</Text>
+        <Text
+          style={styles.sectionHeader}
+          accessibilityRole="header">
+          {t('map.trips')}
+        </Text>
+        <TripList
+          segments={segments}
+          stops={activeStops}
+          onPress={setSelectedSegment}
+        />
+        <Text style={[styles.sectionHeader, styles.tripsHeader]}>
+          {t('map.places')}
+        </Text>
         <LocationsList
           stops={activeStops}
           styles={styles}
@@ -243,13 +270,14 @@ export function MapOverview({
             openStop(stop).catch(() => {});
           }}
         />
-        <Text
-          style={[styles.sectionHeader, styles.tripsHeader]}
-          accessibilityRole="header">
-          {t('map.trips')}
-        </Text>
-        <TripList segments={segments} stops={activeStops} />
       </ScrollView>
+      <TripDetailsModal
+        visible={selectedSegment != null}
+        segment={selectedSegment}
+        originName={selectedEndpoints.origin}
+        destinationName={selectedEndpoints.destination}
+        onClose={() => setSelectedSegment(null)}
+      />
       <PlaceNameSheet
         visible={activeSelectedStop != null}
         currentName={activeSelectedStop?.display_name ?? null}

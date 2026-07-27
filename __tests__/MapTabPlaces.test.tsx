@@ -438,6 +438,8 @@ it('includes visible stop timing in its accessibility label and marks Trips as a
     renderer.root.findAllByType(Text).find(item => item.props.children === 'Trips')
       ?.props.accessibilityRole,
   ).toBe('header');
+  const labels = renderer.root.findAllByType(Text).map(item => item.props.children);
+  expect(labels.indexOf('Trips')).toBeLessThan(labels.indexOf('Places'));
 });
 
 it('discards prior-day results and prevents an old selection acting after day change', async () => {
