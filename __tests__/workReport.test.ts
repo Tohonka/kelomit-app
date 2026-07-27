@@ -325,8 +325,17 @@ describe('buildWorkReport', () => {
   it('uses Finnish dates and fixed report copy without global i18n', () => {
     const report = buildWorkReport({
       ...base,
+      startDate: '2026-07-29',
+      endDate: '2026-07-29',
       language: 'fi',
       type: 'statistics',
+      days: [makeDay({
+        id: 2,
+        date: '2026-07-29',
+        started_at: '2026-07-29T08:00:00.000Z',
+        ended_at: '2026-07-29T16:00:00.000Z',
+      })],
+      entries: [],
     });
 
     expect(report.meta).toMatchObject({
@@ -343,7 +352,7 @@ describe('buildWorkReport', () => {
       total: 'Yhteensä',
     });
     expect(report.days[0]).toMatchObject({
-      date: 'la 25 heinä 2026',
+      date: 'KE 29 heinä 2026',
     });
     expect(report.statistics).toMatchObject({
       title: 'Tilastot',

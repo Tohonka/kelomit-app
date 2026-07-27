@@ -92,3 +92,21 @@ it('ignores legs on leave and counts only manually logged work', () => {
     totalSeconds: 2.5 * H,
   });
 });
+
+it('normalizes timestamp milliseconds to whole report seconds', () => {
+  expect(classifyReportDay(day({
+    started_at: '2026-07-27T08:00:00.123Z',
+    ended_at: '2026-07-27T16:00:00.987Z',
+  }), [
+    entry({
+      time_from: '2026-07-27T14:00:00.123Z',
+      time_to: '2026-07-27T16:00:00.987Z',
+      is_overtime: true,
+    }),
+  ], false)).toEqual({
+    regularSeconds: 6 * H,
+    remoteOtherSeconds: 0,
+    overtimeSeconds: 2 * H + 1,
+    totalSeconds: 8 * H + 1,
+  });
+});

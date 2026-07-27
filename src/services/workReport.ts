@@ -35,8 +35,8 @@ function entryInterval(entry: Entry): Interval | null {
   ) {
     return null;
   }
-  const start = Date.parse(entry.time_from) / 1000;
-  const end = Date.parse(entry.time_to) / 1000;
+  const start = Math.round(Date.parse(entry.time_from) / 1000);
+  const end = Math.round(Date.parse(entry.time_to) / 1000);
   return Number.isFinite(start) && Number.isFinite(end) && end > start
     ? [start, end]
     : null;
@@ -128,10 +128,16 @@ export function classifyReportDay(
   const breakdown = calcDayWorkBreakdown(day, entries);
   const legs: Interval[] = [];
   if (day.started_at && day.ended_at) {
-    legs.push([Date.parse(day.started_at) / 1000, Date.parse(day.ended_at) / 1000]);
+    legs.push([
+      Math.round(Date.parse(day.started_at) / 1000),
+      Math.round(Date.parse(day.ended_at) / 1000),
+    ]);
   }
   if (day.started_at_2 && day.ended_at_2) {
-    legs.push([Date.parse(day.started_at_2) / 1000, Date.parse(day.ended_at_2) / 1000]);
+    legs.push([
+      Math.round(Date.parse(day.started_at_2) / 1000),
+      Math.round(Date.parse(day.ended_at_2) / 1000),
+    ]);
   }
   const personalIntervals = entries
     .filter(entry =>
@@ -424,7 +430,10 @@ export function buildWorkReport(input: WorkReportInput): WorkReportModel {
     throw new Error('report_empty');
   }
   const days = reportDays.map(({day, entries, leave, buckets}) => ({
-    date: format(parseISO(day.date), 'EEE d MMM yyyy', {locale}),
+    date: input.language === 'fi'
+      ? format(parseISO(day.date), 'EEEEEE d MMM yyyy', {locale})
+        .replace(/^\S+/, weekday => weekday.toUpperCase())
+      : format(parseISO(day.date), 'EEE d MMM yyyy', {locale}),
     workTime: leave.length > 0
       ? leave.map(item => copy.leave[item.type as LeaveType]).join(' + ')
       : workTime(day),
