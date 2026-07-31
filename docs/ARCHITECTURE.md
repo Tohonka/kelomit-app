@@ -1,7 +1,10 @@
 # Kelomit — Architecture & Code Patterns
 
-Read this before touching code. The patterns here are load-bearing — departing from them
-breaks dark mode, causes style recalculation on every render, or breaks TS strict mode.
+Read this before touching code. The patterns here are load-bearing — departing
+from them breaks dark mode, causes style recalculation on every render, or breaks
+TS strict mode.
+
+*Current as of 2026-07-31, schema v23.*
 
 ---
 
@@ -9,19 +12,23 @@ breaks dark mode, causes style recalculation on every render, or breaks TS stric
 
 | Concern | Library | Version | Notes |
 |---|---|---|---|
-| Framework | React Native (bare) | 0.86.0 | Android only for now |
+| Framework | React Native (bare) | 0.86.0 | Android only; **New Architecture** |
 | Language | TypeScript | ^5.8 | strict mode on |
-| Database | `@op-engineering/op-sqlite` | ^16.2 | WAL mode, synchronous-style API |
+| Database | `@op-engineering/op-sqlite` | ^16.2 | WAL mode |
 | State | Zustand | ^5.0 | one store per domain |
-| Navigation | React Navigation | v7 | native-stack + bottom-tabs |
+| Navigation | React Navigation | v7 | native-stack + bottom-tabs, custom shell |
+| Animation | `react-native-reanimated` + `react-native-worklets` | ^4.5 / ^0.10 | |
 | Date math | date-fns | ^4.1 | |
+| i18n | i18next + react-i18next | ^26 / ^17 | fi + en |
 | Icons | react-native-vector-icons | ^10.2 | MaterialCommunityIcons only |
-| Date/time pickers | `@react-native-community/datetimepicker` | ^9.1 | |
-| Audio | `react-native-audio-recorder-player` | **4.1.5 PINNED** | see known issues |
-| GPS | `react-native-geolocation-service` | ^5.3 | Google Fused Location |
-| Camera / gallery | `react-native-image-picker` | ^8.2 | |
-| File system | `react-native-fs` | ^2.20 | |
-| Permissions | `react-native-permissions` | ^5.5 | |
+| GPS | `@react-native-community/geolocation` | ^3.4 | JS side; the real work is native |
+| Maps | react-native-maps | ^1.27 | |
+| Audio | `react-native-nitro-sound` (playback), `react-native-nitro-audio-record` (16 kHz WAV capture) | ^0.2 / ^0.1 | |
+| Transcription | `whisper.rn` | ^0.6 | on-device engine |
+| Notifications | `@notifee/react-native` | ^9.1 | |
+| Files / zip | react-native-fs, react-native-zip-archive | ^2.20 / ^8.0 | backup |
+| Secrets | react-native-keychain | ^10.0 | API keys |
+| Server | Hono + better-sqlite3 + puppeteer-core | — | `server/`, separate package |
 
 ---
 
@@ -31,106 +38,120 @@ breaks dark mode, causes style recalculation on every render, or breaks TS stric
 src/
   db/                   # Raw SQLite access — no business logic
     database.ts         # Opens DB, runs migrations, exports `db`
-    migrations.ts       # Versioned SQL migration array (add new ones at the bottom)
-    days.ts             # CRUD for days table
-    entries.ts          # CRUD for entries + entry_tags join
-    projects.ts
-    tags.ts
-    settings.ts         # Key/value settings table helpers
-    gps.ts
+    migrations.ts       # Versioned SQL migration array (append at the bottom)
+    days.ts  entries.ts  projects.ts  tags.ts  settings.ts
+    gps.ts  locations.ts  routeHistory.ts  activityEvents.ts
+    leaveRanges.ts  dayConfirmations.ts  activeSession.ts
 
   store/                # Zustand stores — single source of truth for UI
-    dayStore.ts
-    entryStore.ts
-    projectStore.ts
-    settingsStore.ts    # Includes theme_mode: ThemeMode
-    tagStore.ts
+    dayStore  entryStore  projectStore  tagStore
+    settingsStore  sessionStore  locationStore
 
-  screens/              # Full-screen components (one per route)
-    HomeScreen.tsx
-    DayScreen.tsx
-    CalendarScreen.tsx
-    AddEntryModal.tsx   # Also handles edit (entryId param)
-    EntryDetailScreen.tsx
-    SettingsScreen.tsx
-    ProjectsScreen.tsx
+  screens/
+    HomeScreen  CalendarScreen  DayScreen  DayMapScreen  MapTab
+    GalleryScreen  SearchScreen  InsightsScreen  TagsScreen  ProjectsScreen
+    AddEntryModal  QuickAddModal  SettingsScreen
+    settings/          # One screen per settings section (11 of them)
 
   components/
-    ui/                 # Generic reusable: Button, Card, FAB, TimePicker
-    day/                # Day-specific: DaySummaryCard, HourBreakdown, FilterBar
-    entries/            # Entry display: ActivityBadge, EntryList, EntryListItem,
-                        #               EntryTypeIcon, ProjectChip, TagChip
-    media/              # Media capture/playback: AudioPlayer, PhotoCapture,
-                        #                         VideoCapture, VoiceRecorder, MediaThumbnail
+    ui/                 # Generic reusable (Button, Card, ActionSheet, pickers…)
+    day/  entries/  media/  map/  insights/  quickadd/
 
   navigation/
-    navigationTypes.ts  # All route param types
-    RootNavigator.tsx   # Stack navigator (modal + push screens)
-    MainTabs.tsx        # Bottom tab navigator
+    NavShell.tsx        # The glass shell that wraps everything
+    TopFeatureBar.tsx  BottomPill.tsx  QuickAddButton.tsx
+    RootNavigator.tsx  MainTabs.tsx  navigationTypes.ts  shellMetrics.ts
 
   services/
-    gpsService.ts       # start/stop tracking, getLastKnownPosition()
-    locationUtils.ts    # Outlier rejection + Kalman filter
-    permissionService.ts
+    workReport.ts       # PURE report builder — shared with the server
+    workReportExport.ts # On-device PDF export flow
+    gpsService  trackingOrchestrator  trackingMode  locationUtils
+    routeHistoryService  placesService  crossingStore  sessionService
+    sessionLogic  syncService  syncSettings  backupService
+    notificationService  permissionService  nativeEventSync  diag
+    transcription/      # Whisper API + on-device engines behind one seam
 
-  theme/
-    colors.ts           # lightColors, darkColors, Colors type
-    useTheme.ts         # useTheme() hook — reads settingsStore + useColorScheme()
-    index.ts            # Re-exports everything; static: typography, spacing, radius
+  native/               # Thin JS wrappers over the Kotlin modules
+    backgroundLocation.ts  widgetSession.ts  workReport.ts
 
-  types/                # Shared TypeScript types (Entry, Day, Project, Tag, etc.)
-  utils/
-    dateUtils.ts
-    exportUtils.ts      # CSV export + Share sheet
-    hoursUtils.ts       # calcHourBreakdown(), formatHours()
-    mediaUtils.ts       # File paths, fileUri(), ensureMediaDir()
+  utils/                # Pure helpers — hoursUtils, payPeriod, routeSegments,
+                        # routeStats, geofence, timeFormat, exportUtils, …
+  theme/                # colors.ts, useTheme.ts, index.ts
+  types/index.ts        # All shared types
+
+android/app/src/main/java/com/kelomitapp/
+  location/             # Foreground service, AR receivers, geofencing, journal
+  reporting/            # WorkReport Canvas → PdfDocument renderer
+  widget/               # Home-screen session widgets
+
+server/src/             # Hono app: api.ts, web.ts, report.ts routes,
+                        # db.ts, pdf.ts, render.ts, reportSheet.ts, ingest.ts
 ```
 
 ---
 
-## Database schema (current, v2)
+## Database schema (v23)
+
+Tables: `days`, `entries`, `entry_media`, `entry_tags`, `tags`, `projects`,
+`settings`, `schema_version`, `gps_track`, `activity_events`, `locations`,
+`named_places`, `place_cache`, `geofence_events`, `day_route_stops`,
+`day_route_segments`, `day_end_confirmations`, `leave_ranges`, `diag_log`.
 
 ```sql
-days (id, date UNIQUE, started_at, ended_at, notes, created_at, updated_at)
-
-projects (id, name UNIQUE, type CHECK('work','personal','other'), archived, ...)
+days (id, date UNIQUE,
+      started_at, ended_at,           -- work leg 1
+      started_at_2, ended_at_2,       -- work leg 2 (split days)
+      started_at_source, ended_at_source,   -- 'manual' | auto-detection
+      notes, created_at, updated_at)
 
 entries (
   id, day_id → days.id CASCADE,
-  entry_type  CHECK('note','photo','video','voice'),   -- IMMUTABLE after creation
+  entry_type    CHECK('note','photo','video','voice'),   -- IMMUTABLE
   activity_type CHECK('work','personal_work','personal'),
   title, body,
   project_id → projects.id SET NULL,
-  file_path, thumbnail_path,
-  duration_sec,        -- seconds, for voice or manual duration
-  time_from, time_to,  -- ISO strings for from–to tracking
+  file_path, thumbnail_path, duration_sec,
+  time_from, time_to,               -- every entry resolves to a real from→to
   latitude, longitude, location_label,
-  created_at, updated_at
-)
+  is_overtime,                                    -- payroll classification
+  is_todo, scheduled_date, completed_at, reminder_at,
+  created_at, updated_at)
 
-gps_track (id, day_id → days.id CASCADE, latitude, longitude, accuracy,
-           altitude, speed, timestamp)
+leave_ranges (id, type CHECK('paid_day_off','unpaid_day_off','vacation','sick'),
+              start_date, end_date, CHECK(start_date <= end_date))
 
-tags (id, name UNIQUE COLLATE NOCASE, created_at)
-entry_tags (entry_id → entries, tag_id → tags, PRIMARY KEY (entry_id, tag_id))
+-- Raw GPS evidence, 45-day retention. Never derived-from-derived.
+gps_track (id, day_id, latitude, longitude, accuracy, altitude, speed, timestamp)
+activity_events (id, activity, transition CHECK('enter','exit'), timestamp,
+                 UNIQUE(activity, transition, timestamp))
 
-settings (key TEXT PRIMARY KEY, value TEXT)
-  -- keys: gps_enabled, gps_interval_ms, default_activity_type,
-  --       default_project_id, theme_mode
-
-schema_version (version INTEGER PRIMARY KEY)
+-- Derived from the two tables above; fully rerunnable.
+day_route_stops (id, day_id, start_ts, end_ts, latitude, longitude,
+                 saved_location_id, named_place_id, google_place_id,
+                 display_name, name_source, user_edited)
+day_route_segments (id, day_id, sequence, start_ts, end_ts,
+                    origin_stop_id, destination_stop_id, coordinates_json,
+                    distance_m, duration_sec, average_speed_mps,
+                    maximum_speed_mps, raw_last_ts)
 ```
 
-Adding a migration: append to the `migrations` array in `src/db/migrations.ts` with the next version number. The DB runner applies any missing versions on startup.
+**Adding a migration:** append to the `migrations` array in `src/db/migrations.ts`
+with the next version number. The runner applies missing versions on startup.
+Migrations are additive — never rewrite an existing one.
+
+**Raw vs. derived is the rule.** `gps_track` and `activity_events` are source
+evidence. Stops and segments are derived by pure functions and reconciled by a
+single writer, so a derivation-logic change is a recompute, not a data loss.
 
 ---
 
-## Dark mode pattern
+## Theming pattern
 
-**The rule:** every file that uses colors from the theme must use `useTheme()`. Static imports of `colors` from `'../../theme'` are wrong — they always return light colors.
+**The rule:** every file that uses theme colors must use `useTheme()`. Static
+imports of `colors` are wrong — they always return light colors.
 
 ```typescript
-// At module level (outside component):
+// At module level (outside the component):
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
     container: { backgroundColor: c.bg },
@@ -143,107 +164,99 @@ const { colors, isDark } = useTheme();
 const styles = useMemo(() => makeStyles(colors), [colors]);
 ```
 
-`useTheme()` reads `settingsStore.theme_mode` ('system' | 'light' | 'dark') and
-`useColorScheme()` from React Native, then picks `lightColors` or `darkColors`.
+`useTheme()` reads `settingsStore.theme_mode` (`'system' | 'light' | 'dark'`) and
+`useColorScheme()`, then picks `lightColors` or `darkColors`.
 
-**Color tokens** (defined in `src/theme/colors.ts`):
-- `bg`, `bgCard`, `bgMuted` — background layers (darkest → lightest in light mode, reversed in dark)
-- `primary`, `primaryLight`, `primaryDark` — terracotta brand color
-- `accent`, `accentLight` — warm gold
-- `textPrimary`, `textSecondary`, `textMuted` — text hierarchy
-- `badgeWork`, `badgePersonalWork`, `badgePersonal` — activity type colors
-- `error`, `success`, `border`, `shadow`, `white`
+**Palette:** "liquid glass" synthwave, dark-first (July 2026 redesign — the warm
+terracotta theme is gone). Tokens in `src/theme/colors.ts`:
+- `bg`, `bgCard`, `bgMuted`, `swatch` — background layers
+- `primary` / `primaryLight` / `primaryDark` — pink `#D0268C`
+- `accentPink` / `accentAmber` / `accentCyan` — the three activity hues
+- `glassTopBar`, `glassPill`, `glassBorder`, `glassHighlight` — translucent nav
+  fills (blur is faked; no blur library on Android)
+- `timerBg`, `timerBorder` — live-timer card
+- `textPrimary` / `textSecondary` / `textMuted`, `badge*`, `error`, `success`,
+  `border`, `shadow`, `white`
 
 ---
 
-## Navigation types
+## Shared app ↔ server code
 
-```typescript
-// src/navigation/navigationTypes.ts
-export type RootStackParamList = {
-  MainTabs: undefined;
-  DayScreen: { date: string };           // 'yyyy-MM-dd'
-  AddEntryModal: {
-    date?: string;
-    dayId: number;
-    entryId?: number;                    // present = edit mode
-  };
-  EntryDetailScreen: { entryId: number; dayId: number };
-  ProjectsScreen: undefined;
-};
+`src/services/workReport.ts` and `src/utils/hoursUtils.ts` are **pure and
+imported directly by the server** (`server/src/routes/report.ts` reaches across
+with a relative import; the Dockerfile copies them into the image). Keep them
+free of React Native imports, native modules and DB access — they take plain data
+and return plain data. Breaking that breaks the server build.
 
-export type TabParamList = {
-  Home: undefined;
-  Calendar: undefined;
-  Settings: undefined;
-};
+The report has two renderers of the *same* model, which must be kept visually in
+sync by hand:
+- **Phone:** `android/.../reporting/WorkReportRenderer.kt` — Canvas + `PdfDocument`
+- **Server:** `server/src/reportSheet.ts` — HTML/CSS printed by Chromium
 
-// Helper prop types:
-// RootStackScreenProps<'DayScreen'>
-// TabScreenProps<'Calendar'>
-```
+Every constant in `reportSheet.ts` is lifted from `WorkReportLayout.kt`. A4 is
+595×842 pt, so the Kotlin constants are already CSS points and carry over 1:1.
 
 ---
 
 ## Store pattern (Zustand)
 
-Stores are the single source of truth. Components read from stores, never directly from DB.
+Stores are the single source of truth. Components read from stores, never
+directly from the DB.
 
 ```typescript
-// Typical pattern:
 const { entries, loadEntriesForDay, addEntry, editEntry, removeEntry } = useEntryStore();
 ```
 
-Key stores:
-- `useEntryStore` — `entriesByDay: Record<number, Entry[]>`, CRUD ops
-- `useDayStore` — `daysCache: Record<string, Day>` (keyed by date string)
-- `useSettingsStore` — includes `theme_mode`, `setThemeMode(mode)`
-- `useProjectStore`, `useTagStore` — flat arrays with load/CRUD
+Each store has a `loaded: boolean` and an async `load()`. Check `loaded` before
+rendering data.
 
 ---
 
-## Edit entry flow
+## Native modules
 
-1. `EntryDetailScreen` has an **Edit** button → `navigation.navigate('AddEntryModal', { dayId, entryId: entry.id })`
-2. `AddEntryModal` checks `route.params.entryId`: if present, calls `getEntry(entryId)` and pre-fills all state
-3. Type selector rendered as disabled (entry_type is immutable)
-4. On save: calls `useEntryStore().editEntry(entryId, fields, dayId)` instead of `addEntry`
-5. `EntryDetailScreen` has a `navigation.addListener('focus', ...)` that reloads the entry after returning from edit
+Three Kotlin packages, each with a thin JS wrapper in `src/native/`:
 
----
-
-## GPS service
-
-`src/services/gpsService.ts` — call `startTracking(intervalMs)` / `stopTracking()` from app startup or Settings toggle.
-
-`getLastKnownPosition()` returns the latest smoothed position for tagging new entries.
-
-Location points go through `locationUtils.ts`:
-- Outlier rejection (distance threshold ~500 m by default)
-- Simple Kalman filter for smoothing noisy readings
-
----
-
-## Media files
-
-All media is stored in `{RNFS.DocumentDirectoryPath}/kelomit_media/`.
-
-`src/utils/mediaUtils.ts` exports:
-- `makeMediaPath(type, ext)` — generates a timestamped filename
-- `makeThumbnailPath(filePath)` — derives `_thumb` path
-- `fileUri(path)` — prepends `file://` for Image/Audio components
-- `ensureMediaDir()` — creates the directory if needed
+- **`location/`** — `LocationService` is a foreground service running a
+  fast/slow power ladder. Activity Recognition transitions and geofence crossings
+  arrive via receivers and are appended to `NativeEventJournal`, a durable
+  on-disk journal that JS drains and validates into SQLite. `TrackingPolicy` and
+  `WorkdayPolicy` hold the decision logic.
+- **`reporting/`** — `WorkReportModule` takes the JSON report model and returns a
+  rendered PDF path.
+- **`widget/`** — home-screen session widgets.
 
 ---
 
 ## Known gotchas
 
-1. **`react-native-audio-recorder-player` must stay at ^4.1.5** (with `react-native-nitro-modules@^0.26.3`). v4.5.0 references `react-native-nitro-modules@0.51.1` which doesn't exist on npm.
+1. **New Architecture native→JS events:** use `reactHost`, *not*
+   `reactNativeHost` (which throws on New Arch), and emit with
+   `ReactContext.emitDeviceEvent`.
 
-2. **`android.permission.VIBRATE`** must be in `android/app/src/main/AndroidManifest.xml`. Without it the app crashes (silently on older Android) whenever `Vibration.vibrate()` is called on save/delete.
+2. **Worklets:** a function called from a worklet needs its own `'worklet'`
+   directive. Jest cannot catch this — it fails only on device.
 
-3. **`entry_type` is immutable** — the DB schema has a CHECK constraint and `updateEntry` in `src/db/entries.ts` intentionally omits it from the updatable fields.
+3. **RNGH inside `<Modal>`:** gestures are dead unless the modal contains its own
+   `<GestureHandlerRootView>`.
 
-4. **Styles must use `useMemo`** with `makeStyles(colors)` — never call `StyleSheet.create()` directly in render, and never import `colors` statically if you need theme-reactive styles.
+4. **`Alert` with 3+ buttons:** Android drops the 4th. Use `components/ui/ActionSheet`
+   for multi-action menus.
 
-5. **Stores must be loaded before use** — each store has a `loaded: boolean` flag and a `load()` async function. Check `loaded` in `useEffect` before rendering data.
+5. **`android.permission.VIBRATE`** must be in AndroidManifest.xml or the app
+   crashes on entry save.
+
+6. **`entry_type` is immutable** — CHECK constraint in the schema, and
+   `updateEntry` intentionally omits it. The edit modal disables the selector.
+
+7. **Styles must use `useMemo`** with `makeStyles(colors)` — never call
+   `StyleSheet.create()` in render, never import `colors` statically.
+
+8. **Sideloading:** permission or component changes break in-place updates.
+   Uninstall → reinstall, and back up the DB first.
+
+9. **GPS "straight lines" are usually device state**, not code — revoked Location
+   or Battery permissions kill the foreground service. Check permissions and
+   `adb logcat -s KelomitLoc` before touching the tracking ladder.
+
+10. **Native tracking changes are compile-verified only** until a real
+    walk/drive/store trip confirms them on a rebuilt, reinstalled app.
