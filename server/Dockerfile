@@ -14,7 +14,7 @@ COPY server ./
 # catches exactly that.
 COPY src/utils ../src/utils
 COPY src/types ../src/types
-COPY src/services/workReport.ts ../src/services/workReport.ts
+COPY src/reports ../src/reports
 # ../src/utils/hoursUtils.ts imports date-fns; Node resolves modules by walking
 # up from the importing file, and /app/src is not under /app/server, so without
 # this symlink date-fns (installed only in server/node_modules) can't be found.

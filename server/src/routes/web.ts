@@ -21,7 +21,7 @@ import {
   segmentWorkSecs,
 } from '../../../src/utils/hoursUtils.ts';
 import type {Day, Entry, LeaveRange, LeaveType} from '../../../src/types/index.ts';
-import {classifyReportDay} from '../../../src/services/workReport.ts';
+import {classifyReportDay} from '../../../src/reports/workHours/build.ts';
 
 const NO_DATA = layout('Kelomit', '<h1>Kelomit</h1><p class="empty">No data synced yet.</p>');
 

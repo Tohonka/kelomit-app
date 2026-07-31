@@ -274,6 +274,7 @@ const fi: typeof en = {
     typeHoursAccessibility: 'Raportin tyyppi Päivittäiset tunnit',
     typeHeadlinesAccessibility: 'Raportin tyyppi Tunnit ja otsikot',
     typeStatisticsAccessibility: 'Raportin tyyppi Tunnit ja tilastot',
+    templateWorkHours: 'Työaika',
     export: 'Vie PDF',
     exporting: 'Viedään…',
     errorPersonRequired: 'Syötä nimesi.',

@@ -4,40 +4,44 @@ import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
-import java.util.concurrent.Executors
+import com.facebook.react.bridge.UiThreadUtil
 
 class WorkReportModule(reactContext: ReactApplicationContext) :
   ReactContextBaseJavaModule(reactContext) {
 
-  private val executor = Executors.newSingleThreadExecutor()
-
   override fun getName() = "WorkReport"
 
+  /**
+   * Renders a report's HTML and hands it to Android's print UI.
+   *
+   * JS builds the document from the shared template (src/reports/); this side
+   * only prints it. Resolves once the print job has been submitted — the user
+   * chooses "Save as PDF" and the destination from there, so no path comes back.
+   *
+   * Runs on the main thread because WebView and PrintManager both require it.
+   */
   @ReactMethod
-  fun create(json: String, fileName: String, promise: Promise) {
-    try {
-      require(FILE_NAME.matches(fileName)) { "Invalid work report filename" }
-      executor.execute {
-        try {
-          val file = WorkReportRenderer.render(reactApplicationContext, json, fileName)
-          promise.resolve(file.absolutePath)
-        } catch (error: Exception) {
-          promise.reject("report_pdf_failed", error)
-        }
-      }
-    } catch (error: Exception) {
-      promise.reject("report_pdf_failed", error)
+  fun create(html: String, fileName: String, marginPt: Double, promise: Promise) {
+    if (!isSafeReportFileName(fileName)) {
+      promise.reject("report_pdf_failed", IllegalArgumentException("Invalid work report filename"))
+      return
     }
-  }
-
-  override fun invalidate() {
-    executor.shutdown()
-    super.invalidate()
-  }
-
-  private companion object {
-    val FILE_NAME = Regex(
-      """work-report-\d{4}-\d{2}-\d{2}-to-\d{4}-\d{2}-\d{2}\.pdf""",
-    )
+    UiThreadUtil.runOnUiThread {
+      val activity = reactApplicationContext.currentActivity
+      if (activity == null) {
+        promise.reject("report_pdf_failed", IllegalStateException("No activity to print from"))
+        return@runOnUiThread
+      }
+      try {
+        WorkReportPrinter.print(activity, html, fileName, marginPt.toInt()) { result ->
+          result.fold(
+            onSuccess = {promise.resolve(null)},
+            onFailure = {promise.reject("report_pdf_failed", it)},
+          )
+        }
+      } catch (error: Throwable) {
+        promise.reject("report_pdf_failed", error)
+      }
+    }
   }
 }

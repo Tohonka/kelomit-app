@@ -272,6 +272,7 @@ const en = {
     typeHoursAccessibility: 'Report type Daily hours',
     typeHeadlinesAccessibility: 'Report type Hours and headlines',
     typeStatisticsAccessibility: 'Report type Hours and statistics',
+    templateWorkHours: 'Work hours',
     export: 'Export PDF',
     exporting: 'Exporting…',
     errorPersonRequired: 'Enter your name.',

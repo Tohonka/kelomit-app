@@ -1,4 +1,4 @@
-import {classifyReportDay} from '../src/services/workReport';
+import {classifyReportDay} from '../src/reports/workHours/build';
 import type {Day, Entry} from '../src/types';
 
 const H = 3600;

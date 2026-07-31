@@ -21,7 +21,7 @@ import {
 import type {
   ReportLanguage,
   WorkReportType,
-} from '../../services/workReport';
+} from '../../reports/workHours/build';
 import {radius, spacing, typography, useTheme} from '../../theme';
 import type {Colors} from '../../theme';
 import {makeSettingsStyles} from './settingsStyles';

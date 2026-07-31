@@ -1,8 +1,13 @@
 import {eachDayOfInterval, format, parseISO} from 'date-fns';
 import {enUS, fi as fiLocale} from 'date-fns/locale';
-import type {Day, Entry, LeaveRange, LeaveType} from '../types';
-import {formatTime, parseTimestamp} from '../utils/timeFormat';
-import {calcDayWorkBreakdown, entryTrackedSeconds} from '../utils/hoursUtils';
+// '../../types' is the app's domain types; '../types' is the report-template
+// contract next door. Both are named types.ts — mind the depth.
+import type {Day, Entry, LeaveRange, LeaveType} from '../../types/index.ts';
+import {formatTime, parseTimestamp} from '../../utils/timeFormat.ts';
+import {calcDayWorkBreakdown, entryTrackedSeconds} from '../../utils/hoursUtils.ts';
+import type {ReportInput, ReportLanguage} from '../types.ts';
+
+export type {ReportLanguage};
 
 type Interval = [number, number];
 
@@ -165,19 +170,13 @@ export function classifyReportDay(
   };
 }
 
-export type ReportLanguage = 'fi' | 'en';
 export type WorkReportType = 'hours' | 'headlines' | 'statistics';
 
-export interface WorkReportInput {
-  personName: string;
-  companyName: string;
-  startDate: string;
-  endDate: string;
-  language: ReportLanguage;
+/** The three types are variants of one document, not three documents:
+ *  'statistics' is 'headlines' plus an extra section, and all three share the
+ *  whole table. Splitting them into separate templates would duplicate it. */
+export interface WorkReportInput extends ReportInput {
   type: WorkReportType;
-  days: Day[];
-  entries: Entry[];
-  leaveRanges: LeaveRange[];
 }
 
 interface WorkReportDay {
@@ -431,9 +430,9 @@ export function buildWorkReport(input: WorkReportInput): WorkReportModel {
   }
   const days = reportDays.map(({day, entries, leave, buckets}) => ({
     date: input.language === 'fi'
-      ? format(parseISO(day.date), 'EEEEEE d MMM yyyy', {locale})
+      ? format(parseISO(day.date), 'EEEEEE d.M. yyyy', {locale})
         .replace(/^\S+/, weekday => weekday.toUpperCase())
-      : format(parseISO(day.date), 'EEE d MMM yyyy', {locale}),
+      : format(parseISO(day.date), 'EEE d.M. yyyy', {locale}),
     workTime: leave.length > 0
       ? leave.map(item => copy.leave[item.type as LeaveType]).join(' + ')
       : workTime(day),

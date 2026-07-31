@@ -9,20 +9,19 @@ import {
   getSetting,
 } from '../queries.ts';
 import {esc} from '../render.ts';
-import {
-  footerTemplate,
-  PAGE_MARGIN_PT,
-  reportDocument,
-  reportLayout,
-  sheetHtml,
-} from '../reportSheet.ts';
+import {reportLayout} from '../reportSheet.ts';
 import {CHROMIUM_MISSING, htmlToPdf} from '../pdf.ts';
-import {buildWorkReport} from '../../../src/services/workReport.ts';
+// The shared report template — one document, rendered here by Chromium and on
+// the phone by an offscreen WebView. Import concrete files, never a barrel:
+// src/ is CJS and cjs-module-lexer cannot see through `export *`.
+import {reportDocument} from '../../../src/reports/document.ts';
+import {workHoursReport} from '../../../src/reports/workHours/index.ts';
+import {buildWorkReport} from '../../../src/reports/workHours/build.ts';
 import type {
   ReportLanguage,
   WorkReportModel,
   WorkReportType,
-} from '../../../src/services/workReport.ts';
+} from '../../../src/reports/workHours/build.ts';
 
 const TYPES: WorkReportType[] = ['hours', 'headlines', 'statistics'];
 const LANGUAGES: ReportLanguage[] = ['fi', 'en'];
@@ -140,7 +139,7 @@ export function reportRoutes(opts: {dataDir: string}): Hono {
     try {
       body =
         `<p><a class="pdf-btn" href="/report.pdf?${esc(downloadQuery(params))}">Download PDF</a></p>` +
-        sheetHtml(buildModel(db, params));
+        workHoursReport.html(buildModel(db, params));
     } catch (e) {
       body = `<p class="empty">${esc(errorMessage(e))}</p>`;
     }
@@ -166,9 +165,9 @@ export function reportRoutes(opts: {dataDir: string}): Hono {
 
     let pdf: Uint8Array<ArrayBuffer>;
     try {
-      pdf = await htmlToPdf(reportDocument(model), {
-        footerTemplate: footerTemplate(model),
-        marginPt: PAGE_MARGIN_PT,
+      pdf = await htmlToPdf(reportDocument(workHoursReport, model), {
+        footerTemplate: workHoursReport.footer?.(model) ?? '<span></span>',
+        marginPt: workHoursReport.marginPt,
       });
     } catch (e) {
       const missing = e instanceof Error && e.message === CHROMIUM_MISSING;

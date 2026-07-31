@@ -1,6 +1,6 @@
 import {test, beforeEach, afterEach} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync, readFileSync, rmSync} from 'node:fs';
+import {mkdtempSync, rmSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import Database from 'better-sqlite3';
@@ -244,39 +244,3 @@ test('work periods print in the process timezone', async () => {
   }
 });
 
-// The sheet is a copy of the app's native renderer, and the columns are the
-// part that has drifted before. Read the widths straight out of the Kotlin
-// layout rather than hard-coding them twice.
-test('the table columns match the app layout constants', async () => {
-  seed();
-  const kotlin = readFileSync(
-    new URL(
-      '../../android/app/src/main/java/com/kelomitapp/reporting/WorkReportLayout.kt',
-      import.meta.url,
-    ),
-    'utf8',
-  );
-  const widths = [
-    'DATE',
-    'WORK_TIME',
-    'REGULAR',
-    'REMOTE',
-    'OVERTIME',
-    'TOTAL',
-  ].map(name => {
-    const m = kotlin.match(new RegExp(`${name}_COLUMN_WIDTH = ([\\d.]+)f`));
-    assert.ok(m, `${name}_COLUMN_WIDTH missing from WorkReportLayout.kt`);
-    return Number(m[1]);
-  });
-
-  const html = await get('?from=2026-07-20&to=2026-07-21').then(r => r.text());
-  widths.forEach((w, i) => {
-    assert.match(
-      html,
-      new RegExp(`col:nth-child\\(${i + 1}\\) \\{ width: ${w}pt;`),
-      `column ${i + 1} should be ${w}pt`,
-    );
-  });
-  const total = widths.reduce((a, b) => a + b, 0);
-  assert.match(html, new RegExp(`width: ${total}pt`));
-});

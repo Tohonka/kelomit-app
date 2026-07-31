@@ -1,4 +1,4 @@
-import {buildWorkReport} from '../src/services/workReport';
+import {buildWorkReport} from '../src/reports/workHours/build';
 import type {Day, Entry} from '../src/types';
 
 const H = 3600;
@@ -105,7 +105,7 @@ describe('buildWorkReport', () => {
     });
 
     expect(report.days).toHaveLength(1);
-    expect(report.days[0].date).toBe('Sat 25 Jul 2026');
+    expect(report.days[0].date).toBe('Sat 25.7. 2026');
     expect(report.days[0].regular).toBe('8h 00m');
     expect(report.days[0].total).toBe('8h 00m');
   });
@@ -164,7 +164,7 @@ describe('buildWorkReport', () => {
     });
 
     expect(report.days[0]).toMatchObject({
-      date: 'Sat 25 Jul 2026',
+      date: 'Sat 25.7. 2026',
       workTime: 'Vacation + Sick',
       regular: '0h 00m',
       remoteOther: '0h 00m',
@@ -352,7 +352,7 @@ describe('buildWorkReport', () => {
       total: 'Yhteensä',
     });
     expect(report.days[0]).toMatchObject({
-      date: 'KE 29 heinä 2026',
+      date: 'KE 29.7. 2026',
     });
     expect(report.statistics).toMatchObject({
       title: 'Tilastot',

@@ -1,0 +1,193 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`work-hours template renders a stable document 1`] = `
+"<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Työaikaraportti</title>
+<style>
+@page { size: A4; }
+html, body { margin: 0; padding: 0; background: #FFFFFF; }
+/* The app ellipsizes overlong labels to keep its hand-drawn columns aligned.
+   Here the browser wraps them instead — same content, no truncation. */
+* { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+tr { break-inside: avoid; }
+thead { display: table-header-group; }
+h1, h2, h3 { break-after: avoid; }
+
+.sheet {
+  color: #193047;
+  /* Android draws with Roboto; Noto Sans is the closest thing an Alpine image
+     has. Metrics differ slightly, so the sheet wraps text rather than
+     ellipsizing it — see the note in reportDocument(). */
+  font-family: 'Noto Sans', 'Liberation Sans', 'DejaVu Sans', system-ui, sans-serif;
+  font-size: 10pt;
+  line-height: 1.35;
+}
+.sheet h1 { font-size: 20pt; line-height: 25pt; margin: 0; font-weight: 700; }
+.sheet-rule { height: 3pt; background: #2B6CB0; margin-top: 8pt; }
+.sheet-ident { margin-top: 25pt; }
+.sheet-ident p { margin: 0; }
+.sheet-company { font-size: 13pt; line-height: 18pt; font-weight: 700; }
+.sheet-person { font-size: 11pt; line-height: 17pt; }
+.sheet-range { font-size: 10pt; line-height: 15pt; }
+.sheet-total {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  background: #E8F2FB;
+  min-height: 58pt;
+  margin-top: 16pt;
+  padding: 13pt 14pt 0;
+}
+.sheet-total-label { font-size: 10pt; }
+.sheet-total-hours {
+  font-size: 25pt;
+  line-height: 25pt;
+  font-weight: 700;
+  color: #2B6CB0;
+  align-self: flex-end;
+  padding-bottom: 8pt;
+  white-space: nowrap;
+}
+/* Column widths, the table's right edge and the 5pt cell gap are
+   WorkReportLayout's own constants — the table stops well short of the right
+   margin on paper, exactly as the app draws it. */
+.sheet-table {
+  table-layout: fixed;
+  width: 464pt;
+  border-collapse: collapse;
+  margin-top: 18pt;
+  line-height: 11pt;
+}
+.sheet-table col:nth-child(1) { width: 88pt; }
+.sheet-table col:nth-child(2) { width: 104pt; }
+.sheet-table col:nth-child(3) { width: 58pt; }
+.sheet-table col:nth-child(4) { width: 88pt; }
+.sheet-table col:nth-child(5) { width: 58pt; }
+.sheet-table col:nth-child(6) { width: 68pt; }
+.sheet-table th {
+  background: #E8F2FB;
+  font-size: 8pt;
+  font-weight: 700;
+  text-align: left;
+  height: 32pt;
+  padding: 5.5pt 5pt 0 0;
+  vertical-align: top;
+}
+.sheet-table th.right, .sheet-table td.right { text-align: right; }
+/* 28pt is the app's minimum row height; a wrapped date or work-time grows it. */
+.sheet-table td { font-size: 9pt; height: 28pt; padding: 6pt 5pt 0 0; vertical-align: top; }
+/* Durations sit lower in the row than the date, as on paper. */
+.sheet-table td.right { font-size: 8.5pt; padding-top: 10.5pt; }
+.sheet-table td.total { font-weight: 700; }
+/* One day = its row plus the headline row underneath. The hairline closes the
+   pair, so it belongs to the LAST row of the group. */
+.sheet-table tr.close td { padding-bottom: 4pt; border-bottom: 0.75pt solid #D6E0EA; }
+/* Each day is its own tbody, so this keeps a date row and its headlines on the
+   same page. A day taller than a page still breaks — the engine ignores
+   break-inside when it has no choice. */
+.sheet-table tbody { break-inside: avoid; }
+.sheet-table td.headlines { height: auto; padding: 0 0 5pt; }
+.sheet-headlines { list-style: none; margin: 0; padding: 0; }
+.sheet-headlines li {
+  font-size: 9.5pt;
+  line-height: 14pt;
+  padding-left: 22pt;
+  position: relative;
+}
+.sheet-headlines li::before {
+  content: '';
+  position: absolute;
+  left: 8pt;
+  top: 5pt;
+  width: 4pt;
+  height: 4pt;
+  background: #2B6CB0;
+}
+.sheet-stats { break-before: page; padding-top: 12pt; }
+.sheet-stats h2 { font-size: 20pt; line-height: 24pt; margin: 0 0 14pt; font-weight: 700; }
+.sheet-stats h3 { font-size: 13pt; line-height: 18pt; margin: 18pt 0 7pt; font-weight: 700; }
+.sheet-stats h3:first-of-type { margin-top: 0; }
+.sheet-note { font-size: 9pt; font-style: italic; margin: 0 0 7pt; }
+.sheet-alloc { break-inside: avoid; margin-bottom: 6pt; }
+.sheet-alloc-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 9.5pt;
+  line-height: 14pt;
+}
+.sheet-alloc-head b { font-weight: 700; white-space: nowrap; }
+.sheet-bar { height: 7pt; background: #E8F2FB; margin-top: 3pt; }
+.sheet-bar span { display: block; height: 100%; background: #2B6CB0; }
+.num { font-variant-numeric: tabular-nums lining-nums; }
+
+</style>
+</head>
+<body><article class="sheet">
+    <h1>Työaikaraportti</h1>
+    <div class="sheet-rule"></div>
+    <div class="sheet-ident">
+      <p class="sheet-company">Example &amp; Co Oy</p>
+      <p class="sheet-person">Ada &lt;Example&gt;</p>
+      <p class="sheet-range">25 heinä 2026 – 26 heinä 2026</p>
+    </div>
+    <div class="sheet-total">
+      <span class="sheet-total-label">Tunteja yhteensä</span>
+      <span class="sheet-total-hours num">10h 00m</span>
+    </div>
+    <table class="sheet-table">
+      <colgroup><col><col><col><col><col><col></colgroup>
+      <thead>
+        <tr>
+          <th>Päivä</th>
+          <th>Työaika</th>
+          <th class="right">Tunnit</th>
+          <th class="right">Etä / muu</th>
+          <th class="right">Ylityö</th>
+          <th class="right">Yhteensä</th>
+        </tr>
+      </thead>
+      <tbody><tr>
+          <td>LA 25.7. 2026</td>
+          <td>09:00–17:00</td>
+          <td class="right num">8h 00m</td>
+          <td class="right num">0h 00m</td>
+          <td class="right num">2h 00m</td>
+          <td class="right total num">10h 00m</td>
+        </tr><tr class="close"><td class="headlines" colspan="6"><ul class="sheet-headlines"><li>Kickoff &amp; &lt;review&gt;</li><li>Overtime push</li></ul></td></tr></tbody><tbody><tr class="close">
+          <td>SU 26.7. 2026</td>
+          <td>Loma</td>
+          <td class="right num">0h 00m</td>
+          <td class="right num">0h 00m</td>
+          <td class="right num">0h 00m</td>
+          <td class="right total num">0h 00m</td>
+        </tr></tbody>
+    </table>
+    <section class="sheet-stats">
+        <h2>Tilastot</h2>
+        <h3>Projekteittain</h3>
+        <div class="sheet-alloc">
+        <div class="sheet-alloc-head"><span>Client &lt;A&gt; &amp; &quot;B&quot;</span><b class="num">2h 00m</b></div>
+        <div class="sheet-bar"><span style="width:25.00%"></span></div>
+      </div><div class="sheet-alloc">
+        <div class="sheet-alloc-head"><span>Kohdistamaton työ</span><b class="num">8h 00m</b></div>
+        <div class="sheet-bar"><span style="width:100.00%"></span></div>
+      </div>
+        <h3>Tunnisteittain</h3>
+        <p class="sheet-note">Tunnisteiden tunnit eivät sulje toisiaan pois.</p>
+        <div class="sheet-alloc">
+        <div class="sheet-alloc-head"><span>O&#39;Brien</span><b class="num">2h 00m</b></div>
+        <div class="sheet-bar"><span style="width:25.00%"></span></div>
+      </div><div class="sheet-alloc">
+        <div class="sheet-alloc-head"><span>Kohdistamaton työ</span><b class="num">8h 00m</b></div>
+        <div class="sheet-bar"><span style="width:100.00%"></span></div>
+      </div>
+      </section>
+  </article></body>
+</html>"
+`;

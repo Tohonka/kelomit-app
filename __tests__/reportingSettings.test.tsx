@@ -100,7 +100,7 @@ beforeEach(() => {
   mockUiLanguage = 'en';
   getSettingMock.mockResolvedValue(null);
   setSettingMock.mockResolvedValue();
-  exportWorkReportMock.mockResolvedValue('saved');
+  exportWorkReportMock.mockResolvedValue();
 });
 
 it('defaults dates to the most recently completed saved pay period', async () => {
@@ -247,7 +247,7 @@ it('exports selected options once and exposes the busy state accessibly', async 
   getSettingMock
     .mockResolvedValueOnce('Matti Meikäläinen')
     .mockResolvedValueOnce('Kelo Design Oy');
-  const pendingExport = deferred<'saved'>();
+  const pendingExport = deferred<void>();
   exportWorkReportMock.mockReturnValue(pendingExport.promise);
   const renderer = await renderScreen();
   const root = renderer.root;
@@ -277,7 +277,7 @@ it('exports selected options once and exposes the busy state accessibly', async 
   }));
 
   await act(async () => {
-    pendingExport.resolve('saved');
+    pendingExport.resolve();
     await pendingExport.promise;
   });
 });
