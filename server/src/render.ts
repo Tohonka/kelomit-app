@@ -1,16 +1,6 @@
-const ESCAPES: Record<string, string> = {
-  '&': '&amp;',
-  '<': '&lt;',
-  '>': '&gt;',
-  '"': '&quot;',
-  "'": '&#39;',
-};
-
-/** Everything rendered comes from the phone, but escape anyway — a note body is
- *  free text and this is the only barrier. */
-export function esc(value: unknown): string {
-  return String(value ?? '').replace(/[&<>"']/g, ch => ESCAPES[ch] ?? ch);
-}
+// The one HTML escaper lives with the shared templates; see its comment.
+export {esc} from '../../src/reports/escape.ts';
+import {esc} from '../../src/reports/escape.ts';
 
 /** Media paths in the DB are absolute Android paths; the server stores files by
  *  basename. */

@@ -61,8 +61,9 @@ let _slowIntervalMs = 60_000; // set from startTracking's arg (the gps_interval_
 let _currentIntervalMs = FAST_INTERVAL_MS;
 let _currentHighAccuracy = true;
 let _watchId: number | null = null;
-// When background tracking is on, the native FGS runs as an ADDITIONAL source
-// alongside the always-on JS watch (both feed handlePosition). See spec 5.8.
+// When background tracking is on, the native FGS is the ONLY fix source (it
+// owns the mode ladder too — see LocationService.kt). The JS watch runs solely
+// in the foreground-only fallback, when the native service is off/unavailable.
 let _nativeActive = false;
 let _active = false;
 let _nativeSub: {remove: () => void} | null = null;
@@ -275,7 +276,6 @@ export async function startTracking(intervalMs = 60_000): Promise<void> {
 
 /** Adapt a native fix into the GeolocationResponse shape handlePosition reads. */
 function handleNativeFix(fix: NativeFix): void {
-  console.log('[gps] native fix', fix.latitude, fix.longitude, 'spd', fix.speed);
   handlePosition({
     coords: {
       latitude: fix.latitude,
