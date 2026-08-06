@@ -132,6 +132,12 @@ class LocationService : Service() {
       stopSelf()
       return START_NOT_STICKY
     }
+    if (settings.isPaused()) {
+      DiagLog.write(this, "svc.paused", "until=${settings.pausedUntilMs}")
+      stopForeground(STOP_FOREGROUND_REMOVE)
+      stopSelf()
+      return START_NOT_STICKY
+    }
     slowIntervalMs = intent?.getLongExtra(EXTRA_SLOW_INTERVAL, settings.slowIntervalMs)
       ?: settings.slowIntervalMs
     settings.slowIntervalMs = slowIntervalMs

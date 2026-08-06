@@ -136,6 +136,11 @@
         android:name=".location.DayEndActionReceiver"
         android:exported="false" />
 
+      <!-- AlarmManager target for a timed tracking pause elapsing. -->
+      <receiver
+        android:name=".location.TrackingResumeReceiver"
+        android:exported="false" />
+
       <!-- Wakes the idle location service the moment activity-recognition
            reports the user started moving (faster than the geofence exit). -->
       <receiver

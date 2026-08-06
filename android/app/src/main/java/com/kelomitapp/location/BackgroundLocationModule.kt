@@ -33,6 +33,12 @@ class BackgroundLocationModule(reactContext: ReactApplicationContext) :
       val settings = NativeTrackingSettings(ctx)
       settings.slowIntervalMs = slowIntervalMs.toLong()
       settings.enabled = true
+      if (settings.isPaused()) {
+        // Paused wins: remember enabled=true but don't start anything. The
+        // widget/settings resume path starts the service when the pause lifts.
+        promise.resolve(null)
+        return
+      }
       val intent = Intent(ctx, LocationService::class.java)
         .putExtra(LocationService.EXTRA_SLOW_INTERVAL, slowIntervalMs.toLong())
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -177,5 +183,34 @@ class BackgroundLocationModule(reactContext: ReactApplicationContext) :
     } catch (e: Exception) {
       promise.reject("respond_day_end_failed", e)
     }
+  }
+
+  @ReactMethod
+  fun getTrackingPauseState(promise: Promise) {
+    val map = com.facebook.react.bridge.Arguments.createMap()
+    map.putDouble("pausedUntilMs", NativeTrackingSettings(reactApplicationContext).pausedUntilMs.toDouble())
+    promise.resolve(map)
+  }
+
+  /** untilMs: 0 resumes; Long.MAX-equivalent (pass 2^62) or any future epoch ms pauses. */
+  @ReactMethod
+  fun setTrackingPause(untilMs: Double, promise: Promise) {
+    try {
+      val ctx = reactApplicationContext
+      if (untilMs <= 0.0) {
+        TrackingPause.resume(ctx)
+      } else {
+        TrackingPause.pause(ctx, untilMs.toLong())
+      }
+      promise.resolve(null)
+    } catch (e: Exception) {
+      promise.reject("pause_failed", e)
+    }
+  }
+
+  @ReactMethod
+  fun expirePauseIfDue(promise: Promise) {
+    TrackingPause.expireIfDue(reactApplicationContext)
+    getTrackingPauseState(promise)
   }
 }

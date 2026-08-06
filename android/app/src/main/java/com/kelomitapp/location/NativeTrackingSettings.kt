@@ -11,6 +11,7 @@ class NativeTrackingSettings(context: Context) {
     private const val KEY_POLICY_INTERVAL_MS = "policy_interval_ms"
     private const val KEY_MOVING_UNTIL_MS = "moving_until_ms"
     private const val KEY_STILL_FIXES = "still_fixes"
+    private const val KEY_PAUSED_UNTIL_MS = "paused_until_ms"
   }
 
   private val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -37,6 +38,18 @@ class NativeTrackingSettings(context: Context) {
     set(value) {
       check(prefs.edit().putLong(KEY_MOVING_UNTIL_MS, value).commit())
     }
+
+  /** 0 = not paused, Long.MAX_VALUE = paused until resumed, else resume epoch ms. */
+  var pausedUntilMs: Long
+    get() = prefs.getLong(KEY_PAUSED_UNTIL_MS, 0L)
+    set(value) {
+      check(prefs.edit().putLong(KEY_PAUSED_UNTIL_MS, value).commit()) {
+        "Could not persist tracking pause"
+      }
+    }
+
+  fun isPaused(now: Long = System.currentTimeMillis()): Boolean =
+    pausedUntilMs != 0L && now < pausedUntilMs
 
   fun policyState(slowIntervalMs: Long = this.slowIntervalMs): TrackingPolicy.State {
     val mode = runCatching {
