@@ -127,16 +127,26 @@ object SessionStore {
   private fun stopInternal(context: Context, activeJson: String) {
     val active = runCatching { JSONObject(activeJson) }.getOrNull()
     if (active != null) {
-      val completed = JSONObject().apply {
-        put("started_at", active.optString("started_at"))
-        put("ended_at", Instant.now().toString())
-        put("project_id", active.opt("project_id") ?: JSONObject.NULL)
-        put("activity_type", active.optString("activity_type", "work"))
-        put("tags", active.optJSONArray("tags") ?: JSONArray())
-        put("title", active.opt("title") ?: JSONObject.NULL)
-        put("name", active.opt("name") ?: JSONObject.NULL)
+      val startedMs = runCatching {
+        Instant.parse(active.optString("started_at")).toEpochMilli()
+      }.getOrNull()
+      val now = Instant.now()
+      // Drop segments under MIN_SESSION_SECONDS, same as src/services/sessionService.ts
+      // stopSession — mirrors the pauseResume guard above. An unparseable started_at
+      // can't be measured, so fall back to keeping it (the pre-guard behaviour).
+      val segmentMs = startedMs?.let { (now.toEpochMilli() - it).coerceAtLeast(0) }
+      if (segmentMs == null || segmentMs >= 1000L) {
+        val completed = JSONObject().apply {
+          put("started_at", active.optString("started_at"))
+          put("ended_at", now.toString())
+          put("project_id", active.opt("project_id") ?: JSONObject.NULL)
+          put("activity_type", active.optString("activity_type", "work"))
+          put("tags", active.optJSONArray("tags") ?: JSONArray())
+          put("title", active.opt("title") ?: JSONObject.NULL)
+          put("name", active.opt("name") ?: JSONObject.NULL)
+        }
+        pushPending(context, completed)
       }
-      pushPending(context, completed)
     }
     clearActive(context)
   }

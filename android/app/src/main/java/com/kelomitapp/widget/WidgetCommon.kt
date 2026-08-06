@@ -27,6 +27,7 @@ object WidgetCommon {
 
   /** Re-render every placed widget of either flavour. Safe to call from RN. */
   fun updateAll(context: Context) {
+    TimerNotification.sync(context)
     val mgr = AppWidgetManager.getInstance(context) ?: return
     for (id in mgr.getAppWidgetIds(ComponentName(context, SessionWidgetProvider::class.java))) {
       mgr.updateAppWidget(id, buildFull(context, id))
@@ -34,7 +35,6 @@ object WidgetCommon {
     for (id in mgr.getAppWidgetIds(ComponentName(context, SessionToggleWidgetProvider::class.java))) {
       mgr.updateAppWidget(id, buildToggle(context, id))
     }
-    TimerNotification.sync(context)
   }
 
   /** PendingIntent that fires [ACTION_TOGGLE] for a specific widget. */
@@ -53,7 +53,7 @@ object WidgetCommon {
     )
   }
 
-  private fun openAppPendingIntent(context: Context): PendingIntent {
+  internal fun openAppPendingIntent(context: Context): PendingIntent {
     val intent = Intent(context, MainActivity::class.java).apply {
       flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
     }

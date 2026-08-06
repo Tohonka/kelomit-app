@@ -3,11 +3,8 @@ package com.kelomitapp.widget
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.content.Context
-import android.content.Intent
-import com.kelomitapp.MainActivity
 import com.kelomitapp.R
 
 /**
@@ -37,13 +34,7 @@ object TimerNotification {
     // literal string "null" for a JSON-null name (see WidgetCommon.optName doc).
     val name = WidgetCommon.optName(active) ?: context.getString(R.string.widget_title)
 
-    val openApp = PendingIntent.getActivity(
-      context, 0,
-      Intent(context, MainActivity::class.java).apply {
-        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
-      },
-      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-    )
+    val openApp = WidgetCommon.openAppPendingIntent(context)
     val invalid = AppWidgetManager.INVALID_APPWIDGET_ID
     val stopIntent =
       WidgetCommon.togglePendingIntent(context, SessionWidgetProvider::class.java, invalid)
