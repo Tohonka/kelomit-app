@@ -478,6 +478,8 @@ const fi: typeof en = {
     addToggle: 'Lisää painikewidget',
     pinUnsupportedTitle: 'Ei tuettu',
     pinUnsupported: 'Käynnistysohjelmasi ei tue widgetien lisäämistä sovelluksesta. Paina aloitusnäyttöä pitkään ja valitse Widgetit.',
+    voiceAutoTitle: 'Otsikoi äänimuistiot automaattisesti',
+    voiceAutoTitleHint: 'Widgetillä tehdyt äänimuistiot litteroidaan tallennuksen jälkeen ja otsikoidaan puheen alkusanoista.',
   },
   projects: {
     newProject: 'Uusi projekti',

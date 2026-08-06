@@ -17,6 +17,7 @@ import {capturePhoto} from '../utils/mediaCapture';
 import {ensureMediaDir} from '../utils/mediaUtils';
 import {haptic, HAPTIC_SAVE} from '../utils/haptics';
 import {useSaveQuickNote} from '../components/quickadd/useSaveQuickNote';
+import {autoTitleVoiceNote} from '../services/autoTitle';
 import type {RootStackScreenProps} from '../navigation/navigationTypes';
 
 type Props = RootStackScreenProps<'QuickAddModal'>;
@@ -119,7 +120,20 @@ export default function QuickAddModal({navigation, route}: Props) {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await saveQuickNote({dayId, title, durationMinutes, media});
+      const saved = await saveQuickNote({dayId, title, durationMinutes, media});
+      if (
+        autoCapture &&
+        entryType === 'voice' &&
+        useSettingsStore.getState().widget_voice_auto_title
+      ) {
+        // Fire and forget — titling must never hold up the save UX.
+        autoTitleVoiceNote({
+          entryId: saved.entry.id,
+          dayId,
+          media: saved.media,
+          userTitled: title.trim().length > 0,
+        }).catch(() => {});
+      }
       haptic(HAPTIC_SAVE);
       navigation.goBack();
     } catch (e) {

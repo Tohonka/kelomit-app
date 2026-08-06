@@ -476,6 +476,8 @@ const en = {
     addToggle: 'Add toggle widget',
     pinUnsupportedTitle: 'Not supported',
     pinUnsupported: 'Your launcher doesn’t support adding widgets from the app. Long-press the home screen and pick Widgets instead.',
+    voiceAutoTitle: 'Auto-title voice notes',
+    voiceAutoTitleHint: 'Widget voice notes are transcribed after saving and titled from the first spoken words.',
   },
   projects: {
     newProject: 'New project',

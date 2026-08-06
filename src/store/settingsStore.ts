@@ -21,6 +21,8 @@ interface SettingsState extends Settings {
   weekday_hours: WeekdayHours;
   /** Opt-in: keep logging GPS via a foreground service while the app is closed. */
   background_tracking: boolean;
+  /** Opt-in: transcribe + title widget-started voice notes after saving. */
+  widget_voice_auto_title: boolean;
   time_selector_mode: TimeSelectorMode;
   language: Language;
   quickadd_default_project_id: number | null;
@@ -39,6 +41,7 @@ interface SettingsState extends Settings {
   /** Set (or clear, with null) the override for one weekday (0=Sun..6=Sat). */
   setWeekdayOverride: (weekday: number, override: WeekdayOverride | null) => Promise<void>;
   setBackgroundTracking: (enabled: boolean) => Promise<void>;
+  setWidgetVoiceAutoTitle: (enabled: boolean) => Promise<void>;
   setUsualStart: (hhmm: string | null) => Promise<void>;
   setUsualEnd: (hhmm: string | null) => Promise<void>;
   setPrefillFromUsual: (enabled: boolean) => Promise<void>;
@@ -68,6 +71,7 @@ export const useSettingsStore = create<SettingsState>(set => ({
   day_list_mode: 'time_desc',
   weekday_hours: {},
   background_tracking: false,
+  widget_voice_auto_title: false,
   time_selector_mode: 'clock',
   language: 'en',
   quickadd_default_project_id: null,
@@ -93,6 +97,7 @@ export const useSettingsStore = create<SettingsState>(set => ({
       : 'time_desc';
     const weekday_hours = parseWeekdayHours(raw.weekday_hours);
     const background_tracking = raw.background_tracking === 'true';
+    const widget_voice_auto_title = raw.widget_voice_auto_title === 'true';
     const time_selector_mode: TimeSelectorMode =
       raw.time_selector_mode === 'keyboard' ? 'keyboard' : 'clock';
     const language = resolveLanguageSetting(raw.language);
@@ -115,6 +120,7 @@ export const useSettingsStore = create<SettingsState>(set => ({
       day_list_mode,
       weekday_hours,
       background_tracking,
+      widget_voice_auto_title,
       time_selector_mode,
       language,
       quickadd_default_project_id,
@@ -183,6 +189,11 @@ export const useSettingsStore = create<SettingsState>(set => ({
   setBackgroundTracking: async enabled => {
     await setSetting('background_tracking', String(enabled));
     set({background_tracking: enabled});
+  },
+
+  setWidgetVoiceAutoTitle: async enabled => {
+    await setSetting('widget_voice_auto_title', String(enabled));
+    set({widget_voice_auto_title: enabled});
   },
 
   setUsualStart: async hhmm => {
