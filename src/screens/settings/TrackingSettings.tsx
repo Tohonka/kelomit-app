@@ -1,4 +1,4 @@
-import React, {useMemo} from 'react';
+import React, {useEffect, useMemo, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {View, Text, ScrollView, TouchableOpacity} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
@@ -6,6 +6,8 @@ import {useSettingsStore} from '../../store/settingsStore';
 import {startTracking, stopTracking} from '../../services/gpsService';
 import {ensureBackgroundLocationPermission, ensureActivityRecognitionPermission} from '../../services/permissionService';
 import {requestNotificationPermission} from '../../services/notificationService';
+import {getTrackingPauseState, setTrackingPause, INDEFINITE_PAUSE_MS} from '../../native/backgroundLocation';
+import {formatTime} from '../../utils/dateUtils';
 import {useTheme} from '../../theme';
 import {makeSettingsStyles} from './settingsStyles';
 
@@ -17,6 +19,17 @@ export default function TrackingSettings() {
     gps_enabled, setGpsEnabled, gps_interval_ms, default_activity_type,
     background_tracking, setBackgroundTracking,
   } = useSettingsStore();
+  const [pausedUntilMs, setPausedUntilMs] = useState(0);
+
+  useEffect(() => {
+    getTrackingPauseState().then(s => setPausedUntilMs(s.pausedUntilMs)).catch(() => {});
+  }, []);
+
+  const handleResumeTracking = async () => {
+    await setTrackingPause(0).catch(() => {});
+    setPausedUntilMs(0);
+    if (gps_enabled) { startTracking(gps_interval_ms); }
+  };
 
   const handleGpsToggle = async () => {
     const next = !gps_enabled;
@@ -61,6 +74,17 @@ export default function TrackingSettings() {
             </Text>
           </View>
         </TouchableOpacity>
+
+        {pausedUntilMs !== 0 && (
+          <TouchableOpacity style={styles.row} onPress={handleResumeTracking}>
+            <Text style={styles.rowLabel}>
+              {pausedUntilMs >= INDEFINITE_PAUSE_MS
+                ? t('tracking.pausedIndefinitely')
+                : t('tracking.pausedUntil', {time: formatTime(new Date(pausedUntilMs).toISOString())})}
+            </Text>
+            <Text style={[styles.rowLabel, {color: colors.primary}]}>{t('tracking.resume')}</Text>
+          </TouchableOpacity>
+        )}
 
         {gps_enabled && (
           <TouchableOpacity style={styles.row} onPress={handleBackgroundToggle}>

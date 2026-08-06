@@ -249,6 +249,11 @@ const en = {
     syncDone: 'Sync complete',
     syncSave: 'Save',
   },
+  tracking: {
+    pausedUntil: 'Tracking paused until {{time}}',
+    pausedIndefinitely: 'Tracking paused',
+    resume: 'Resume',
+  },
   reporting: {
     title: 'Reporting',
     subtitle: 'Export work hours as a PDF',
@@ -474,6 +479,8 @@ const en = {
     saved: 'Saved',
     addFull: 'Add timer widget',
     addToggle: 'Add toggle widget',
+    addAddNote: 'Add note widget',
+    addTracking: 'Add tracking widget',
     pinUnsupportedTitle: 'Not supported',
     pinUnsupported: 'Your launcher doesn’t support adding widgets from the app. Long-press the home screen and pick Widgets instead.',
     voiceAutoTitle: 'Auto-title voice notes',

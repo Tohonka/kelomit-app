@@ -16,6 +16,9 @@ interface BackgroundLocationNative {
   respondToDayEnd(token: string, confirmed: boolean): Promise<void>;
   readFixBuffer(): Promise<string[]>;
   ackFixBuffer(count: number): Promise<void>;
+  getTrackingPauseState(): Promise<{pausedUntilMs: number}>;
+  setTrackingPause(untilMs: number): Promise<void>;
+  expirePauseIfDue(): Promise<{pausedUntilMs: number}>;
   /** Build-time Google Maps key (from .maps.env), exposed as a native constant. */
   mapsApiKey?: string;
 }
@@ -218,4 +221,26 @@ export function subscribeNativeEventAvailable(
   cb: () => void,
 ): {remove: () => void} {
   return DeviceEventEmitter.addListener('onNativeEventAvailable', cb);
+}
+
+/** JS-side stand-in for Kotlin's Long.MAX_VALUE (not Double-safe): any value at
+ *  or above this means "paused until resumed". Kotlin stores what we pass. */
+export const INDEFINITE_PAUSE_MS = 2 ** 62;
+
+export async function getTrackingPauseState(): Promise<{pausedUntilMs: number}> {
+  if (!Native) {
+    return {pausedUntilMs: 0};
+  }
+  return Native.getTrackingPauseState();
+}
+
+export async function setTrackingPause(untilMs: number): Promise<void> {
+  await Native?.setTrackingPause(untilMs);
+}
+
+export async function expirePauseIfDue(): Promise<{pausedUntilMs: number}> {
+  if (!Native) {
+    return {pausedUntilMs: 0};
+  }
+  return Native.expirePauseIfDue();
 }

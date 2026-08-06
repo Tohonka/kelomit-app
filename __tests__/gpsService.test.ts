@@ -12,6 +12,7 @@ const mockGetOrCreateDay = jest.fn();
 const mockScheduleRouteRefresh = jest.fn();
 const mockRefreshRouteDay = jest.fn();
 let mockBackgroundTracking = true;
+let mockPausedUntil = 0;
 
 jest.mock('@react-native-community/geolocation', () => ({
   setRNConfiguration: jest.fn(),
@@ -34,6 +35,7 @@ jest.mock('../src/native/backgroundLocation', () => ({
   readNativeFixBuffer: (...args: unknown[]) => mockReadFixBuffer(...args),
   ackNativeFixBuffer: (...args: unknown[]) => mockAckFixBuffer(...args),
   parseFixLine: (line: string) => JSON.parse(line),
+  getTrackingPauseState: jest.fn(async () => ({pausedUntilMs: mockPausedUntil})),
 }));
 jest.mock('../src/store/settingsStore', () => ({
   useSettingsStore: {
@@ -70,6 +72,7 @@ function emitPosition(position: unknown): void {
 beforeEach(() => {
   jest.clearAllMocks();
   mockBackgroundTracking = true;
+  mockPausedUntil = 0;
   watchCallback = null;
   mockReadFixBuffer.mockResolvedValue([]);
   mockInsertGpsPoint.mockResolvedValue(undefined);
@@ -87,6 +90,13 @@ it('uses only the native location request when background tracking is enabled', 
   expect(mockStartNative).toHaveBeenCalledWith(75_000);
   expect(mockWatchPosition).not.toHaveBeenCalled();
 
+});
+
+it('startTracking no-ops while tracking is paused', async () => {
+  mockPausedUntil = Date.now() + 60_000;
+  await startTracking(60_000);
+  expect(mockWatchPosition).not.toHaveBeenCalled();
+  expect(mockStartNative).not.toHaveBeenCalled();
 });
 
 it('acknowledges buffered fixes only after SQLite persistence', async () => {

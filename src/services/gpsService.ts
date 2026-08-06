@@ -26,6 +26,7 @@ import {
   readNativeFixBuffer,
   ackNativeFixBuffer,
   parseFixLine,
+  getTrackingPauseState,
   type NativeFix,
 } from '../native/backgroundLocation';
 import {ensureActivityRecognitionPermission} from './permissionService';
@@ -250,6 +251,11 @@ export async function startTracking(intervalMs = 60_000): Promise<void> {
   }
   const ok = await requestLocationPermission();
   if (!ok) {
+    return;
+  }
+  const {pausedUntilMs} = await getTrackingPauseState().catch(() => ({pausedUntilMs: 0}));
+  if (pausedUntilMs !== 0 && Date.now() < pausedUntilMs) {
+    diag('track.paused', `until=${pausedUntilMs}`);
     return;
   }
   ensureConfigured();

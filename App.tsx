@@ -13,6 +13,7 @@ import {pruneDiagLog, diag} from './src/services/diag';
 import {getAllSettings} from './src/db/settings';
 import {getLocations} from './src/db/locations';
 import {stopTracking} from './src/services/gpsService';
+import {expirePauseIfDue} from './src/native/backgroundLocation';
 import {ensureNotificationChannel, requestNotificationPermission} from './src/services/notificationService';
 import {maybeAutoSync} from './src/services/syncService';
 import {
@@ -80,6 +81,7 @@ function AppContent() {
     }
 
     const syncGps = async () => {
+      await expirePauseIfDue().catch(() => ({pausedUntilMs: 0}));
       const settings = await getAllSettings().catch(() => null);
       if (!settings) return;
       const backgroundTracking = useSettingsStore.getState().background_tracking;

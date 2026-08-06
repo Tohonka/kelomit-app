@@ -115,12 +115,14 @@ const makeStyles = (c: Colors) =>
     },
     addRow: {
       flexDirection: 'row',
+      flexWrap: 'wrap',
       gap: spacing.sm,
       paddingHorizontal: spacing.lg,
       marginTop: spacing.md,
     },
     addBtn: {
       flex: 1,
+      flexBasis: '45%',
       minHeight: 48,
       borderRadius: radius.md,
       backgroundColor: c.primary,
@@ -213,7 +215,7 @@ export default function WidgetSettings() {
     return () => sub.remove();
   }, [available, refresh]);
 
-  const handleAddWidget = async (type: 'full' | 'toggle') => {
+  const handleAddWidget = async (type: 'full' | 'toggle' | 'addnote' | 'tracking') => {
     const ok = await nativeRequestPinWidget(type).catch(() => false);
     if (!ok) {
       Alert.alert(t('widgets.pinUnsupportedTitle'), t('widgets.pinUnsupported'));
@@ -260,6 +262,12 @@ export default function WidgetSettings() {
             </TouchableOpacity>
             <TouchableOpacity style={styles.addBtn} onPress={() => handleAddWidget('toggle')}>
               <Text style={styles.saveBtnText}>{t('widgets.addToggle')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.addBtn} onPress={() => handleAddWidget('addnote')}>
+              <Text style={styles.saveBtnText}>{t('widgets.addAddNote')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.addBtn} onPress={() => handleAddWidget('tracking')}>
+              <Text style={styles.saveBtnText}>{t('widgets.addTracking')}</Text>
             </TouchableOpacity>
           </View>
         )}

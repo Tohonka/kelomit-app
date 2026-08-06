@@ -119,7 +119,7 @@ export async function nativeRefreshWidgets(): Promise<void> {
 /** Ask the launcher to place a new widget (Android pin flow). False = launcher
  *  doesn't support pinning; the caller points the user at the home-screen menu. */
 export async function nativeRequestPinWidget(
-  type: 'toggle' | 'full',
+  type: 'toggle' | 'full' | 'addnote' | 'tracking',
 ): Promise<boolean> {
   return (await Native?.requestPinWidget(type)) ?? false;
 }
