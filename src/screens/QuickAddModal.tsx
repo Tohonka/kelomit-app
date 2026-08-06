@@ -100,6 +100,20 @@ export default function QuickAddModal({navigation, route}: Props) {
     }
   }, [autoCapture, entryType]);
 
+  // Clear the route's `autoCapture` flag once the auto-action above (photo) or
+  // below (voice, via the autoStartVoice prop) has been kicked off. The param
+  // otherwise stays `true` for the rest of the screen's life, so any *later*
+  // VoiceRecorder remount — after a discard, or tapping the mic again — would
+  // see the same live flag and auto-record again, with no way to reach the
+  // idle recorder. React commits child effects before parent effects, and
+  // AttachmentsSection's initial recording state already latched autoStartVoice
+  // in during the first render, so this only ever suppresses *subsequent* mounts.
+  useEffect(() => {
+    if (autoCapture) {
+      navigation.setParams({autoCapture: false});
+    }
+  }, [autoCapture, navigation]);
+
   const handleSave = async () => {
     setIsSaving(true);
     try {
