@@ -43,6 +43,14 @@ class TrackingPauseWidgetProvider : AppWidgetProvider() {
       val paused = settings.isPaused()
 
       when {
+        // `enabled` is the native background-tracking service flag, not the
+        // app's `gps_enabled` setting. In the supported "GPS on, background
+        // tracking off" configuration this is false while the JS watch may
+        // still be capturing foreground fixes — so the widget shows
+        // "Tracking off" (and offers no pause) even though location is being
+        // recorded. Accepted limitation, not a bug: the app's owner runs
+        // background tracking on. A proper fix would mirror `gps_enabled`
+        // into native prefs so this branch reflects the real state.
         !settings.enabled -> {
           views.setTextViewText(R.id.widget_pause_status, context.getString(R.string.widget_tracking_off))
           views.setViewVisibility(R.id.widget_pause_presets, View.GONE)

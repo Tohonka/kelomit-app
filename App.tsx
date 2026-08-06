@@ -127,6 +127,11 @@ function AppContent() {
         const {gps_enabled, background_tracking} = useSettingsStore.getState();
         // With background tracking on, keep the watch alive (the foreground
         // service is already running). Otherwise stop tracking as before.
+        // Load-bearing for the tracking-pause widget invariant: in
+        // foreground-only mode this is the only reason a live JS
+        // watchPosition isn't still capturing by the time the user reaches
+        // the home screen to tap the pause widget. Don't weaken this guard
+        // without checking that invariant.
         if (!(gps_enabled && background_tracking)) {
           stopTracking();
         }
