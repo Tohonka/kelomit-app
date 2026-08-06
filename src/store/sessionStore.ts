@@ -2,6 +2,8 @@ import {create} from 'zustand';
 import {
   startSession,
   stopSession,
+  pauseSession,
+  resumeSession,
   cancelSession,
   getActiveSession,
   drainPendingSessions,
@@ -20,6 +22,8 @@ interface SessionState {
   reconcile: () => Promise<void>;
   start: (input: StartSessionInput) => Promise<void>;
   stop: () => Promise<StopResult>;
+  pause: () => Promise<StopResult>;
+  resume: () => Promise<void>;
   cancel: () => Promise<void>;
 }
 
@@ -56,6 +60,18 @@ export const useSessionStore = create<SessionState>(set => ({
     const result = await stopSession();
     set({active: null});
     return result;
+  },
+
+  pause: async () => {
+    const result = await pauseSession();
+    const active = await getActiveSession();
+    set({active});
+    return result;
+  },
+
+  resume: async () => {
+    const session = await resumeSession();
+    set({active: session});
   },
 
   cancel: async () => {
