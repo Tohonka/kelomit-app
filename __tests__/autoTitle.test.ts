@@ -42,6 +42,21 @@ describe('titleFromTranscript', () => {
     expect(titleFromTranscript('')).toBeNull();
     expect(titleFromTranscript('   ')).toBeNull();
   });
+  it('does not title off an abbreviation like "Mr."', () => {
+    const t = titleFromTranscript('Mr. Smith called about scheduling the roof inspection');
+    expect(t).not.toBe('Mr.');
+    expect(t).toBe('Mr. Smith called about scheduling the roof…');
+  });
+  it('does not title off an abbreviation like "e.g."', () => {
+    const t = titleFromTranscript('e.g. the thing broke down');
+    expect(t).not.toBe('e.g.');
+    expect(t).toBe('e.g. the thing broke down');
+  });
+  it('does not title off a Finnish abbreviation like "Dr."', () => {
+    const t = titleFromTranscript('Dr. Virtanen soitti tapaamisesta ensi viikolla');
+    expect(t).not.toBe('Dr.');
+    expect(t).toBe('Dr. Virtanen soitti tapaamisesta ensi viikolla');
+  });
 });
 
 describe('autoTitleVoiceNote', () => {

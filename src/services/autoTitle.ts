@@ -4,6 +4,10 @@ import {useEntryStore} from '../store/entryStore';
 import type {EntryMedia} from '../types';
 
 const MAX_TITLE = 50;
+// Sentence-ending abbreviations ("Mr.", "Dr.", "e.g.") land well under this length;
+// a genuine short sentence runs longer. Below it, the regex match is untrustworthy —
+// fall through to the length-based cut instead of titling the note off "Mr.".
+const MIN_SENTENCE_LEN = 15;
 
 /** Opening words of a transcript as a note title: first sentence if it fits,
  *  else a word-boundary cut with an ellipsis. Null when there's nothing usable. */
@@ -13,7 +17,7 @@ export function titleFromTranscript(transcript: string): string | null {
     return null;
   }
   const sentence = text.match(/^.+?[.!?](\s|$)/)?.[0]?.trim();
-  if (sentence && sentence.length <= MAX_TITLE) {
+  if (sentence && sentence.length >= MIN_SENTENCE_LEN && sentence.length <= MAX_TITLE) {
     return sentence;
   }
   if (text.length <= MAX_TITLE) {
