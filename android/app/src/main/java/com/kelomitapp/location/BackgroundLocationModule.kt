@@ -138,7 +138,8 @@ class BackgroundLocationModule(reactContext: ReactApplicationContext) :
         parsedPlace
       }
       NativePlaceStore(reactApplicationContext).replace(parsed)
-      val registration = if (NativeTrackingSettings(reactApplicationContext).enabled) {
+      val settings = NativeTrackingSettings(reactApplicationContext)
+      val registration = if (settings.enabled && !settings.isPaused()) {
         PlaceMonitor.sync(reactApplicationContext)
       } else {
         PlaceMonitor.unregister(reactApplicationContext)
@@ -187,9 +188,13 @@ class BackgroundLocationModule(reactContext: ReactApplicationContext) :
 
   @ReactMethod
   fun getTrackingPauseState(promise: Promise) {
-    val map = com.facebook.react.bridge.Arguments.createMap()
-    map.putDouble("pausedUntilMs", NativeTrackingSettings(reactApplicationContext).pausedUntilMs.toDouble())
-    promise.resolve(map)
+    try {
+      val map = com.facebook.react.bridge.Arguments.createMap()
+      map.putDouble("pausedUntilMs", NativeTrackingSettings(reactApplicationContext).pausedUntilMs.toDouble())
+      promise.resolve(map)
+    } catch (e: Exception) {
+      promise.reject("get_tracking_pause_state_failed", e)
+    }
   }
 
   /** untilMs: 0 resumes; Long.MAX-equivalent (pass 2^62) or any future epoch ms pauses. */
@@ -210,7 +215,11 @@ class BackgroundLocationModule(reactContext: ReactApplicationContext) :
 
   @ReactMethod
   fun expirePauseIfDue(promise: Promise) {
-    TrackingPause.expireIfDue(reactApplicationContext)
-    getTrackingPauseState(promise)
+    try {
+      TrackingPause.expireIfDue(reactApplicationContext)
+      getTrackingPauseState(promise)
+    } catch (e: Exception) {
+      promise.reject("expire_pause_if_due_failed", e)
+    }
   }
 }

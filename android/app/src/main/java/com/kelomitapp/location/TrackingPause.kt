@@ -1,6 +1,7 @@
 package com.kelomitapp.location
 
 import android.app.AlarmManager
+import android.app.ForegroundServiceStartNotAllowedException
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -17,14 +18,21 @@ import android.os.Build
 object TrackingPause {
   private const val ALARM_REQUEST = 7001
 
+  /** JS cannot pass Long.MAX_VALUE through a Double; 2^62 is the agreed
+   *  "until resumed" sentinel and round-trips exactly. Anything at or above
+   *  it means indefinite. */
+  const val INDEFINITE_PAUSE_MS = 1L shl 62
+
   fun pause(context: Context, untilMs: Long) {
     val settings = NativeTrackingSettings(context)
     settings.pausedUntilMs = untilMs
     cancelAlarm(context)
     context.stopService(Intent(context, LocationService::class.java))
     LocationService.removeActivityUpdates(context)
-    PlaceMonitor.unregister(context)
-    if (untilMs != Long.MAX_VALUE) {
+    PlaceMonitor.unregister(context).addOnFailureListener {
+      DiagLog.write(context, "pause.unregister.fail", it.javaClass.simpleName)
+    }
+    if (untilMs < INDEFINITE_PAUSE_MS) {
       scheduleResume(context, untilMs)
     }
     DiagLog.write(context, "pause.on", "until=$untilMs")
@@ -38,10 +46,16 @@ object TrackingPause {
     if (settings.enabled) {
       val intent = Intent(context, LocationService::class.java)
         .putExtra(LocationService.EXTRA_SLOW_INTERVAL, settings.slowIntervalMs)
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        context.startForegroundService(intent)
-      } else {
-        context.startService(intent)
+      try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+          context.startForegroundService(intent)
+        } else {
+          context.startService(intent)
+        }
+      } catch (error: ForegroundServiceStartNotAllowedException) {
+        DiagLog.write(context, "pause.resume.fail", error.javaClass.simpleName)
+      } catch (error: SecurityException) {
+        DiagLog.write(context, "pause.resume.fail", error.javaClass.simpleName)
       }
       PlaceMonitor.sync(context)
     }
@@ -57,7 +71,7 @@ object TrackingPause {
     when {
       until == 0L -> {}
       now >= until -> resume(context)
-      until != Long.MAX_VALUE -> scheduleResume(context, until)
+      until < INDEFINITE_PAUSE_MS -> scheduleResume(context, until)
     }
   }
 
@@ -73,7 +87,13 @@ object TrackingPause {
 
   private fun cancelAlarm(context: Context) {
     val mgr = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
-    mgr.cancel(alarmIntent(context))
+    val pending = PendingIntent.getBroadcast(
+      context,
+      ALARM_REQUEST,
+      Intent(context, TrackingResumeReceiver::class.java),
+      PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE,
+    ) ?: return
+    mgr.cancel(pending)
   }
 
   private fun alarmIntent(context: Context): PendingIntent =
