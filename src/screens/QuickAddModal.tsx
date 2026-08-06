@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useMemo} from 'react';
+import React, {useState, useEffect, useMemo, useRef} from 'react';
 import {useTranslation} from 'react-i18next';
 import {
   View,
@@ -13,6 +13,7 @@ import {useTheme, typography, spacing, radius} from '../theme';
 import type {Colors} from '../theme';
 import Button from '../components/ui/Button';
 import AttachmentsSection, {type EditorMedia} from '../components/media/AttachmentsSection';
+import {capturePhoto} from '../utils/mediaCapture';
 import {ensureMediaDir} from '../utils/mediaUtils';
 import {haptic, HAPTIC_SAVE} from '../utils/haptics';
 import {useSaveQuickNote} from '../components/quickadd/useSaveQuickNote';
@@ -65,7 +66,7 @@ const makeStyles = (c: Colors) =>
   });
 
 export default function QuickAddModal({navigation, route}: Props) {
-  const {dayId, entryType} = route.params;
+  const {dayId, entryType, autoCapture} = route.params;
   const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -86,6 +87,18 @@ export default function QuickAddModal({navigation, route}: Props) {
     if (!settingsLoaded) { loadSettings(); }
     ensureMediaDir().catch(() => {});
   }, [settingsLoaded, loadSettings]);
+
+  // Widget photo flow: open the camera immediately; the shot lands in `media`.
+  // Cancelling the camera just leaves the normal quick-add screen.
+  const autoCaptured = useRef(false);
+  useEffect(() => {
+    if (autoCapture && entryType === 'photo' && !autoCaptured.current) {
+      autoCaptured.current = true;
+      capturePhoto(false)
+        .then(m => { if (m) { setMedia(prev => [...prev, m]); } })
+        .catch(() => {});
+    }
+  }, [autoCapture, entryType]);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -118,6 +131,7 @@ export default function QuickAddModal({navigation, route}: Props) {
         media={media}
         onAdd={m => setMedia(prev => [...prev, m])}
         onRemove={i => setMedia(prev => prev.filter((_, idx) => idx !== i))}
+        autoStartVoice={autoCapture && entryType === 'voice'}
       />
 
       <Text style={styles.sectionLabel}>{t('entries.title')}</Text>
