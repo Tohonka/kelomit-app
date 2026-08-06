@@ -28,6 +28,7 @@ function rowToEntry(row: RawRow, tags: Tag[], project: Project | null, media: En
     entry_type: row.entry_type as Entry['entry_type'],
     activity_type: row.activity_type as Entry['activity_type'],
     project_id: (row.project_id as number | null) ?? null,
+    tally: (row.tally as number | null) ?? null,
     title: (row.title as string | null) ?? null,
     body: (row.body as string | null) ?? null,
     file_path: (row.file_path as string | null) ?? null,
@@ -156,7 +157,7 @@ async function fetchProjectsForRows(rows: RawRow[]): Promise<Map<number, Project
 export async function getEntriesForDay(dayId: number): Promise<Entry[]> {
   const db = getDB();
   const result = await db.execute(
-    'SELECT * FROM entries WHERE day_id = ? ORDER BY time_from DESC;',
+    'SELECT e.*, ep.tally AS tally FROM entries e LEFT JOIN entry_projects ep ON ep.entry_id = e.id AND ep.project_id = e.project_id WHERE e.day_id = ? ORDER BY e.time_from DESC;',
     [dayId],
   );
   const rows = (result.rows ?? []) as RawRow[];
@@ -185,9 +186,9 @@ export async function getEntriesForDays(dayIds: number[]): Promise<Entry[]> {
   const db = getDB();
   const placeholders = dayIds.map(() => '?').join(',');
   const result = await db.execute(
-    `SELECT * FROM entries
-      WHERE day_id IN (${placeholders})
-      ORDER BY day_id ASC, created_at ASC;`,
+    `SELECT e.*, ep.tally AS tally FROM entries e LEFT JOIN entry_projects ep ON ep.entry_id = e.id AND ep.project_id = e.project_id
+      WHERE e.day_id IN (${placeholders})
+      ORDER BY e.day_id ASC, e.created_at ASC;`,
     dayIds,
   );
   const rows = (result.rows ?? []) as RawRow[];
@@ -207,7 +208,10 @@ export async function getEntriesForDays(dayIds: number[]): Promise<Entry[]> {
 
 export async function getEntry(id: number): Promise<Entry | null> {
   const db = getDB();
-  const result = await db.execute('SELECT * FROM entries WHERE id = ?;', [id]);
+  const result = await db.execute(
+    'SELECT e.*, ep.tally AS tally FROM entries e LEFT JOIN entry_projects ep ON ep.entry_id = e.id AND ep.project_id = e.project_id WHERE e.id = ?;',
+    [id],
+  );
   if (!result.rows || result.rows.length === 0) {
     return null;
   }
@@ -296,6 +300,22 @@ export interface CreateEntryParams {
   tagIds?: number[];
 }
 
+/** Reserve the project's next tally (atomic post-increment) and link the entry.
+ *  Numbers are never reused — deletes burn them. */
+async function assignProjectTally(entryId: number, projectId: number): Promise<number> {
+  const db = getDB();
+  const res = await db.execute(
+    'UPDATE projects SET next_tally = next_tally + 1 WHERE id = ? RETURNING next_tally;',
+    [projectId],
+  );
+  const tally = ((res.rows![0] as RawRow).next_tally as number) - 1;
+  await db.execute(
+    'INSERT INTO entry_projects (entry_id, project_id, tally) VALUES (?, ?, ?);',
+    [entryId, projectId, tally],
+  );
+  return tally;
+}
+
 export async function createEntry(params: CreateEntryParams): Promise<Entry> {
   const db = getDB();
   const result = await db.execute(
@@ -343,6 +363,10 @@ export async function createEntry(params: CreateEntryParams): Promise<Entry> {
         [entryId, tagId],
       );
     }
+  }
+
+  if (params.project_id != null) {
+    await assignProjectTally(entryId, params.project_id);
   }
 
   const entry = await getEntry(entryId);
@@ -415,6 +439,22 @@ export async function updateEntry(
         'INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) VALUES (?, ?);',
         [id, tagId],
       );
+    }
+  }
+
+  if ('project_id' in fields) {
+    const cur = await db.execute(
+      'SELECT project_id FROM entry_projects WHERE entry_id = ?;',
+      [id],
+    );
+    const linked = (cur.rows?.[0] as RawRow | undefined)?.project_id as number | undefined;
+    const next = fields.project_id ?? null;
+    if (linked !== next) {
+      // ponytail: single-project assumption; multi-project needs per-project rows
+      await db.execute('DELETE FROM entry_projects WHERE entry_id = ?;', [id]);
+      if (next != null) {
+        await assignProjectTally(id, next);
+      }
     }
   }
 }

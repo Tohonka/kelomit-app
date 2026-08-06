@@ -394,4 +394,30 @@ export const migrations: Migration[] = [
       "INSERT OR IGNORE INTO settings (key, value) VALUES ('pay_period_start_day', '1')",
     ],
   },
+  {
+    version: 24,
+    up: [
+      // Widget iteration 1 — per-project note numbering. The tally lives in a
+      // join table (multi-project-ready: a note could later be Banana #5 AND
+      // Pudding #1); entries.project_id remains the single primary project.
+      // next_tally never decrements — deleting Banana #5 burns #5 forever.
+      'ALTER TABLE projects ADD COLUMN next_tally INTEGER NOT NULL DEFAULT 1',
+      `CREATE TABLE IF NOT EXISTS entry_projects (
+        entry_id   INTEGER NOT NULL REFERENCES entries(id) ON DELETE CASCADE,
+        project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        tally      INTEGER NOT NULL,
+        PRIMARY KEY (entry_id, project_id)
+      )`,
+      'CREATE INDEX IF NOT EXISTS idx_entry_projects_project ON entry_projects(project_id)',
+      // Backfill: number every existing project note by creation order.
+      `INSERT INTO entry_projects (entry_id, project_id, tally)
+       SELECT id, project_id,
+              ROW_NUMBER() OVER (PARTITION BY project_id ORDER BY created_at, id)
+         FROM entries
+        WHERE project_id IS NOT NULL`,
+      `UPDATE projects
+          SET next_tally = COALESCE(
+            (SELECT MAX(tally) + 1 FROM entry_projects WHERE project_id = projects.id), 1)`,
+    ],
+  },
 ];

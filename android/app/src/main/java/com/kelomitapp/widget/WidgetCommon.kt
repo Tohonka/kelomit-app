@@ -14,6 +14,8 @@ import java.time.Instant
 
 /** Broadcast action a widget fires to start/stop the session. */
 const val ACTION_TOGGLE = "com.kelomitapp.widget.ACTION_TOGGLE"
+/** Broadcast action the full widget's pause/resume button fires. */
+const val ACTION_PAUSE_RESUME = "com.kelomitapp.widget.ACTION_PAUSE_RESUME"
 const val EXTRA_WIDGET_ID = "com.kelomitapp.widget.WIDGET_ID"
 
 /**
@@ -25,6 +27,7 @@ object WidgetCommon {
 
   /** Re-render every placed widget of either flavour. Safe to call from RN. */
   fun updateAll(context: Context) {
+    TimerNotification.sync(context)
     val mgr = AppWidgetManager.getInstance(context) ?: return
     for (id in mgr.getAppWidgetIds(ComponentName(context, SessionWidgetProvider::class.java))) {
       mgr.updateAppWidget(id, buildFull(context, id))
@@ -50,7 +53,7 @@ object WidgetCommon {
     )
   }
 
-  private fun openAppPendingIntent(context: Context): PendingIntent {
+  internal fun openAppPendingIntent(context: Context): PendingIntent {
     val intent = Intent(context, MainActivity::class.java).apply {
       flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
     }
@@ -62,15 +65,43 @@ object WidgetCommon {
     )
   }
 
-  /** Milliseconds the active session has been running, or null if idle. */
-  private fun elapsedMillis(active: JSONObject?): Long? {
-    val startedAt = active?.optString("started_at") ?: return null
-    return try {
-      val startMs = Instant.parse(startedAt).toEpochMilli()
-      (System.currentTimeMillis() - startMs).coerceAtLeast(0)
-    } catch (e: Exception) {
-      null
+  /** PendingIntent that fires [ACTION_PAUSE_RESUME] for a specific widget. */
+  fun pausePendingIntent(context: Context, appWidgetId: Int): PendingIntent {
+    val intent = Intent(context, SessionWidgetProvider::class.java).apply {
+      action = ACTION_PAUSE_RESUME
+      putExtra(EXTRA_WIDGET_ID, appWidgetId)
+      data = android.net.Uri.parse("kelomit://widget-pause/$appWidgetId")
     }
+    return PendingIntent.getBroadcast(
+      context,
+      1_000_000 + appWidgetId,
+      intent,
+      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    )
+  }
+
+  fun isPaused(active: JSONObject?): Boolean =
+    active != null && !active.isNull("paused_at") && active.optString("paused_at").isNotEmpty()
+
+  /**
+   * Reads a "name" field the way it's written (`opt("name") ?: JSONObject.NULL`).
+   * Android's org.json `optString` has no NULL check: `JSONObject.NULL` is not Java
+   * null, so it flows through `String.valueOf(NULL)` and comes back as the literal
+   * string "null" — which is not blank, so it survives a plain `isNotBlank()` filter.
+   * Gate on `isNull` first, same as the pause guard already does for `paused_at`.
+   */
+  internal fun optName(o: JSONObject?): String? =
+    o?.takeIf { !it.isNull("name") }?.optString("name")?.takeIf { it.isNotBlank() }
+
+  /** Total tracked ms: closed segments + running one. Pauses excluded. */
+  fun totalElapsedMillis(active: JSONObject?): Long? {
+    if (active == null) return null
+    val acc = active.optLong("accumulated_ms", 0L)
+    if (isPaused(active)) return acc
+    val startMs = runCatching {
+      Instant.parse(active.optString("started_at")).toEpochMilli()
+    }.getOrNull() ?: return acc
+    return acc + (System.currentTimeMillis() - startMs).coerceAtLeast(0)
   }
 
   private fun activeJson(context: Context): JSONObject? =
@@ -81,29 +112,49 @@ object WidgetCommon {
   fun buildFull(context: Context, appWidgetId: Int): RemoteViews {
     val views = RemoteViews(context.packageName, R.layout.widget_session)
     val active = activeJson(context)
-    val running = active != null
-    val elapsed = elapsedMillis(active)
+    val total = totalElapsedMillis(active)
+    val paused = isPaused(active)
+    val cfg = SessionStore.getConfig(context, appWidgetId)
+      ?.let { runCatching { JSONObject(it) }.getOrNull() }
+    val configName = optName(cfg)
+    // Each widget keeps its own identity: only the widget that STARTED the
+    // session renders the running state. Every other widget stays idle with its
+    // own name, and tapping its Start switches tasks (see SessionStore.toggle).
+    val owns = active != null && SessionStore.ownerWidgetId(active) == appWidgetId
 
-    if (running && elapsed != null) {
-      // Chronometer counts up on its own — no periodic widget updates needed.
-      val base = SystemClock.elapsedRealtime() - elapsed
-      views.setChronometer(R.id.widget_chrono, base, null, true)
+    if (owns && total != null) {
+      val base = SystemClock.elapsedRealtime() - total
+      views.setChronometer(R.id.widget_chrono, base, null, !paused)
       views.setViewVisibility(R.id.widget_chrono, android.view.View.VISIBLE)
       views.setViewVisibility(R.id.widget_idle_label, android.view.View.GONE)
       views.setTextViewText(R.id.widget_button, context.getString(R.string.widget_stop))
-      views.setTextViewText(R.id.widget_status, context.getString(R.string.widget_tracking))
+      views.setTextViewText(
+        R.id.widget_status,
+        optName(active) ?: context.getString(
+          if (paused) R.string.widget_paused else R.string.widget_tracking),
+      )
+      views.setViewVisibility(R.id.widget_pause_button, android.view.View.VISIBLE)
+      views.setTextViewText(
+        R.id.widget_pause_button,
+        context.getString(if (paused) R.string.widget_resume else R.string.widget_pause),
+      )
     } else {
       views.setChronometer(R.id.widget_chrono, SystemClock.elapsedRealtime(), null, false)
       views.setViewVisibility(R.id.widget_chrono, android.view.View.GONE)
       views.setViewVisibility(R.id.widget_idle_label, android.view.View.VISIBLE)
       views.setTextViewText(R.id.widget_button, context.getString(R.string.widget_start))
-      views.setTextViewText(R.id.widget_status, context.getString(R.string.widget_title))
+      views.setTextViewText(
+        R.id.widget_status,
+        configName ?: context.getString(R.string.widget_title),
+      )
+      views.setViewVisibility(R.id.widget_pause_button, android.view.View.GONE)
     }
 
     views.setOnClickPendingIntent(
       R.id.widget_button,
       togglePendingIntent(context, SessionWidgetProvider::class.java, appWidgetId),
     )
+    views.setOnClickPendingIntent(R.id.widget_pause_button, pausePendingIntent(context, appWidgetId))
     views.setOnClickPendingIntent(R.id.widget_root, openAppPendingIntent(context))
     return views
   }
@@ -112,14 +163,20 @@ object WidgetCommon {
 
   fun buildToggle(context: Context, appWidgetId: Int): RemoteViews {
     val views = RemoteViews(context.packageName, R.layout.widget_session_toggle)
-    val running = SessionStore.getActive(context) != null
+    // Same per-widget identity rule as buildFull: active-look only on the owner.
+    val running =
+      SessionStore.ownerWidgetId(activeJson(context)) == appWidgetId
     views.setImageViewResource(
       R.id.widget_toggle_icon,
       if (running) R.drawable.ic_widget_stop else R.drawable.ic_widget_play,
     )
+    val cfgName = optName(
+      SessionStore.getConfig(context, appWidgetId)?.let { runCatching { JSONObject(it) }.getOrNull() },
+    )
     views.setTextViewText(
       R.id.widget_toggle_label,
-      context.getString(if (running) R.string.widget_stop else R.string.widget_start),
+      if (running) context.getString(R.string.widget_stop)
+      else cfgName ?: context.getString(R.string.widget_start),
     )
     views.setInt(
       R.id.widget_toggle_root,

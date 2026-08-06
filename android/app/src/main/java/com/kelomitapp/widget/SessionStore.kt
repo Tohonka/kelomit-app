@@ -1,6 +1,8 @@
 package com.kelomitapp.widget
 
+import android.appwidget.AppWidgetManager
 import android.content.Context
+import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.Instant
@@ -12,9 +14,13 @@ import java.time.Instant
  * RN is NOT running — that's the whole point of keeping it native.
  *
  * Shapes mirror the JS side (`src/types ActiveSession`, `src/native/widgetSession`):
- *   active  = { started_at, project_id, activity_type, tags[], title, source }
- *   pending = [ { started_at, ended_at, project_id, activity_type, tags[], title } ]
- *   config  = { project_id, activity_type, tags[] }   (per appWidgetId)
+ *   active  = { started_at, project_id, activity_type, tags[], title, source,
+ *               name, accumulated_ms, paused_at }
+ *   pending = [ { started_at, ended_at, project_id, activity_type, tags[], title, name } ]
+ *   config  = { project_id, activity_type, tags[], name }   (per appWidgetId)
+ *
+ * name/accumulated_ms/paused_at are absent on a session persisted by an older
+ * build — always read them with opt*, never assume they exist.
  *
  * On stop the finished session is pushed to `pending`; the app drains that queue
  * into a normal note entry the next time it runs.
@@ -83,20 +89,45 @@ object SessionStore {
   // ── Toggle (called from a widget tap, RN may be dead) ───────────────────────
 
   /**
-   * Start or stop the single global session. Starting pulls project/activity/tags
-   * from the tapping widget's config (if any). Returns true if a session is now
-   * running, false if it was just stopped (and queued for draining).
+   * Start, stop, or switch the single global session from a widget tap.
+   * Each widget has its own identity: tapping the widget that OWNS the running
+   * session stops it; tapping a different widget switches — the running segment
+   * is closed (logged with its own name/tally) and this widget's session starts
+   * in the same tap. An INVALID_APPWIDGET_ID (the notification's Stop action)
+   * can only ever stop, never start — so a stale notification tap can't spawn
+   * an unconfigured session. Returns true if a session is now running.
    */
   fun toggle(context: Context, appWidgetId: Int): Boolean {
     val active = getActive(context)
-    return if (active != null) {
-      stopInternal(context, active)
-      false
-    } else {
+    if (active == null) {
+      if (appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
+        return false
+      }
       startInternal(context, appWidgetId)
-      true
+      return true
     }
+    val json = runCatching { JSONObject(active) }.getOrNull()
+    // Close the running session: a paused one already logged its segment at
+    // pause time, a running one logs it now.
+    if (json != null && !json.isNull("paused_at") && json.optString("paused_at").isNotEmpty()) {
+      clearActive(context)
+    } else {
+      stopInternal(context, active)
+    }
+    val ownerId = ownerWidgetId(json)
+    if (appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID && appWidgetId != ownerId) {
+      // Tap on a non-owning widget = switch tasks, not plain stop.
+      startInternal(context, appWidgetId)
+      return true
+    }
+    return false
   }
+
+  /** Which widget started this session, or INVALID for in-app/legacy sessions. */
+  fun ownerWidgetId(active: JSONObject?): Int =
+    active?.takeIf { !it.isNull("widget_id") }
+      ?.optInt("widget_id", AppWidgetManager.INVALID_APPWIDGET_ID)
+      ?: AppWidgetManager.INVALID_APPWIDGET_ID
 
   private fun startInternal(context: Context, appWidgetId: Int) {
     val cfg = getConfig(context, appWidgetId)?.let { runCatching { JSONObject(it) }.getOrNull() }
@@ -107,6 +138,10 @@ object SessionStore {
       put("tags", cfg?.optJSONArray("tags") ?: JSONArray())
       put("title", JSONObject.NULL)
       put("source", "widget")
+      put("name", cfg?.opt("name") ?: JSONObject.NULL)
+      put("widget_id", appWidgetId)
+      put("accumulated_ms", 0L)
+      put("paused_at", JSONObject.NULL)
     }
     setActive(context, session.toString())
   }
@@ -114,16 +149,70 @@ object SessionStore {
   private fun stopInternal(context: Context, activeJson: String) {
     val active = runCatching { JSONObject(activeJson) }.getOrNull()
     if (active != null) {
-      val completed = JSONObject().apply {
-        put("started_at", active.optString("started_at"))
-        put("ended_at", Instant.now().toString())
-        put("project_id", active.opt("project_id") ?: JSONObject.NULL)
-        put("activity_type", active.optString("activity_type", "work"))
-        put("tags", active.optJSONArray("tags") ?: JSONArray())
-        put("title", active.opt("title") ?: JSONObject.NULL)
+      val startedMs = runCatching {
+        Instant.parse(active.optString("started_at")).toEpochMilli()
+      }.getOrNull()
+      val now = Instant.now()
+      // Drop segments under MIN_SESSION_SECONDS, same as src/services/sessionService.ts
+      // stopSession — mirrors the pauseResume guard above. An unparseable started_at
+      // can't be measured, so fall back to keeping it (the pre-guard behaviour).
+      val segmentMs = startedMs?.let { (now.toEpochMilli() - it).coerceAtLeast(0) }
+      if (segmentMs == null || segmentMs >= 1000L) {
+        val completed = JSONObject().apply {
+          put("started_at", active.optString("started_at"))
+          put("ended_at", now.toString())
+          put("project_id", active.opt("project_id") ?: JSONObject.NULL)
+          put("activity_type", active.optString("activity_type", "work"))
+          put("tags", active.optJSONArray("tags") ?: JSONArray())
+          put("title", active.opt("title") ?: JSONObject.NULL)
+          put("name", active.opt("name") ?: JSONObject.NULL)
+        }
+        pushPending(context, completed)
       }
-      pushPending(context, completed)
     }
     clearActive(context)
+  }
+
+  /** Pause a running session (segment → pending) or resume a paused one. */
+  fun pauseResume(context: Context) {
+    val raw = getActive(context) ?: return
+    val active = runCatching { JSONObject(raw) }.getOrNull() ?: return
+    val paused = !active.isNull("paused_at") && active.optString("paused_at").isNotEmpty()
+    if (paused) {
+      active.put("started_at", Instant.now().toString())
+      active.put("paused_at", JSONObject.NULL)
+    } else {
+      val startedMs = runCatching {
+        Instant.parse(active.optString("started_at")).toEpochMilli()
+      }.getOrNull()
+      if (startedMs == null) {
+        // Unparseable started_at: bail with no state change rather than pause into
+        // a broken segment. Logged so a stuck pause button is diagnosable on device.
+        Log.w("KelomitWidget", "pauseResume: unparseable started_at, ignoring tap")
+        return
+      }
+      // Single clock read for this whole pause: segment length, ended_at and
+      // paused_at must all agree to the millisecond.
+      val now = Instant.now()
+      val segmentMs = (now.toEpochMilli() - startedMs).coerceAtLeast(0)
+      // Drop segments under MIN_SESSION_SECONDS, same as src/services/sessionService.ts
+      // pauseSession — but still fold the elapsed time into accumulated_ms below.
+      if (segmentMs >= 1000L) {
+        // Same shape stopInternal pushes — the app drains it into a note.
+        val completed = JSONObject().apply {
+          put("started_at", active.optString("started_at"))
+          put("ended_at", now.toString())
+          put("project_id", active.opt("project_id") ?: JSONObject.NULL)
+          put("activity_type", active.optString("activity_type", "work"))
+          put("tags", active.optJSONArray("tags") ?: JSONArray())
+          put("title", active.opt("title") ?: JSONObject.NULL)
+          put("name", active.opt("name") ?: JSONObject.NULL)
+        }
+        pushPending(context, completed)
+      }
+      active.put("accumulated_ms", active.optLong("accumulated_ms", 0L) + segmentMs)
+      active.put("paused_at", now.toString())
+    }
+    setActive(context, active.toString())
   }
 }

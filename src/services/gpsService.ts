@@ -120,27 +120,33 @@ export function getLastKnownPosition(): KnownPosition | null {
 
 export type GeofenceDetection = 'work' | 'home' | 'other' | 'unknown';
 
+/** Pure: which kind of saved place contains `pos` (work > home > other). */
+export function detectionFromPosition(
+  pos: {latitude: number; longitude: number} | null,
+  places: SavedLocation[],
+): GeofenceDetection {
+  if (!pos) {
+    return 'unknown';
+  }
+  const insideKinds = places
+    .filter(loc => distanceMeters(pos.latitude, pos.longitude, loc.latitude, loc.longitude) <= loc.radius_m)
+    .map(loc => loc.kind);
+  if (insideKinds.includes('work')) { return 'work'; }
+  if (insideKinds.includes('home')) { return 'home'; }
+  if (insideKinds.includes('other')) { return 'other'; }
+  return 'unknown';
+}
+
 /**
  * Which kind of saved place we're currently inside, for the Home-screen
- * "Where am I?" label. Reads live geofence membership (`_insideIds`), advanced
- * by the live-fix producer while the app is foreground. This is a best-effort
- * live indicator only — the authoritative arrive/leave record is the persisted
- * crossing store. 'unknown' right after launch until the first fix.
+ * "Where am I?" label. Derived from the last known fix + saved-place radii —
+ * NOT from `_insideIds`, which only advances when JS owns tracking (it never
+ * does under the native-primary service, which made this label stick on
+ * Unknown). Best-effort live indicator; the authoritative arrive/leave record
+ * is the persisted crossing store. 'unknown' until the first fix.
  */
 export function getCurrentGeofenceDetection(): GeofenceDetection {
-  const insideKinds = _geofences
-    .filter(loc => _insideIds.has(loc.id))
-    .map(loc => loc.kind);
-  if (insideKinds.includes('work')) {
-    return 'work';
-  }
-  if (insideKinds.includes('home')) {
-    return 'home';
-  }
-  if (insideKinds.includes('other')) {
-    return 'other';
-  }
-  return 'unknown';
+  return detectionFromPosition(_lastPosition, _geofences);
 }
 
 /** Reload saved geofence locations into memory. Call after editing locations. */

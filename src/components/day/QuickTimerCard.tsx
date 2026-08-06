@@ -22,7 +22,7 @@ import {useProjectStore} from '../../store/projectStore';
 import {useEntryStore} from '../../store/entryStore';
 import {useTheme, typography, spacing, radius} from '../../theme';
 import type {Colors} from '../../theme';
-import {elapsedSeconds} from '../../services/sessionLogic';
+import {sessionElapsedMs} from '../../services/sessionLogic';
 import {formatTime} from '../../utils/dateUtils';
 import {haptic, HAPTIC_START, HAPTIC_SAVE, HAPTIC_CANCEL} from '../../utils/haptics';
 import ProjectPicker from '../entries/ProjectPicker';
@@ -203,7 +203,7 @@ export default function QuickTimerCard() {
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
-  const {active, loaded, load, start, stop, cancel} = useSessionStore();
+  const {active, loaded, load, start, stop, cancel, pause, resume} = useSessionStore();
   const {
     loaded: settingsLoaded,
     quickadd_default_activity,
@@ -242,7 +242,7 @@ export default function QuickTimerCard() {
   }, [settingsLoaded, active, quickadd_default_activity, quickadd_default_project_id]);
 
   useEffect(() => {
-    if (!active) { return; }
+    if (!active || active.paused_at) { return; }
     const id = setInterval(() => setTick(n => n + 1), 1000);
     return () => clearInterval(id);
   }, [active]);
@@ -320,12 +320,12 @@ export default function QuickTimerCard() {
 
   // ── Running ──────────────────────────────────────────────────────────────
   if (active) {
-    const seconds = elapsedSeconds(active.started_at);
+    const seconds = Math.floor(sessionElapsedMs(active) / 1000);
     return (
       <View style={styles.glowWrap}>
         <Animated.View style={[styles.glow, glowStyle]} pointerEvents="none" />
         <Animated.View style={[styles.card, styles.cardRunningSolid, styles.cardRunningInner, cardScaleStyle]}>
-          <Text style={[styles.title, styles.titleInverted]}>{t('timer.tracking')}</Text>
+          <Text style={[styles.title, styles.titleInverted]}>{t(active.paused_at ? 'timer.paused' : 'timer.tracking')}</Text>
           <Text style={[styles.clock, styles.clockInverted]}>{formatClock(seconds)}</Text>
           <Text style={[styles.runningTarget, styles.runningTargetInverted]}>
             {active.title
@@ -341,6 +341,30 @@ export default function QuickTimerCard() {
               onPress={handleStop}
               disabled={busy}>
               <Text style={[styles.stopBtnText, {color: colors.primary}]}>{t('timer.stop')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.cancelBtn, styles.cancelBtnInverted]}
+              onPress={async () => {
+                if (busy) { return; }
+                setBusy(true);
+                try {
+                  if (active.paused_at) {
+                    await resume();
+                  } else {
+                    const result = await pause();
+                    if (result.dayId != null) { await loadEntriesForDay(result.dayId); }
+                  }
+                  haptic(HAPTIC_START);
+                } catch (e) {
+                  Alert.alert(t('common.error'), String(e));
+                } finally {
+                  setBusy(false);
+                }
+              }}
+              disabled={busy}>
+              <Text style={[styles.cancelBtnText, styles.cancelBtnTextInverted]}>
+                {t(active.paused_at ? 'timer.resume' : 'timer.pause')}
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.cancelBtn, styles.cancelBtnInverted]} onPress={handleCancel} disabled={busy}>
               <Text style={[styles.cancelBtnText, styles.cancelBtnTextInverted]}>{t('timer.cancelTimer')}</Text>

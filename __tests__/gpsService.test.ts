@@ -218,3 +218,38 @@ it('keeps buffered lines acknowledged when a route refresh fails', async () => {
   expect(mockAckFixBuffer).toHaveBeenCalledWith(1);
   expect(mockRefreshRouteDay).toHaveBeenCalledWith(1);
 });
+
+// Tests for detectionFromPosition
+import {detectionFromPosition} from '../src/services/gpsService';
+import type {SavedLocation} from '../src/types';
+
+const place = (over: Partial<SavedLocation>): SavedLocation => ({
+  id: 1, name: 'x', kind: 'work', latitude: 60.45, longitude: 22.26,
+  radius_m: 150, created_at: '', updated_at: '', ...over,
+});
+
+describe('detectionFromPosition', () => {
+  it('returns the kind of the place containing the position', () => {
+    const pos = {latitude: 60.45, longitude: 22.26};
+    expect(detectionFromPosition(pos, [place({kind: 'work'})])).toBe('work');
+  });
+
+  it('prefers work over home when inside both', () => {
+    const pos = {latitude: 60.45, longitude: 22.26};
+    expect(
+      detectionFromPosition(pos, [
+        place({id: 2, kind: 'home'}),
+        place({id: 1, kind: 'work'}),
+      ]),
+    ).toBe('work');
+  });
+
+  it('returns unknown outside every radius', () => {
+    const pos = {latitude: 60.46, longitude: 22.28}; // ~1.5 km away
+    expect(detectionFromPosition(pos, [place({kind: 'work'})])).toBe('unknown');
+  });
+
+  it('returns unknown with no position', () => {
+    expect(detectionFromPosition(null, [place({})])).toBe('unknown');
+  });
+});

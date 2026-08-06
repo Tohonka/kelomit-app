@@ -48,3 +48,30 @@ export function sessionToEntryParams(input: SessionEntryInput): CreateEntryParam
     tagIds,
   };
 }
+
+/** Total tracked work ms: closed segments + the running one. Pauses excluded. */
+export function sessionElapsedMs(session: ActiveSession, now: Date = new Date()): number {
+  const acc = session.accumulated_ms ?? 0;
+  if (session.paused_at) {
+    return acc;
+  }
+  return acc + elapsedSeconds(session.started_at, now) * 1000;
+}
+
+/**
+ * Timer-note title: "<name> #<tally>" for project notes, "<name> <HH:MM>"
+ * otherwise, null when there's nothing to build from (caller falls back to the
+ * i18n "Timer note" title). `name` falls back to the project name.
+ */
+export function formatTimerTitle(input: {
+  name: string | null;
+  projectName: string | null;
+  tally: number | null;
+  timeLabel: string;
+}): string | null {
+  const name = input.name?.trim() || input.projectName?.trim() || null;
+  if (!name) {
+    return null;
+  }
+  return input.tally != null ? `${name} #${input.tally}` : `${name} ${input.timeLabel}`;
+}

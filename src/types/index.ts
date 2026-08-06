@@ -44,6 +44,9 @@ export interface Entry {
   entry_type: EntryType;
   activity_type: ActivityType;
   project_id: number | null;
+  /** Per-project note number (entry_projects join). Null when no project, or
+   *  in read paths that don't fetch it (search, gallery, todos). */
+  tally: number | null;
   title: string | null;
   body: string | null;
   file_path: string | null;
@@ -107,6 +110,16 @@ export interface ActiveSession {
   title: string | null;
   /** Where the session was started from. */
   source: 'timer' | 'widget';
+  /** Display name from the starting widget/config (falls back to project name
+   *  in titles). Optional: sessions persisted before iteration W1 lack it. */
+  name?: string | null;
+  /** Work ms from segments already closed by pause. Absent = 0. */
+  accumulated_ms?: number;
+  /** Set while paused (ISO); null/absent = running. */
+  paused_at?: string | null;
+  /** appWidgetId of the widget that started this session; null/absent for
+   *  in-app sessions. Only the owning widget renders the running state. */
+  widget_id?: number | null;
 }
 
 export type LocationKind = 'work' | 'home' | 'other';

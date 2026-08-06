@@ -20,10 +20,16 @@ class SessionWidgetProvider : AppWidgetProvider() {
 
   override fun onReceive(context: Context, intent: Intent) {
     super.onReceive(context, intent)
-    if (intent.action == ACTION_TOGGLE) {
-      val id = intent.getIntExtra(EXTRA_WIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
-      SessionStore.toggle(context, id)
-      WidgetCommon.updateAll(context)
+    when (intent.action) {
+      ACTION_TOGGLE -> {
+        val id = intent.getIntExtra(EXTRA_WIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
+        SessionStore.toggle(context, id)
+        WidgetCommon.updateAll(context)
+      }
+      ACTION_PAUSE_RESUME -> {
+        SessionStore.pauseResume(context)
+        WidgetCommon.updateAll(context)
+      }
     }
   }
 

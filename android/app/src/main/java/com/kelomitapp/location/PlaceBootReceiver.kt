@@ -6,6 +6,10 @@ import android.content.Intent
 
 class PlaceBootReceiver : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {
+    // Self-heal the timer notification: if a session was running when the
+    // device rebooted, the notification is gone until some transition fires —
+    // repost it here so it doesn't wait on the app being opened.
+    com.kelomitapp.widget.TimerNotification.sync(context)
     if (!NativeTrackingSettings(context).enabled) return
     val pending = goAsync()
     PlaceMonitor.sync(context).addOnCompleteListener { task ->

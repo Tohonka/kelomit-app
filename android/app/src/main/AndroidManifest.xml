@@ -70,6 +70,7 @@
         <intent-filter>
           <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
           <action android:name="com.kelomitapp.widget.ACTION_TOGGLE" />
+          <action android:name="com.kelomitapp.widget.ACTION_PAUSE_RESUME" />
         </intent-filter>
         <meta-data
           android:name="android.appwidget.provider"

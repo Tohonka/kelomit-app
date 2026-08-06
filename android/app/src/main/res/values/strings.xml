@@ -5,10 +5,15 @@
     <string name="widget_start">Start</string>
     <string name="widget_stop">Stop</string>
     <string name="widget_tracking">Tracking…</string>
+    <string name="widget_pause">Pause</string>
+    <string name="widget_resume">Resume</string>
+    <string name="widget_paused">Paused</string>
     <string name="widget_full_label">Kelomit timer</string>
     <string name="widget_full_description">Start/stop a work session with a live timer.</string>
     <string name="widget_toggle_label">Kelomit toggle</string>
     <string name="widget_toggle_description">One-tap start/stop for a configured project.</string>
+    <string name="timer_notification_channel">Timer</string>
+    <string name="timer_notification_paused">Paused · %1$s</string>
     <!-- Background-location foreground service -->
     <string name="location_channel_name">Location tracking</string>
     <string name="location_service_title">Kelomit is tracking location</string>

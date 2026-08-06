@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  Alert,
+  AppState,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useProjectStore} from '../../store/projectStore';
@@ -17,6 +19,7 @@ import {
   isWidgetBridgeAvailable,
   nativeGetWidgets,
   nativeSetWidgetConfig,
+  nativeRequestPinWidget,
   type WidgetConfig,
   type WidgetInfo,
 } from '../../native/widgetSession';
@@ -32,6 +35,7 @@ const defaultConfig = (): WidgetConfig => ({
   project_id: null,
   activity_type: 'work',
   tags: [],
+  name: null,
 });
 
 const makeStyles = (c: Colors) =>
@@ -108,6 +112,20 @@ const makeStyles = (c: Colors) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
+    addRow: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+      paddingHorizontal: spacing.lg,
+      marginTop: spacing.md,
+    },
+    addBtn: {
+      flex: 1,
+      minHeight: 48,
+      borderRadius: radius.md,
+      backgroundColor: c.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
     saveBtnText: {
       fontSize: typography.sizes.base,
       fontWeight: typography.weights.semibold,
@@ -163,6 +181,23 @@ export default function WidgetSettings() {
     if (available) { refresh().catch(() => {}); }
   }, [projectsLoaded, loadProjects, available, refresh]);
 
+  // The pin flow hands off to the launcher's overlay; refresh on return so a
+  // freshly placed widget appears in the list without leaving the screen.
+  useEffect(() => {
+    if (!available) { return; }
+    const sub = AppState.addEventListener('change', state => {
+      if (state === 'active') { refresh().catch(() => {}); }
+    });
+    return () => sub.remove();
+  }, [available, refresh]);
+
+  const handleAddWidget = async (type: 'full' | 'toggle') => {
+    const ok = await nativeRequestPinWidget(type).catch(() => false);
+    if (!ok) {
+      Alert.alert(t('widgets.pinUnsupportedTitle'), t('widgets.pinUnsupported'));
+    }
+  };
+
   const update = (id: number, patch: Partial<WidgetConfig>) =>
     setConfigs(prev => ({...prev, [id]: {...prev[id], ...patch}}));
 
@@ -172,9 +207,9 @@ export default function WidgetSettings() {
       .split(',')
       .map(s => s.trim())
       .filter(Boolean);
-    const toSave: WidgetConfig = {...cfg, tags};
+    const toSave: WidgetConfig = {...cfg, tags, name: cfg.name?.trim() || null};
     await nativeSetWidgetConfig(id, toSave);
-    update(id, {tags});
+    update(id, {tags, name: toSave.name});
     setSavedId(id);
     setTimeout(() => setSavedId(s => (s === id ? null : s)), 1500);
   };
@@ -183,6 +218,17 @@ export default function WidgetSettings() {
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.intro}>{t('widgets.intro')}</Text>
+
+        {available && (
+          <View style={styles.addRow}>
+            <TouchableOpacity style={styles.addBtn} onPress={() => handleAddWidget('full')}>
+              <Text style={styles.saveBtnText}>{t('widgets.addFull')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.addBtn} onPress={() => handleAddWidget('toggle')}>
+              <Text style={styles.saveBtnText}>{t('widgets.addToggle')}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {(!available || widgets.length === 0) && (
           <View style={styles.empty}>
@@ -199,6 +245,16 @@ export default function WidgetSettings() {
               <Text style={styles.widgetTitle}>
                 {t(w.type === 'full' ? 'widgets.typeFull' : 'widgets.typeToggle')}
               </Text>
+
+              <Text style={styles.label}>{t('widgets.name')}</Text>
+              <TextInput
+                style={styles.input}
+                value={cfg.name ?? ''}
+                onChangeText={txt => update(w.appWidgetId, {name: txt})}
+                placeholder={t('widgets.namePlaceholder')}
+                placeholderTextColor={colors.textMuted}
+                maxLength={40}
+              />
 
               <Text style={styles.label}>{t('entries.activity')}</Text>
               <View style={styles.activityRow}>
