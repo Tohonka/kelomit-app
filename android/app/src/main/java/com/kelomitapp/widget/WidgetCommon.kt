@@ -34,6 +34,7 @@ object WidgetCommon {
     for (id in mgr.getAppWidgetIds(ComponentName(context, SessionToggleWidgetProvider::class.java))) {
       mgr.updateAppWidget(id, buildToggle(context, id))
     }
+    TimerNotification.sync(context)
   }
 
   /** PendingIntent that fires [ACTION_TOGGLE] for a specific widget. */
@@ -89,7 +90,7 @@ object WidgetCommon {
    * string "null" — which is not blank, so it survives a plain `isNotBlank()` filter.
    * Gate on `isNull` first, same as the pause guard already does for `paused_at`.
    */
-  private fun optName(o: JSONObject?): String? =
+  internal fun optName(o: JSONObject?): String? =
     o?.takeIf { !it.isNull("name") }?.optString("name")?.takeIf { it.isNotBlank() }
 
   /** Total tracked ms: closed segments + running one. Pauses excluded. */
