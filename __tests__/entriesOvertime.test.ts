@@ -12,7 +12,7 @@ beforeEach(() => {
     if (sql.includes('INSERT INTO entries')) {
       return {rows: [{id: 1}]};
     }
-    if (sql.includes('SELECT * FROM entries WHERE id')) {
+    if (sql.includes('FROM entries e') && sql.includes('WHERE e.id')) {
       return {
         rows: [{
           id: 1,
