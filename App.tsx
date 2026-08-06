@@ -1,5 +1,5 @@
 import React, {useEffect, useState, useRef} from 'react';
-import {View, Text, StyleSheet, ActivityIndicator, AppState, StatusBar} from 'react-native';
+import {View, Text, StyleSheet, ActivityIndicator, AppState, StatusBar, Linking} from 'react-native';
 import './src/i18n';
 import {useTranslation} from 'react-i18next';
 import type {AppStateStatus} from 'react-native';
@@ -25,6 +25,8 @@ import {useSettingsStore} from './src/store/settingsStore';
 import {useSessionStore} from './src/store/sessionStore';
 import {useTheme, lightColors, typography} from './src/theme';
 import RootNavigator from './src/navigation/RootNavigator';
+import {navigationRef} from './src/navigation/navigationRef';
+import {handleDeepLink, flushPendingDeepLink} from './src/services/deepLinks';
 
 // Defer GPS startup off the critical launch path so location init doesn't
 // compete with the first render / DB warm-up. Foreground-resume start stays
@@ -62,6 +64,15 @@ function AppContent() {
       })
       .catch(e => setError(String(e)));
   }, [load]);
+
+  // Widget deep links (kelomit://quickadd/<type>): cold start + warm delivery.
+  useEffect(() => {
+    Linking.getInitialURL().then(handleDeepLink).catch(() => {});
+    const sub = Linking.addEventListener('url', e => {
+      handleDeepLink(e.url).catch(() => {});
+    });
+    return () => sub.remove();
+  }, []);
 
   useEffect(() => {
     if (!dbReady || !loaded) {
@@ -156,7 +167,7 @@ function AppContent() {
         barStyle={isDark ? 'light-content' : 'dark-content'}
         backgroundColor={colors.bg}
       />
-      <NavigationContainer>
+      <NavigationContainer ref={navigationRef} onReady={flushPendingDeepLink}>
         <RootNavigator />
       </NavigationContainer>
     </>

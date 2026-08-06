@@ -60,6 +60,14 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent-filter>
+        <!-- kelomit://quickadd/<note|photo|voice> — home-screen add-note widget
+             opens straight into quick-add (Task 1 of the widget iteration). -->
+        <intent-filter>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.DEFAULT" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="kelomit" />
+        </intent-filter>
       </activity>
 
       <!-- Home-screen session widgets (Iteration 3 Phase 9.2). ACTION_TOGGLE is
