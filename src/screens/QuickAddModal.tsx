@@ -100,19 +100,21 @@ export default function QuickAddModal({navigation, route}: Props) {
     }
   }, [autoCapture, entryType]);
 
-  // Clear the route's `autoCapture` flag once the auto-action above (photo) or
-  // below (voice, via the autoStartVoice prop) has been kicked off. The param
-  // otherwise stays `true` for the rest of the screen's life, so any *later*
-  // VoiceRecorder remount — after a discard, or tapping the mic again — would
-  // see the same live flag and auto-record again, with no way to reach the
-  // idle recorder. React commits child effects before parent effects, and
-  // AttachmentsSection's initial recording state already latched autoStartVoice
-  // in during the first render, so this only ever suppresses *subsequent* mounts.
+  // Widget voice flow: AttachmentsSection latches this into its initial
+  // `recording` state on first render, so the recorder auto-starts once on
+  // arrival. Disarmed here — component-local state, NOT route.params — right
+  // after mount, so a later VoiceRecorder remount (after a discard, or the
+  // user tapping the mic again) sees `autoStart: false` and lands on the idle
+  // "tap to record" state instead of auto-recording again. React commits
+  // child effects before parent effects, so this disarm still runs after
+  // AttachmentsSection's first-render state already captured the `true`.
+  // `route.params.autoCapture` is deliberately left untouched: save-time code
+  // reads it to tell a widget-initiated capture from a manual one, so do NOT
+  // "helpfully" convert this back into `navigation.setParams`.
+  const [voiceAutoStart, setVoiceAutoStart] = useState(autoCapture && entryType === 'voice');
   useEffect(() => {
-    if (autoCapture) {
-      navigation.setParams({autoCapture: false});
-    }
-  }, [autoCapture, navigation]);
+    setVoiceAutoStart(false);
+  }, []);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -145,7 +147,7 @@ export default function QuickAddModal({navigation, route}: Props) {
         media={media}
         onAdd={m => setMedia(prev => [...prev, m])}
         onRemove={i => setMedia(prev => prev.filter((_, idx) => idx !== i))}
-        autoStartVoice={autoCapture && entryType === 'voice'}
+        autoStartVoice={voiceAutoStart}
       />
 
       <Text style={styles.sectionLabel}>{t('entries.title')}</Text>
