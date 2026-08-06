@@ -12,9 +12,13 @@ import java.time.Instant
  * RN is NOT running — that's the whole point of keeping it native.
  *
  * Shapes mirror the JS side (`src/types ActiveSession`, `src/native/widgetSession`):
- *   active  = { started_at, project_id, activity_type, tags[], title, source }
- *   pending = [ { started_at, ended_at, project_id, activity_type, tags[], title } ]
- *   config  = { project_id, activity_type, tags[] }   (per appWidgetId)
+ *   active  = { started_at, project_id, activity_type, tags[], title, source,
+ *               name, accumulated_ms, paused_at }
+ *   pending = [ { started_at, ended_at, project_id, activity_type, tags[], title, name } ]
+ *   config  = { project_id, activity_type, tags[], name }   (per appWidgetId)
+ *
+ * name/accumulated_ms/paused_at are absent on a session persisted by an older
+ * build — always read them with opt*, never assume they exist.
  *
  * On stop the finished session is pushed to `pending`; the app drains that queue
  * into a normal note entry the next time it runs.
@@ -90,7 +94,12 @@ object SessionStore {
   fun toggle(context: Context, appWidgetId: Int): Boolean {
     val active = getActive(context)
     return if (active != null) {
-      stopInternal(context, active)
+      val json = runCatching { JSONObject(active) }.getOrNull()
+      if (json != null && !json.isNull("paused_at") && json.optString("paused_at").isNotEmpty()) {
+        clearActive(context) // segment already landed at pause time
+      } else {
+        stopInternal(context, active)
+      }
       false
     } else {
       startInternal(context, appWidgetId)
@@ -107,6 +116,9 @@ object SessionStore {
       put("tags", cfg?.optJSONArray("tags") ?: JSONArray())
       put("title", JSONObject.NULL)
       put("source", "widget")
+      put("name", cfg?.opt("name") ?: JSONObject.NULL)
+      put("accumulated_ms", 0L)
+      put("paused_at", JSONObject.NULL)
     }
     setActive(context, session.toString())
   }
@@ -121,9 +133,40 @@ object SessionStore {
         put("activity_type", active.optString("activity_type", "work"))
         put("tags", active.optJSONArray("tags") ?: JSONArray())
         put("title", active.opt("title") ?: JSONObject.NULL)
+        put("name", active.opt("name") ?: JSONObject.NULL)
       }
       pushPending(context, completed)
     }
     clearActive(context)
+  }
+
+  /** Pause a running session (segment → pending) or resume a paused one. */
+  fun pauseResume(context: Context) {
+    val raw = getActive(context) ?: return
+    val active = runCatching { JSONObject(raw) }.getOrNull() ?: return
+    val paused = !active.isNull("paused_at") && active.optString("paused_at").isNotEmpty()
+    if (paused) {
+      active.put("started_at", Instant.now().toString())
+      active.put("paused_at", JSONObject.NULL)
+    } else {
+      val startedMs = runCatching {
+        Instant.parse(active.optString("started_at")).toEpochMilli()
+      }.getOrNull() ?: return
+      val segmentMs = (System.currentTimeMillis() - startedMs).coerceAtLeast(0)
+      // Same shape stopInternal pushes — the app drains it into a note.
+      val completed = JSONObject().apply {
+        put("started_at", active.optString("started_at"))
+        put("ended_at", Instant.now().toString())
+        put("project_id", active.opt("project_id") ?: JSONObject.NULL)
+        put("activity_type", active.optString("activity_type", "work"))
+        put("tags", active.optJSONArray("tags") ?: JSONArray())
+        put("title", active.opt("title") ?: JSONObject.NULL)
+        put("name", active.opt("name") ?: JSONObject.NULL)
+      }
+      pushPending(context, completed)
+      active.put("accumulated_ms", active.optLong("accumulated_ms", 0L) + segmentMs)
+      active.put("paused_at", Instant.now().toString())
+    }
+    setActive(context, active.toString())
   }
 }
