@@ -1,5 +1,4 @@
-import {getOrCreateDay} from '../db/days';
-import {localDateOf} from '../utils/dateUtils';
+import {useDayStore} from '../store/dayStore';
 import {navigationRef} from '../navigation/navigationRef';
 
 const QUICKADD_TYPES = ['note', 'photo', 'voice'] as const;
@@ -28,7 +27,7 @@ export async function handleDeepLink(url: string | null): Promise<void> {
     _pending = url;
     return;
   }
-  const day = await getOrCreateDay(localDateOf(new Date().toISOString()));
+  const day = await useDayStore.getState().loadToday();
   navigationRef.navigate('QuickAddModal', {
     dayId: day.id,
     entryType: parsed.entryType,
