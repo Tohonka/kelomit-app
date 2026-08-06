@@ -38,4 +38,13 @@ class SessionWidgetProvider : AppWidgetProvider() {
       SessionStore.removeConfig(context, id)
     }
   }
+
+  override fun onAppWidgetOptionsChanged(
+    context: Context,
+    appWidgetManager: AppWidgetManager,
+    appWidgetId: Int,
+    newOptions: android.os.Bundle,
+  ) {
+    appWidgetManager.updateAppWidget(appWidgetId, WidgetCommon.buildFull(context, appWidgetId))
+  }
 }

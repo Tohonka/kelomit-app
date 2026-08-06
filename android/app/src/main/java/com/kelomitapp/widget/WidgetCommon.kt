@@ -28,6 +28,9 @@ object WidgetCommon {
   /** Below this min-width (dp) widgets drop secondary content. Tune on device. */
   const val COMPACT_WIDTH_DP = 180
 
+  /** Below this min-height (dp) the timer widget drops its status/name line. */
+  const val SHORT_HEIGHT_DP = 90
+
   /** Re-render every placed widget of either flavour. Safe to call from RN. */
   fun updateAll(context: Context) {
     TimerNotification.sync(context)
@@ -114,6 +117,9 @@ object WidgetCommon {
 
   fun buildFull(context: Context, appWidgetId: Int): RemoteViews {
     val views = RemoteViews(context.packageName, R.layout.widget_session)
+    val options = AppWidgetManager.getInstance(context)?.getAppWidgetOptions(appWidgetId)
+    val minWidth = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, Int.MAX_VALUE) ?: Int.MAX_VALUE
+    val minHeight = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, Int.MAX_VALUE) ?: Int.MAX_VALUE
     val active = activeJson(context)
     val total = totalElapsedMillis(active)
     val paused = isPaused(active)
@@ -151,6 +157,15 @@ object WidgetCommon {
         configName ?: context.getString(R.string.widget_title),
       )
       views.setViewVisibility(R.id.widget_pause_button, android.view.View.GONE)
+    }
+
+    // Size-adaptive: narrow drops the pause button, short drops the name line.
+    // Chronometer + Start/Stop always survive.
+    if (minWidth < COMPACT_WIDTH_DP) {
+      views.setViewVisibility(R.id.widget_pause_button, android.view.View.GONE)
+    }
+    if (minHeight < SHORT_HEIGHT_DP) {
+      views.setViewVisibility(R.id.widget_status, android.view.View.GONE)
     }
 
     views.setOnClickPendingIntent(
