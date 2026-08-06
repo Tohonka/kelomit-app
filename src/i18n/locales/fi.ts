@@ -250,8 +250,6 @@ const fi: typeof en = {
     syncFailed: 'Synkronointi epäonnistui: {{error}}',
     syncDone: 'Synkronointi valmis',
     syncSave: 'Tallenna',
-  },
-  tracking: {
     pausedUntil: 'Seuranta tauolla klo {{time}} asti',
     pausedIndefinitely: 'Seuranta tauolla',
     resume: 'Jatka',

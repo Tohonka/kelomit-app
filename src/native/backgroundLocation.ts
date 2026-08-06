@@ -228,19 +228,13 @@ export function subscribeNativeEventAvailable(
 export const INDEFINITE_PAUSE_MS = 2 ** 62;
 
 export async function getTrackingPauseState(): Promise<{pausedUntilMs: number}> {
-  if (!Native) {
-    return {pausedUntilMs: 0};
-  }
-  return Native.getTrackingPauseState();
+  return (await Native?.getTrackingPauseState?.()) ?? {pausedUntilMs: 0};
 }
 
 export async function setTrackingPause(untilMs: number): Promise<void> {
-  await Native?.setTrackingPause(untilMs);
+  await Native?.setTrackingPause?.(untilMs);
 }
 
 export async function expirePauseIfDue(): Promise<{pausedUntilMs: number}> {
-  if (!Native) {
-    return {pausedUntilMs: 0};
-  }
-  return Native.expirePauseIfDue();
+  return (await Native?.expirePauseIfDue?.()) ?? {pausedUntilMs: 0};
 }

@@ -248,8 +248,6 @@ const en = {
     syncFailed: 'Last sync failed: {{error}}',
     syncDone: 'Sync complete',
     syncSave: 'Save',
-  },
-  tracking: {
     pausedUntil: 'Tracking paused until {{time}}',
     pausedIndefinitely: 'Tracking paused',
     resume: 'Resume',
