@@ -57,6 +57,21 @@ describe('titleFromTranscript', () => {
     expect(t).not.toBe('Dr.');
     expect(t).toBe('Dr. Virtanen soitti tapaamisesta ensi viikolla');
   });
+  it('does not title off an abbreviation preceded by filler words', () => {
+    const t = titleFromTranscript('Yeah so like, Corp. tax due soon');
+    expect(t).not.toBe('Yeah so like, Corp.');
+    expect(t).toBe('Yeah so like, Corp. tax due soon');
+  });
+  it('does not title off an abbreviation preceded by more filler words', () => {
+    const t = titleFromTranscript('So basically Dr. Smith called about the roof');
+    expect(t).not.toBe('So basically Dr.');
+    expect(t).toBe('So basically Dr. Smith called about the roof');
+  });
+  it('does not title off the Finnish abbreviation "esim."', () => {
+    const t = titleFromTranscript('No esim. katto pitää korjata ensi viikolla');
+    expect(t).not.toBe('No esim.');
+    expect(t).toBe('No esim. katto pitää korjata ensi viikolla');
+  });
 });
 
 describe('autoTitleVoiceNote', () => {
