@@ -82,6 +82,16 @@ object WidgetCommon {
   fun isPaused(active: JSONObject?): Boolean =
     active != null && !active.isNull("paused_at") && active.optString("paused_at").isNotEmpty()
 
+  /**
+   * Reads a "name" field the way it's written (`opt("name") ?: JSONObject.NULL`).
+   * Android's org.json `optString` has no NULL check: `JSONObject.NULL` is not Java
+   * null, so it flows through `String.valueOf(NULL)` and comes back as the literal
+   * string "null" — which is not blank, so it survives a plain `isNotBlank()` filter.
+   * Gate on `isNull` first, same as the pause guard already does for `paused_at`.
+   */
+  private fun optName(o: JSONObject?): String? =
+    o?.takeIf { !it.isNull("name") }?.optString("name")?.takeIf { it.isNotBlank() }
+
   /** Total tracked ms: closed segments + running one. Pauses excluded. */
   fun totalElapsedMillis(active: JSONObject?): Long? {
     if (active == null) return null
@@ -105,8 +115,8 @@ object WidgetCommon {
     val paused = isPaused(active)
     val cfg = SessionStore.getConfig(context, appWidgetId)
       ?.let { runCatching { JSONObject(it) }.getOrNull() }
-    val configName = cfg?.optString("name")?.takeIf { it.isNotBlank() }
-    val sessionName = active?.optString("name")?.takeIf { it.isNotBlank() }
+    val configName = optName(cfg)
+    val sessionName = optName(active)
 
     if (active != null && total != null) {
       val base = SystemClock.elapsedRealtime() - total
@@ -154,9 +164,9 @@ object WidgetCommon {
       R.id.widget_toggle_icon,
       if (running) R.drawable.ic_widget_stop else R.drawable.ic_widget_play,
     )
-    val cfgName = SessionStore.getConfig(context, appWidgetId)
-      ?.let { runCatching { JSONObject(it) }.getOrNull() }
-      ?.optString("name")?.takeIf { it.isNotBlank() }
+    val cfgName = optName(
+      SessionStore.getConfig(context, appWidgetId)?.let { runCatching { JSONObject(it) }.getOrNull() },
+    )
     views.setTextViewText(
       R.id.widget_toggle_label,
       if (running) context.getString(R.string.widget_stop)

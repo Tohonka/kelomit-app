@@ -1,6 +1,7 @@
 package com.kelomitapp.widget
 
 import android.content.Context
+import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.Instant
@@ -151,21 +152,34 @@ object SessionStore {
     } else {
       val startedMs = runCatching {
         Instant.parse(active.optString("started_at")).toEpochMilli()
-      }.getOrNull() ?: return
-      val segmentMs = (System.currentTimeMillis() - startedMs).coerceAtLeast(0)
-      // Same shape stopInternal pushes — the app drains it into a note.
-      val completed = JSONObject().apply {
-        put("started_at", active.optString("started_at"))
-        put("ended_at", Instant.now().toString())
-        put("project_id", active.opt("project_id") ?: JSONObject.NULL)
-        put("activity_type", active.optString("activity_type", "work"))
-        put("tags", active.optJSONArray("tags") ?: JSONArray())
-        put("title", active.opt("title") ?: JSONObject.NULL)
-        put("name", active.opt("name") ?: JSONObject.NULL)
+      }.getOrNull()
+      if (startedMs == null) {
+        // Unparseable started_at: bail with no state change rather than pause into
+        // a broken segment. Logged so a stuck pause button is diagnosable on device.
+        Log.w("KelomitWidget", "pauseResume: unparseable started_at, ignoring tap")
+        return
       }
-      pushPending(context, completed)
+      // Single clock read for this whole pause: segment length, ended_at and
+      // paused_at must all agree to the millisecond.
+      val now = Instant.now()
+      val segmentMs = (now.toEpochMilli() - startedMs).coerceAtLeast(0)
+      // Drop segments under MIN_SESSION_SECONDS, same as src/services/sessionService.ts
+      // pauseSession — but still fold the elapsed time into accumulated_ms below.
+      if (segmentMs >= 1000L) {
+        // Same shape stopInternal pushes — the app drains it into a note.
+        val completed = JSONObject().apply {
+          put("started_at", active.optString("started_at"))
+          put("ended_at", now.toString())
+          put("project_id", active.opt("project_id") ?: JSONObject.NULL)
+          put("activity_type", active.optString("activity_type", "work"))
+          put("tags", active.optJSONArray("tags") ?: JSONArray())
+          put("title", active.opt("title") ?: JSONObject.NULL)
+          put("name", active.opt("name") ?: JSONObject.NULL)
+        }
+        pushPending(context, completed)
+      }
       active.put("accumulated_ms", active.optLong("accumulated_ms", 0L) + segmentMs)
-      active.put("paused_at", Instant.now().toString())
+      active.put("paused_at", now.toString())
     }
     setActive(context, active.toString())
   }

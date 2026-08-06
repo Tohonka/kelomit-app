@@ -15,7 +15,9 @@
         android:text="@string/widget_title"
         android:textColor="@color/widget_text_muted"
         android:textSize="13sp"
-        android:letterSpacing="0.04" />
+        android:letterSpacing="0.04"
+        android:maxLines="1"
+        android:ellipsize="end" />
 
     <Chronometer
         android:id="@+id/widget_chrono"
