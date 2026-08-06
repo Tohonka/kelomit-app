@@ -468,6 +468,8 @@ const en = {
     unavailable: 'Home-screen widgets need the latest app build. Rebuild and reinstall to use them.',
     typeFull: 'Timer widget',
     typeToggle: 'Toggle widget',
+    name: 'Name',
+    namePlaceholder: 'e.g. Project Banana',
     tagPlaceholder: 'Tags, comma-separated…',
     saved: 'Saved',
   },

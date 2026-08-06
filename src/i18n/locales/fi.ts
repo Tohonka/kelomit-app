@@ -470,6 +470,8 @@ const fi: typeof en = {
     unavailable: 'Aloitusnäytön widgetit vaativat uusimman sovellusversion. Rakenna ja asenna uudelleen käyttääksesi niitä.',
     typeFull: 'Ajastinwidget',
     typeToggle: 'Painikewidget',
+    name: 'Nimi',
+    namePlaceholder: 'esim. Projekti Banaani',
     tagPlaceholder: 'Tagit pilkulla eroteltuna…',
     saved: 'Tallennettu',
   },

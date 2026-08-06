@@ -32,6 +32,7 @@ const defaultConfig = (): WidgetConfig => ({
   project_id: null,
   activity_type: 'work',
   tags: [],
+  name: null,
 });
 
 const makeStyles = (c: Colors) =>
@@ -172,7 +173,7 @@ export default function WidgetSettings() {
       .split(',')
       .map(s => s.trim())
       .filter(Boolean);
-    const toSave: WidgetConfig = {...cfg, tags};
+    const toSave: WidgetConfig = {...cfg, tags, name: cfg.name?.trim() || null};
     await nativeSetWidgetConfig(id, toSave);
     update(id, {tags});
     setSavedId(id);
@@ -199,6 +200,16 @@ export default function WidgetSettings() {
               <Text style={styles.widgetTitle}>
                 {t(w.type === 'full' ? 'widgets.typeFull' : 'widgets.typeToggle')}
               </Text>
+
+              <Text style={styles.label}>{t('widgets.name')}</Text>
+              <TextInput
+                style={styles.input}
+                value={cfg.name ?? ''}
+                onChangeText={txt => update(w.appWidgetId, {name: txt})}
+                placeholder={t('widgets.namePlaceholder')}
+                placeholderTextColor={colors.textMuted}
+                maxLength={40}
+              />
 
               <Text style={styles.label}>{t('entries.activity')}</Text>
               <View style={styles.activityRow}>
