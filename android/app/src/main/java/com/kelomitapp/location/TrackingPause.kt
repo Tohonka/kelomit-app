@@ -80,9 +80,27 @@ object TrackingPause {
     // wired in Task 6, when TrackingPauseWidgetProvider exists
   }
 
+  /** Prefer an exact alarm: the background-FGS-start exemption only covers
+   *  exact alarms, so an inexact one can wake us without letting [resume]
+   *  start the foreground service. Falls back to inexact below API 31 (where
+   *  it needs no permission and this call always succeeds) and whenever
+   *  SCHEDULE_EXACT_ALARM isn't granted. */
   private fun scheduleResume(context: Context, untilMs: Long) {
     val mgr = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
-    mgr.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, untilMs, alarmIntent(context))
+    val intent = alarmIntent(context)
+    val canExact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || mgr.canScheduleExactAlarms()
+    if (canExact) {
+      try {
+        mgr.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, untilMs, intent)
+        DiagLog.write(context, "pause.alarm.exact", "until=$untilMs")
+        return
+      } catch (error: SecurityException) {
+        // Permission state can change between the check and the call.
+        DiagLog.write(context, "pause.alarm.fallback", error.javaClass.simpleName)
+      }
+    }
+    mgr.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, untilMs, intent)
+    DiagLog.write(context, "pause.alarm.inexact", "until=$untilMs")
   }
 
   private fun cancelAlarm(context: Context) {

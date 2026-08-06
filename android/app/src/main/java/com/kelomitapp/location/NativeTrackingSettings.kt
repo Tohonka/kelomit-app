@@ -39,7 +39,9 @@ class NativeTrackingSettings(context: Context) {
       check(prefs.edit().putLong(KEY_MOVING_UNTIL_MS, value).commit())
     }
 
-  /** 0 = not paused, Long.MAX_VALUE = paused until resumed, else resume epoch ms. */
+  /** 0 = not paused, else resume epoch ms. [TrackingPause.INDEFINITE_PAUSE_MS] (2^62) is
+   *  the agreed "paused until resumed" sentinel; Long.MAX_VALUE is merely tolerated
+   *  (it's also >= that threshold, so every check against it still works). */
   var pausedUntilMs: Long
     get() = prefs.getLong(KEY_PAUSED_UNTIL_MS, 0L)
     set(value) {

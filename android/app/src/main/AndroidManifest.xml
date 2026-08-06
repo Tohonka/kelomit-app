@@ -19,6 +19,12 @@
          (walking/cycling/vehicle) before the geofence exit fires. -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Exact-alarm scheduling for a timed tracking-pause auto-resume: an
+         inexact alarm only temp-allowlists the app, not the
+         foreground-service-start privilege, so on Android 12+ the resume
+         alarm could fire and then silently fail to restart tracking while
+         the app is closed. Falls back to an inexact alarm if not granted. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
     <!-- Media-library / external-storage permissions intentionally trimmed
          (Iteration 3 Phase 2): gallery imports use the Android system photo
