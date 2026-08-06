@@ -25,6 +25,9 @@ const val EXTRA_WIDGET_ID = "com.kelomitapp.widget.WIDGET_ID"
  */
 object WidgetCommon {
 
+  /** Below this min-width (dp) widgets drop secondary content. Tune on device. */
+  const val COMPACT_WIDTH_DP = 180
+
   /** Re-render every placed widget of either flavour. Safe to call from RN. */
   fun updateAll(context: Context) {
     TimerNotification.sync(context)

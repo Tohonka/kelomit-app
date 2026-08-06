@@ -12,6 +12,10 @@
     <string name="widget_full_description">Start/stop a work session with a live timer.</string>
     <string name="widget_toggle_label">Kelomit toggle</string>
     <string name="widget_toggle_description">One-tap start/stop for a configured project.</string>
+    <string name="widget_add_note_description">Quick add: note, photo or voice</string>
+    <string name="widget_add_note">Note</string>
+    <string name="widget_add_photo">Photo</string>
+    <string name="widget_add_voice">Voice</string>
     <string name="timer_notification_channel">Timer</string>
     <string name="timer_notification_paused">Paused · %1$s</string>
     <!-- Background-location foreground service -->
