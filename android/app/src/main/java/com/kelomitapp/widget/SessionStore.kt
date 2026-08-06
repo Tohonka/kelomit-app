@@ -1,5 +1,6 @@
 package com.kelomitapp.widget
 
+import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.util.Log
 import org.json.JSONArray
@@ -88,25 +89,45 @@ object SessionStore {
   // ── Toggle (called from a widget tap, RN may be dead) ───────────────────────
 
   /**
-   * Start or stop the single global session. Starting pulls project/activity/tags
-   * from the tapping widget's config (if any). Returns true if a session is now
-   * running, false if it was just stopped (and queued for draining).
+   * Start, stop, or switch the single global session from a widget tap.
+   * Each widget has its own identity: tapping the widget that OWNS the running
+   * session stops it; tapping a different widget switches — the running segment
+   * is closed (logged with its own name/tally) and this widget's session starts
+   * in the same tap. An INVALID_APPWIDGET_ID (the notification's Stop action)
+   * can only ever stop, never start — so a stale notification tap can't spawn
+   * an unconfigured session. Returns true if a session is now running.
    */
   fun toggle(context: Context, appWidgetId: Int): Boolean {
     val active = getActive(context)
-    return if (active != null) {
-      val json = runCatching { JSONObject(active) }.getOrNull()
-      if (json != null && !json.isNull("paused_at") && json.optString("paused_at").isNotEmpty()) {
-        clearActive(context) // segment already landed at pause time
-      } else {
-        stopInternal(context, active)
+    if (active == null) {
+      if (appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
+        return false
       }
-      false
-    } else {
       startInternal(context, appWidgetId)
-      true
+      return true
     }
+    val json = runCatching { JSONObject(active) }.getOrNull()
+    // Close the running session: a paused one already logged its segment at
+    // pause time, a running one logs it now.
+    if (json != null && !json.isNull("paused_at") && json.optString("paused_at").isNotEmpty()) {
+      clearActive(context)
+    } else {
+      stopInternal(context, active)
+    }
+    val ownerId = ownerWidgetId(json)
+    if (appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID && appWidgetId != ownerId) {
+      // Tap on a non-owning widget = switch tasks, not plain stop.
+      startInternal(context, appWidgetId)
+      return true
+    }
+    return false
   }
+
+  /** Which widget started this session, or INVALID for in-app/legacy sessions. */
+  fun ownerWidgetId(active: JSONObject?): Int =
+    active?.takeIf { !it.isNull("widget_id") }
+      ?.optInt("widget_id", AppWidgetManager.INVALID_APPWIDGET_ID)
+      ?: AppWidgetManager.INVALID_APPWIDGET_ID
 
   private fun startInternal(context: Context, appWidgetId: Int) {
     val cfg = getConfig(context, appWidgetId)?.let { runCatching { JSONObject(it) }.getOrNull() }
@@ -118,6 +139,7 @@ object SessionStore {
       put("title", JSONObject.NULL)
       put("source", "widget")
       put("name", cfg?.opt("name") ?: JSONObject.NULL)
+      put("widget_id", appWidgetId)
       put("accumulated_ms", 0L)
       put("paused_at", JSONObject.NULL)
     }

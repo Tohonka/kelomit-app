@@ -20,6 +20,7 @@ interface WidgetSessionNative {
   setWidgetConfig(appWidgetId: number, json: string): Promise<void>;
   getWidgets(): Promise<string>;
   refreshWidgets(): Promise<void>;
+  requestPinWidget(type: string): Promise<boolean>;
 }
 
 const Native = NativeModules.WidgetSession as WidgetSessionNative | undefined;
@@ -113,4 +114,12 @@ export async function nativeSetWidgetConfig(
 
 export async function nativeRefreshWidgets(): Promise<void> {
   await Native?.refreshWidgets();
+}
+
+/** Ask the launcher to place a new widget (Android pin flow). False = launcher
+ *  doesn't support pinning; the caller points the user at the home-screen menu. */
+export async function nativeRequestPinWidget(
+  type: 'toggle' | 'full',
+): Promise<boolean> {
+  return (await Native?.requestPinWidget(type)) ?? false;
 }

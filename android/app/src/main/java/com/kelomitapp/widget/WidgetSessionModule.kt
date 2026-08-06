@@ -100,4 +100,22 @@ class WidgetSessionModule(reactContext: ReactApplicationContext) :
     WidgetCommon.updateAll(context)
     promise.resolve(null)
   }
+
+  /**
+   * Ask the launcher to place a new widget (API 26+ pin flow). Resolves false
+   * when the launcher doesn't support pinning — the caller shows a hint to add
+   * it from the home screen instead. The launcher's own dialog handles the rest;
+   * the new widget shows up in getWidgets() once placed.
+   */
+  @ReactMethod
+  fun requestPinWidget(type: String, promise: Promise) {
+    val mgr = AppWidgetManager.getInstance(context)
+    val cls =
+      if (type == "toggle") SessionToggleWidgetProvider::class.java
+      else SessionWidgetProvider::class.java
+    val ok = mgr != null &&
+      mgr.isRequestPinAppWidgetSupported &&
+      mgr.requestPinAppWidget(ComponentName(context, cls), null, null)
+    promise.resolve(ok)
+  }
 }

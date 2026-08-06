@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import com.kelomitapp.R
+import com.kelomitapp.location.DiagLog
 
 /**
  * Ongoing "timer running" notification (media-player style), owned by native
@@ -62,7 +63,19 @@ object TimerNotification {
         .setWhen(System.currentTimeMillis() - total)
         .setUsesChronometer(true)
     }
-    manager.notify(NOTIFICATION_ID, builder.build())
+    // Diag: notify() silently no-ops when the app or channel is blocked, and a
+    // rejected small icon can drop the notification with only a system log — the
+    // device-side flat log is the only way to see which. Remove once the
+    // "no timer notification" report is settled.
+    val ch = manager.getNotificationChannel(CHANNEL_ID)
+    DiagLog.write(
+      context,
+      "notif.timer",
+      "posting id=$NOTIFICATION_ID enabled=${manager.areNotificationsEnabled()} " +
+        "channelImportance=${ch?.importance} paused=$paused",
+    )
+    runCatching { manager.notify(NOTIFICATION_ID, builder.build()) }
+      .onFailure { DiagLog.write(context, "notif.timer", "notify threw ${it.javaClass.simpleName}: ${it.message}") }
   }
 
   private fun ensureChannel(manager: NotificationManager, context: Context) {

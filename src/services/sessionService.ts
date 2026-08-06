@@ -46,6 +46,9 @@ export async function startSession(input: StartSessionInput): Promise<ActiveSess
     name: input.name?.trim() || null,
     accumulated_ms: 0,
     paused_at: null,
+    // In-app sessions own no widget: every widget stays idle-looking and a tap
+    // on any widget's Start switches to that widget's task.
+    widget_id: null,
   };
   await writeActiveSession(session);
   return session;

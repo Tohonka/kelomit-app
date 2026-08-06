@@ -117,6 +117,9 @@ export interface ActiveSession {
   accumulated_ms?: number;
   /** Set while paused (ISO); null/absent = running. */
   paused_at?: string | null;
+  /** appWidgetId of the widget that started this session; null/absent for
+   *  in-app sessions. Only the owning widget renders the running state. */
+  widget_id?: number | null;
 }
 
 export type LocationKind = 'work' | 'home' | 'other';

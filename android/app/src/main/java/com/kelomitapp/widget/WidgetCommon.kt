@@ -117,9 +117,12 @@ object WidgetCommon {
     val cfg = SessionStore.getConfig(context, appWidgetId)
       ?.let { runCatching { JSONObject(it) }.getOrNull() }
     val configName = optName(cfg)
-    val sessionName = optName(active)
+    // Each widget keeps its own identity: only the widget that STARTED the
+    // session renders the running state. Every other widget stays idle with its
+    // own name, and tapping its Start switches tasks (see SessionStore.toggle).
+    val owns = active != null && SessionStore.ownerWidgetId(active) == appWidgetId
 
-    if (active != null && total != null) {
+    if (owns && total != null) {
       val base = SystemClock.elapsedRealtime() - total
       views.setChronometer(R.id.widget_chrono, base, null, !paused)
       views.setViewVisibility(R.id.widget_chrono, android.view.View.VISIBLE)
@@ -127,7 +130,7 @@ object WidgetCommon {
       views.setTextViewText(R.id.widget_button, context.getString(R.string.widget_stop))
       views.setTextViewText(
         R.id.widget_status,
-        sessionName ?: context.getString(
+        optName(active) ?: context.getString(
           if (paused) R.string.widget_paused else R.string.widget_tracking),
       )
       views.setViewVisibility(R.id.widget_pause_button, android.view.View.VISIBLE)
@@ -160,7 +163,9 @@ object WidgetCommon {
 
   fun buildToggle(context: Context, appWidgetId: Int): RemoteViews {
     val views = RemoteViews(context.packageName, R.layout.widget_session_toggle)
-    val running = SessionStore.getActive(context) != null
+    // Same per-widget identity rule as buildFull: active-look only on the owner.
+    val running =
+      SessionStore.ownerWidgetId(activeJson(context)) == appWidgetId
     views.setImageViewResource(
       R.id.widget_toggle_icon,
       if (running) R.drawable.ic_widget_stop else R.drawable.ic_widget_play,

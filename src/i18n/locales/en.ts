@@ -472,6 +472,10 @@ const en = {
     namePlaceholder: 'e.g. Project Banana',
     tagPlaceholder: 'Tags, comma-separated…',
     saved: 'Saved',
+    addFull: 'Add timer widget',
+    addToggle: 'Add toggle widget',
+    pinUnsupportedTitle: 'Not supported',
+    pinUnsupported: 'Your launcher doesn’t support adding widgets from the app. Long-press the home screen and pick Widgets instead.',
   },
   projects: {
     newProject: 'New project',

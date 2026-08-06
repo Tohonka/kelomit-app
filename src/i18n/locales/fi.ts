@@ -474,6 +474,10 @@ const fi: typeof en = {
     namePlaceholder: 'esim. Projekti Banaani',
     tagPlaceholder: 'Tagit pilkulla eroteltuna…',
     saved: 'Tallennettu',
+    addFull: 'Lisää ajastinwidget',
+    addToggle: 'Lisää painikewidget',
+    pinUnsupportedTitle: 'Ei tuettu',
+    pinUnsupported: 'Käynnistysohjelmasi ei tue widgetien lisäämistä sovelluksesta. Paina aloitusnäyttöä pitkään ja valitse Widgetit.',
   },
   projects: {
     newProject: 'Uusi projekti',
