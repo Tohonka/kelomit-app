@@ -77,7 +77,7 @@ object TrackingPause {
 
   /** Repaint the stop-tracking widget after a state change. */
   fun repaintWidgets(context: Context) {
-    // wired in Task 6, when TrackingPauseWidgetProvider exists
+    TrackingPauseWidgetProvider.updateAll(context)
   }
 
   /** Prefer an exact alarm: the background-FGS-start exemption only covers

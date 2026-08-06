@@ -147,6 +147,23 @@
         android:name=".location.TrackingResumeReceiver"
         android:exported="false" />
 
+      <!-- Stop-tracking widget: pause movement detection for 1h/4h/until
+           resumed, or resume it. -->
+      <receiver
+        android:name=".location.TrackingPauseWidgetProvider"
+        android:exported="false">
+        <intent-filter>
+          <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+          <action android:name="com.kelomitapp.widget.ACTION_TRACKING_PAUSE_1H" />
+          <action android:name="com.kelomitapp.widget.ACTION_TRACKING_PAUSE_4H" />
+          <action android:name="com.kelomitapp.widget.ACTION_TRACKING_PAUSE_INF" />
+          <action android:name="com.kelomitapp.widget.ACTION_TRACKING_RESUME" />
+        </intent-filter>
+        <meta-data
+          android:name="android.appwidget.provider"
+          android:resource="@xml/widget_tracking_pause_info" />
+      </receiver>
+
       <!-- Wakes the idle location service the moment activity-recognition
            reports the user started moving (faster than the geofence exit). -->
       <receiver
