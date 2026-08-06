@@ -34,6 +34,7 @@ export interface PendingSession {
   activity_type: ActivityType;
   tags: string[];
   title: string | null;
+  name?: string | null;
 }
 
 /** Per-widget mapping chosen in the in-app Widgets settings screen. */
@@ -41,6 +42,7 @@ export interface WidgetConfig {
   project_id: number | null;
   activity_type: ActivityType;
   tags: string[];
+  name?: string | null;
 }
 
 export interface WidgetInfo {

@@ -110,6 +110,13 @@ export interface ActiveSession {
   title: string | null;
   /** Where the session was started from. */
   source: 'timer' | 'widget';
+  /** Display name from the starting widget/config (falls back to project name
+   *  in titles). Optional: sessions persisted before iteration W1 lack it. */
+  name?: string | null;
+  /** Work ms from segments already closed by pause. Absent = 0. */
+  accumulated_ms?: number;
+  /** Set while paused (ISO); null/absent = running. */
+  paused_at?: string | null;
 }
 
 export type LocationKind = 'work' | 'home' | 'other';

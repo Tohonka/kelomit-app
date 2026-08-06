@@ -71,3 +71,47 @@ describe('sessionToEntryParams', () => {
     expect(params.time_to).toBe('2026-06-21T08:05:00.000Z');
   });
 });
+
+import {sessionElapsedMs, formatTimerTitle} from '../src/services/sessionLogic';
+
+const base: ActiveSession = {
+  started_at: '2026-08-06T10:00:00.000Z',
+  project_id: 1, activity_type: 'work', tags: [], title: null, source: 'widget',
+};
+
+describe('sessionElapsedMs', () => {
+  const now = new Date('2026-08-06T10:10:00.000Z');
+  it('running, no history: elapsed since start', () => {
+    expect(sessionElapsedMs(base, now)).toBe(10 * 60_000);
+  });
+  it('running with accumulated segments adds them', () => {
+    expect(sessionElapsedMs({...base, accumulated_ms: 5 * 60_000}, now)).toBe(15 * 60_000);
+  });
+  it('paused: accumulated only, running segment ignored', () => {
+    expect(
+      sessionElapsedMs({...base, accumulated_ms: 5 * 60_000, paused_at: '2026-08-06T10:05:00.000Z'}, now),
+    ).toBe(5 * 60_000);
+  });
+  it('old persisted session without new fields still works', () => {
+    expect(sessionElapsedMs({...base}, now)).toBe(10 * 60_000);
+  });
+});
+
+describe('formatTimerTitle', () => {
+  it('name + tally', () => {
+    expect(formatTimerTitle({name: 'Banana', projectName: 'Banana proj', tally: 3, timeLabel: '14:30'}))
+      .toBe('Banana #3');
+  });
+  it('falls back to project name', () => {
+    expect(formatTimerTitle({name: null, projectName: 'Banana', tally: 3, timeLabel: '14:30'}))
+      .toBe('Banana #3');
+  });
+  it('name without project/tally gets the time', () => {
+    expect(formatTimerTitle({name: 'Eating', projectName: null, tally: null, timeLabel: '14:30'}))
+      .toBe('Eating 14:30');
+  });
+  it('nothing to build from → null', () => {
+    expect(formatTimerTitle({name: null, projectName: null, tally: null, timeLabel: '14:30'}))
+      .toBeNull();
+  });
+});
