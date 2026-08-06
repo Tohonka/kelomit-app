@@ -175,7 +175,7 @@ export default function WidgetSettings() {
       .filter(Boolean);
     const toSave: WidgetConfig = {...cfg, tags, name: cfg.name?.trim() || null};
     await nativeSetWidgetConfig(id, toSave);
-    update(id, {tags});
+    update(id, {tags, name: toSave.name});
     setSavedId(id);
     setTimeout(() => setSavedId(s => (s === id ? null : s)), 1500);
   };
