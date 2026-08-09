@@ -29,6 +29,7 @@ export type RootStackParamList = {
   QuickAddSettings: undefined;
   LocationSettings: undefined;
   WidgetSettings: undefined;
+  WidgetEdit: {appWidgetId: number};
   TranscriptionSettings: undefined;
   DiagnosticsSettings: undefined;
 };

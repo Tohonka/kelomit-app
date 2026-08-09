@@ -7,6 +7,7 @@ import {DAY_LIST_MODES, type DayListMode} from '../utils/entrySort';
 import {parseWeekdayHours, type WeekdayHours, type WeekdayOverride} from '../utils/usualHours';
 
 export type NavVisibility = 'always' | 'home_only';
+export type WidgetVoiceMode = 'confirm' | 'auto';
 
 interface SettingsState extends Settings {
   loaded: boolean;
@@ -23,6 +24,11 @@ interface SettingsState extends Settings {
   background_tracking: boolean;
   /** Opt-in: transcribe + title widget-started voice notes after saving. */
   widget_voice_auto_title: boolean;
+  /**
+   * Widget voice flow: 'confirm' keeps the normal save button; 'auto' saves
+   * the note the moment the recording stops and always transcribes + titles.
+   */
+  widget_voice_mode: WidgetVoiceMode;
   time_selector_mode: TimeSelectorMode;
   language: Language;
   quickadd_default_project_id: number | null;
@@ -42,6 +48,7 @@ interface SettingsState extends Settings {
   setWeekdayOverride: (weekday: number, override: WeekdayOverride | null) => Promise<void>;
   setBackgroundTracking: (enabled: boolean) => Promise<void>;
   setWidgetVoiceAutoTitle: (enabled: boolean) => Promise<void>;
+  setWidgetVoiceMode: (mode: WidgetVoiceMode) => Promise<void>;
   setUsualStart: (hhmm: string | null) => Promise<void>;
   setUsualEnd: (hhmm: string | null) => Promise<void>;
   setPrefillFromUsual: (enabled: boolean) => Promise<void>;
@@ -72,6 +79,7 @@ export const useSettingsStore = create<SettingsState>(set => ({
   weekday_hours: {},
   background_tracking: false,
   widget_voice_auto_title: false,
+  widget_voice_mode: 'confirm',
   time_selector_mode: 'clock',
   language: 'en',
   quickadd_default_project_id: null,
@@ -98,6 +106,8 @@ export const useSettingsStore = create<SettingsState>(set => ({
     const weekday_hours = parseWeekdayHours(raw.weekday_hours);
     const background_tracking = raw.background_tracking === 'true';
     const widget_voice_auto_title = raw.widget_voice_auto_title === 'true';
+    const widget_voice_mode: WidgetVoiceMode =
+      raw.widget_voice_mode === 'auto' ? 'auto' : 'confirm';
     const time_selector_mode: TimeSelectorMode =
       raw.time_selector_mode === 'keyboard' ? 'keyboard' : 'clock';
     const language = resolveLanguageSetting(raw.language);
@@ -121,6 +131,7 @@ export const useSettingsStore = create<SettingsState>(set => ({
       weekday_hours,
       background_tracking,
       widget_voice_auto_title,
+      widget_voice_mode,
       time_selector_mode,
       language,
       quickadd_default_project_id,
@@ -194,6 +205,11 @@ export const useSettingsStore = create<SettingsState>(set => ({
   setWidgetVoiceAutoTitle: async enabled => {
     await setSetting('widget_voice_auto_title', String(enabled));
     set({widget_voice_auto_title: enabled});
+  },
+
+  setWidgetVoiceMode: async mode => {
+    await setSetting('widget_voice_mode', mode);
+    set({widget_voice_mode: mode});
   },
 
   setUsualStart: async hhmm => {
