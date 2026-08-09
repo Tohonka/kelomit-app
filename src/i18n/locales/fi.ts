@@ -250,6 +250,9 @@ const fi: typeof en = {
     syncFailed: 'Synkronointi epäonnistui: {{error}}',
     syncDone: 'Synkronointi valmis',
     syncSave: 'Tallenna',
+    pausedUntil: 'Seuranta tauolla klo {{time}} asti',
+    pausedIndefinitely: 'Seuranta tauolla',
+    resume: 'Jatka',
   },
   reporting: {
     title: 'Raportointi',
@@ -476,8 +479,12 @@ const fi: typeof en = {
     saved: 'Tallennettu',
     addFull: 'Lisää ajastinwidget',
     addToggle: 'Lisää painikewidget',
+    addAddNote: 'Lisää muistiinpanowidget',
+    addTracking: 'Lisää seurantawidget',
     pinUnsupportedTitle: 'Ei tuettu',
     pinUnsupported: 'Käynnistysohjelmasi ei tue widgetien lisäämistä sovelluksesta. Paina aloitusnäyttöä pitkään ja valitse Widgetit.',
+    voiceAutoTitle: 'Otsikoi äänimuistiot automaattisesti',
+    voiceAutoTitleHint: 'Widgetillä tehdyt äänimuistiot litteroidaan tallennuksen jälkeen ja otsikoidaan puheen alkusanoista.',
   },
   projects: {
     newProject: 'Uusi projekti',

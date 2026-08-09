@@ -1,5 +1,5 @@
 import React, {useEffect, useState, useRef} from 'react';
-import {View, Text, StyleSheet, ActivityIndicator, AppState, StatusBar} from 'react-native';
+import {View, Text, StyleSheet, ActivityIndicator, AppState, StatusBar, Linking} from 'react-native';
 import './src/i18n';
 import {useTranslation} from 'react-i18next';
 import type {AppStateStatus} from 'react-native';
@@ -13,6 +13,7 @@ import {pruneDiagLog, diag} from './src/services/diag';
 import {getAllSettings} from './src/db/settings';
 import {getLocations} from './src/db/locations';
 import {stopTracking} from './src/services/gpsService';
+import {expirePauseIfDue} from './src/native/backgroundLocation';
 import {ensureNotificationChannel, requestNotificationPermission} from './src/services/notificationService';
 import {maybeAutoSync} from './src/services/syncService';
 import {
@@ -25,6 +26,8 @@ import {useSettingsStore} from './src/store/settingsStore';
 import {useSessionStore} from './src/store/sessionStore';
 import {useTheme, lightColors, typography} from './src/theme';
 import RootNavigator from './src/navigation/RootNavigator';
+import {navigationRef} from './src/navigation/navigationRef';
+import {handleDeepLink, flushPendingDeepLink} from './src/services/deepLinks';
 
 // Defer GPS startup off the critical launch path so location init doesn't
 // compete with the first render / DB warm-up. Foreground-resume start stays
@@ -63,12 +66,22 @@ function AppContent() {
       .catch(e => setError(String(e)));
   }, [load]);
 
+  // Widget deep links (kelomit://quickadd/<type>): cold start + warm delivery.
+  useEffect(() => {
+    Linking.getInitialURL().then(handleDeepLink).catch(() => {});
+    const sub = Linking.addEventListener('url', e => {
+      handleDeepLink(e.url).catch(() => {});
+    });
+    return () => sub.remove();
+  }, []);
+
   useEffect(() => {
     if (!dbReady || !loaded) {
       return;
     }
 
     const syncGps = async () => {
+      await expirePauseIfDue().catch(() => ({pausedUntilMs: 0}));
       const settings = await getAllSettings().catch(() => null);
       if (!settings) return;
       const backgroundTracking = useSettingsStore.getState().background_tracking;
@@ -114,6 +127,11 @@ function AppContent() {
         const {gps_enabled, background_tracking} = useSettingsStore.getState();
         // With background tracking on, keep the watch alive (the foreground
         // service is already running). Otherwise stop tracking as before.
+        // Load-bearing for the tracking-pause widget invariant: in
+        // foreground-only mode this is the only reason a live JS
+        // watchPosition isn't still capturing by the time the user reaches
+        // the home screen to tap the pause widget. Don't weaken this guard
+        // without checking that invariant.
         if (!(gps_enabled && background_tracking)) {
           stopTracking();
         }
@@ -156,7 +174,7 @@ function AppContent() {
         barStyle={isDark ? 'light-content' : 'dark-content'}
         backgroundColor={colors.bg}
       />
-      <NavigationContainer>
+      <NavigationContainer ref={navigationRef} onReady={flushPendingDeepLink}>
         <RootNavigator />
       </NavigationContainer>
     </>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- minResizeWidth must stay below WidgetCommon's COMPACT_WIDTH_DP (180dp)
+     adaptive threshold — otherwise the launcher never lets the widget shrink
+     small enough to trigger the label-hiding compact layout. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="180dp"
+    android:minHeight="70dp"
+    android:targetCellWidth="3"
+    android:targetCellHeight="1"
+    android:resizeMode="horizontal"
+    android:minResizeWidth="110dp"
+    android:widgetCategory="home_screen"
+    android:description="@string/widget_add_note_description"
+    android:previewLayout="@layout/widget_add_note"
+    android:initialLayout="@layout/widget_add_note"
+    android:updatePeriodMillis="0" />

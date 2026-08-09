@@ -5,6 +5,7 @@ import {useTagStore} from '../../store/tagStore';
 import {addEntryMedia} from '../../db/entries';
 import {getLastKnownPosition} from '../../services/gpsService';
 import type {EditorMedia} from '../media/AttachmentsSection';
+import type {Entry, EntryMedia} from '../../types';
 
 interface SaveQuickNoteInput {
   dayId: number;
@@ -23,7 +24,12 @@ export function useSaveQuickNote() {
   const quickadd_default_tag = useSettingsStore(s => s.quickadd_default_tag);
 
   return useCallback(
-    async ({dayId, title, durationMinutes, media}: SaveQuickNoteInput): Promise<void> => {
+    async ({
+      dayId,
+      title,
+      durationMinutes,
+      media,
+    }: SaveQuickNoteInput): Promise<{entry: Entry; media: EntryMedia[]}> => {
       const durationSec = durationMinutes.trim()
         ? Math.round(parseFloat(durationMinutes) * 60)
         : null;
@@ -58,15 +64,17 @@ export function useSaveQuickNote() {
         latitude: gps?.latitude ?? null,
         longitude: gps?.longitude ?? null,
       });
+      const savedMedia: EntryMedia[] = [];
       for (const m of media) {
-        await addEntryMedia(created.id, {
+        savedMedia.push(await addEntryMedia(created.id, {
           media_type: m.media_type,
           file_path: m.file_path,
           thumbnail_path: m.thumbnail_path,
           duration_sec: m.duration_sec,
-        });
+        }));
       }
       await loadEntriesForDay(dayId);
+      return {entry: created, media: savedMedia};
     },
     [
       addEntry,

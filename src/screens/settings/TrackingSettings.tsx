@@ -1,11 +1,15 @@
-import React, {useMemo} from 'react';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import {View, Text, ScrollView, TouchableOpacity} from 'react-native';
+import {View, Text, ScrollView, TouchableOpacity, AppState} from 'react-native';
+import type {AppStateStatus} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
+import {useFocusEffect} from '@react-navigation/native';
 import {useSettingsStore} from '../../store/settingsStore';
 import {startTracking, stopTracking} from '../../services/gpsService';
 import {ensureBackgroundLocationPermission, ensureActivityRecognitionPermission} from '../../services/permissionService';
 import {requestNotificationPermission} from '../../services/notificationService';
+import {getTrackingPauseState, setTrackingPause, INDEFINITE_PAUSE_MS} from '../../native/backgroundLocation';
+import {formatTime} from '../../utils/dateUtils';
 import {useTheme} from '../../theme';
 import {makeSettingsStyles} from './settingsStyles';
 
@@ -17,6 +21,29 @@ export default function TrackingSettings() {
     gps_enabled, setGpsEnabled, gps_interval_ms, default_activity_type,
     background_tracking, setBackgroundTracking,
   } = useSettingsStore();
+  const [pausedUntilMs, setPausedUntilMs] = useState(0);
+
+  const refreshPauseState = useCallback(() => {
+    getTrackingPauseState().then(s => setPausedUntilMs(s.pausedUntilMs)).catch(() => {});
+  }, []);
+
+  // Focus alone misses the case where the app is backgrounded (e.g. to tap the
+  // widget) and resumed while this screen is still the focused one — a focus
+  // effect doesn't re-fire for that, so we also listen for the app becoming active.
+  useFocusEffect(refreshPauseState);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextState: AppStateStatus) => {
+      if (nextState === 'active') { refreshPauseState(); }
+    });
+    return () => sub.remove();
+  }, [refreshPauseState]);
+
+  const handleResumeTracking = async () => {
+    await setTrackingPause(0).catch(() => {});
+    setPausedUntilMs(0);
+    if (gps_enabled) { startTracking(gps_interval_ms); }
+  };
 
   const handleGpsToggle = async () => {
     const next = !gps_enabled;
@@ -61,6 +88,17 @@ export default function TrackingSettings() {
             </Text>
           </View>
         </TouchableOpacity>
+
+        {pausedUntilMs !== 0 && (
+          <TouchableOpacity style={styles.row} onPress={handleResumeTracking}>
+            <Text style={styles.rowLabel}>
+              {pausedUntilMs >= INDEFINITE_PAUSE_MS
+                ? t('settings.pausedIndefinitely')
+                : t('settings.pausedUntil', {time: formatTime(new Date(pausedUntilMs).toISOString())})}
+            </Text>
+            <Text style={[styles.rowLabel, {color: colors.primary}]}>{t('settings.resume')}</Text>
+          </TouchableOpacity>
+        )}
 
         {gps_enabled && (
           <TouchableOpacity style={styles.row} onPress={handleBackgroundToggle}>

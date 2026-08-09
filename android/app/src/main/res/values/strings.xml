@@ -12,6 +12,20 @@
     <string name="widget_full_description">Start/stop a work session with a live timer.</string>
     <string name="widget_toggle_label">Kelomit toggle</string>
     <string name="widget_toggle_description">One-tap start/stop for a configured project.</string>
+    <string name="widget_add_note_description">Quick add: note, photo or voice</string>
+    <string name="widget_add_note">Note</string>
+    <string name="widget_add_photo">Photo</string>
+    <string name="widget_add_voice">Voice</string>
+    <!-- Stop-tracking widget (widget iteration 2) -->
+    <string name="widget_tracking_pause_description">Pause movement tracking</string>
+    <string name="widget_tracking_on">Tracking</string>
+    <string name="widget_tracking_off">Tracking off</string>
+    <string name="widget_paused_until">Paused · until %1$s</string>
+    <string name="widget_paused_indefinitely">Paused · until resumed</string>
+    <string name="widget_resume_tracking">Resume tracking</string>
+    <string name="widget_pause_1h">1 h</string>
+    <string name="widget_pause_4h">4 h</string>
+    <string name="widget_pause_inf">∞</string>
     <string name="timer_notification_channel">Timer</string>
     <string name="timer_notification_paused">Paused · %1$s</string>
     <!-- Background-location foreground service -->

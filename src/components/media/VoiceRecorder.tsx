@@ -14,6 +14,8 @@ interface Props {
   filePath: string | null;
   onRecord: (filePath: string, durationSec: number) => void;
   onDiscard: () => void;
+  /** Start recording immediately on mount (widget voice flow). */
+  autoStart?: boolean;
 }
 
 type RecordState = 'idle' | 'recording' | 'done';
@@ -89,7 +91,7 @@ const makeStyles = (c: Colors) =>
     },
   });
 
-export default function VoiceRecorder({filePath, onRecord, onDiscard}: Props) {
+export default function VoiceRecorder({filePath, onRecord, onDiscard, autoStart}: Props) {
   const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -110,6 +112,17 @@ export default function VoiceRecorder({filePath, onRecord, onDiscard}: Props) {
       audioRecorderPlayer.stopPlayer().catch(() => {});
     };
   }, []);
+
+  // Widget flow: begin recording as soon as the recorder mounts. One-shot —
+  // a discard must not re-trigger it.
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (autoStart && !autoStarted.current && state === 'idle') {
+      autoStarted.current = true;
+      startRecording();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoStart]);
 
   const startRecording = async () => {
     const ok = await ensureMicrophonePermission();

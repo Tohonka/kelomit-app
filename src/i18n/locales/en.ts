@@ -248,6 +248,9 @@ const en = {
     syncFailed: 'Last sync failed: {{error}}',
     syncDone: 'Sync complete',
     syncSave: 'Save',
+    pausedUntil: 'Tracking paused until {{time}}',
+    pausedIndefinitely: 'Tracking paused',
+    resume: 'Resume',
   },
   reporting: {
     title: 'Reporting',
@@ -474,8 +477,12 @@ const en = {
     saved: 'Saved',
     addFull: 'Add timer widget',
     addToggle: 'Add toggle widget',
+    addAddNote: 'Add note widget',
+    addTracking: 'Add tracking widget',
     pinUnsupportedTitle: 'Not supported',
     pinUnsupported: 'Your launcher doesn’t support adding widgets from the app. Long-press the home screen and pick Widgets instead.',
+    voiceAutoTitle: 'Auto-title voice notes',
+    voiceAutoTitleHint: 'Widget voice notes are transcribed after saving and titled from the first spoken words.',
   },
   projects: {
     newProject: 'New project',

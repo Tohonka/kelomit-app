@@ -6,6 +6,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.SystemClock
+import android.util.TypedValue
 import android.widget.RemoteViews
 import com.kelomitapp.MainActivity
 import com.kelomitapp.R
@@ -24,6 +25,12 @@ const val EXTRA_WIDGET_ID = "com.kelomitapp.widget.WIDGET_ID"
  * app via [WidgetSessionModule]) repaints every placed widget the same way.
  */
 object WidgetCommon {
+
+  /** Below this min-width (dp) widgets drop secondary content. Tune on device. */
+  const val COMPACT_WIDTH_DP = 180
+
+  /** Below this min-height (dp) the timer widget drops its status/name line. */
+  const val SHORT_HEIGHT_DP = 90
 
   /** Re-render every placed widget of either flavour. Safe to call from RN. */
   fun updateAll(context: Context) {
@@ -111,6 +118,9 @@ object WidgetCommon {
 
   fun buildFull(context: Context, appWidgetId: Int): RemoteViews {
     val views = RemoteViews(context.packageName, R.layout.widget_session)
+    val options = AppWidgetManager.getInstance(context)?.getAppWidgetOptions(appWidgetId)
+    val minWidth = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, Int.MAX_VALUE) ?: Int.MAX_VALUE
+    val minHeight = options?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, Int.MAX_VALUE) ?: Int.MAX_VALUE
     val active = activeJson(context)
     val total = totalElapsedMillis(active)
     val paused = isPaused(active)
@@ -126,11 +136,10 @@ object WidgetCommon {
       val base = SystemClock.elapsedRealtime() - total
       views.setChronometer(R.id.widget_chrono, base, null, !paused)
       views.setViewVisibility(R.id.widget_chrono, android.view.View.VISIBLE)
-      views.setViewVisibility(R.id.widget_idle_label, android.view.View.GONE)
       views.setTextViewText(R.id.widget_button, context.getString(R.string.widget_stop))
       views.setTextViewText(
         R.id.widget_status,
-        optName(active) ?: context.getString(
+        optName(active) ?: configName ?: context.getString(
           if (paused) R.string.widget_paused else R.string.widget_tracking),
       )
       views.setViewVisibility(R.id.widget_pause_button, android.view.View.VISIBLE)
@@ -141,7 +150,6 @@ object WidgetCommon {
     } else {
       views.setChronometer(R.id.widget_chrono, SystemClock.elapsedRealtime(), null, false)
       views.setViewVisibility(R.id.widget_chrono, android.view.View.GONE)
-      views.setViewVisibility(R.id.widget_idle_label, android.view.View.VISIBLE)
       views.setTextViewText(R.id.widget_button, context.getString(R.string.widget_start))
       views.setTextViewText(
         R.id.widget_status,
@@ -149,6 +157,29 @@ object WidgetCommon {
       )
       views.setViewVisibility(R.id.widget_pause_button, android.view.View.GONE)
     }
+
+    // Size-adaptive: narrow drops the pause button, short drops the name line.
+    // Chronometer + Start/Stop always survive.
+    if (minWidth < COMPACT_WIDTH_DP) {
+      views.setViewVisibility(R.id.widget_pause_button, android.view.View.GONE)
+    }
+    val short = minHeight < SHORT_HEIGHT_DP
+    if (short) {
+      views.setViewVisibility(R.id.widget_status, android.view.View.GONE)
+    }
+    // A vertical LinearLayout clips its LAST child when the content is taller
+    // than the widget — and that child is the button row, so the label vanished
+    // while its background stayed. Shrink the box instead of losing the words.
+    val density = context.resources.displayMetrics.density
+    val vPad = ((if (short) 4 else 10) * density).toInt()
+    val rootPad = (12 * density).toInt()
+    val rootVPad = ((if (short) 4 else 12) * density).toInt()
+    views.setViewPadding(R.id.widget_root, rootPad, rootVPad, rootPad, rootVPad)
+    for (id in intArrayOf(R.id.widget_button, R.id.widget_pause_button)) {
+      views.setViewPadding(id, 0, vPad, 0, vPad)
+      views.setTextViewTextSize(id, TypedValue.COMPLEX_UNIT_SP, if (short) 13f else 15f)
+    }
+    views.setTextViewTextSize(R.id.widget_chrono, TypedValue.COMPLEX_UNIT_SP, if (short) 20f else 30f)
 
     views.setOnClickPendingIntent(
       R.id.widget_button,

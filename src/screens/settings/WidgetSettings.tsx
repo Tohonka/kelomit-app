@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useProjectStore} from '../../store/projectStore';
+import {useSettingsStore} from '../../store/settingsStore';
 import {useTheme, typography, spacing, radius} from '../../theme';
 import type {Colors} from '../../theme';
 import ProjectPicker from '../../components/entries/ProjectPicker';
@@ -114,12 +115,14 @@ const makeStyles = (c: Colors) =>
     },
     addRow: {
       flexDirection: 'row',
+      flexWrap: 'wrap',
       gap: spacing.sm,
       paddingHorizontal: spacing.lg,
       marginTop: spacing.md,
     },
     addBtn: {
       flex: 1,
+      flexBasis: '45%',
       minHeight: 48,
       borderRadius: radius.md,
       backgroundColor: c.primary,
@@ -137,6 +140,26 @@ const makeStyles = (c: Colors) =>
       fontSize: typography.sizes.xs,
       color: c.success,
     },
+    autoTitleRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: spacing.lg,
+      marginTop: spacing.md,
+      minHeight: 44,
+    },
+    autoTitleLabel: {fontSize: typography.sizes.base, color: c.textPrimary},
+    autoTitleValue: {
+      fontSize: typography.sizes.sm,
+      fontWeight: typography.weights.semibold,
+      color: c.primary,
+    },
+    autoTitleHint: {
+      fontSize: typography.sizes.xs,
+      color: c.textMuted,
+      paddingHorizontal: spacing.lg,
+      marginTop: 2,
+    },
   });
 
 /**
@@ -150,6 +173,7 @@ export default function WidgetSettings() {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const {projects, loaded: projectsLoaded, load: loadProjects, add: addProject} =
     useProjectStore();
+  const {widget_voice_auto_title, setWidgetVoiceAutoTitle} = useSettingsStore();
 
   const [widgets, setWidgets] = useState<WidgetInfo[]>([]);
   const [configs, setConfigs] = useState<Record<number, WidgetConfig>>({});
@@ -191,7 +215,7 @@ export default function WidgetSettings() {
     return () => sub.remove();
   }, [available, refresh]);
 
-  const handleAddWidget = async (type: 'full' | 'toggle') => {
+  const handleAddWidget = async (type: 'full' | 'toggle' | 'addnote' | 'tracking') => {
     const ok = await nativeRequestPinWidget(type).catch(() => false);
     if (!ok) {
       Alert.alert(t('widgets.pinUnsupportedTitle'), t('widgets.pinUnsupported'));
@@ -219,6 +243,18 @@ export default function WidgetSettings() {
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.intro}>{t('widgets.intro')}</Text>
 
+        <TouchableOpacity
+          style={styles.autoTitleRow}
+          onPress={() =>
+            setWidgetVoiceAutoTitle(!widget_voice_auto_title).catch(() => {})
+          }>
+          <Text style={styles.autoTitleLabel}>{t('widgets.voiceAutoTitle')}</Text>
+          <Text style={styles.autoTitleValue}>
+            {widget_voice_auto_title ? t('common.on') : t('common.off')}
+          </Text>
+        </TouchableOpacity>
+        <Text style={styles.autoTitleHint}>{t('widgets.voiceAutoTitleHint')}</Text>
+
         {available && (
           <View style={styles.addRow}>
             <TouchableOpacity style={styles.addBtn} onPress={() => handleAddWidget('full')}>
@@ -226,6 +262,12 @@ export default function WidgetSettings() {
             </TouchableOpacity>
             <TouchableOpacity style={styles.addBtn} onPress={() => handleAddWidget('toggle')}>
               <Text style={styles.saveBtnText}>{t('widgets.addToggle')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.addBtn} onPress={() => handleAddWidget('addnote')}>
+              <Text style={styles.saveBtnText}>{t('widgets.addAddNote')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.addBtn} onPress={() => handleAddWidget('tracking')}>
+              <Text style={styles.saveBtnText}>{t('widgets.addTracking')}</Text>
             </TouchableOpacity>
           </View>
         )}

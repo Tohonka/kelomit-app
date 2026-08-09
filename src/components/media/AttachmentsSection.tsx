@@ -17,6 +17,7 @@ interface Props {
   media: EditorMedia[];
   onAdd: (m: EditorMedia) => void;
   onRemove: (index: number) => void;
+  autoStartVoice?: boolean;
 }
 
 const TILE = 76;
@@ -83,11 +84,11 @@ function Tile({m, label, onRemove, styles}: {m: EditorMedia; label: string; onRe
   );
 }
 
-export default function AttachmentsSection({media, onAdd, onRemove}: Props) {
+export default function AttachmentsSection({media, onAdd, onRemove, autoStartVoice}: Props) {
   const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const [recording, setRecording] = useState(false);
+  const [recording, setRecording] = useState(autoStartVoice ?? false);
   const [busy, setBusy] = useState(false);
 
   const run = async (fn: () => Promise<CapturedMedia | null>) => {
@@ -123,6 +124,7 @@ export default function AttachmentsSection({media, onAdd, onRemove}: Props) {
       {recording ? (
         <VoiceRecorder
           filePath={null}
+          autoStart={autoStartVoice}
           onRecord={(fp, dur) => {
             onAdd({media_type: 'voice', file_path: fp, thumbnail_path: null, duration_sec: dur});
             setRecording(false);

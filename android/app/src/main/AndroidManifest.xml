@@ -19,6 +19,12 @@
          (walking/cycling/vehicle) before the geofence exit fires. -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Exact-alarm scheduling for a timed tracking-pause auto-resume: an
+         inexact alarm only temp-allowlists the app, not the
+         foreground-service-start privilege, so on Android 12+ the resume
+         alarm could fire and then silently fail to restart tracking while
+         the app is closed. Falls back to an inexact alarm if not granted. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
     <!-- Media-library / external-storage permissions intentionally trimmed
          (Iteration 3 Phase 2): gallery imports use the Android system photo
@@ -60,6 +66,14 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent-filter>
+        <!-- kelomit://quickadd/<note|photo|voice> — home-screen add-note widget
+             opens straight into quick-add (Task 1 of the widget iteration). -->
+        <intent-filter>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.DEFAULT" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="kelomit" />
+        </intent-filter>
       </activity>
 
       <!-- Home-screen session widgets (Iteration 3 Phase 9.2). ACTION_TOGGLE is
@@ -89,6 +103,17 @@
           android:resource="@xml/widget_session_toggle_info" />
       </receiver>
 
+      <receiver
+        android:name=".widget.AddNoteWidgetProvider"
+        android:exported="false">
+        <intent-filter>
+          <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+        </intent-filter>
+        <meta-data
+          android:name="android.appwidget.provider"
+          android:resource="@xml/widget_add_note_info" />
+      </receiver>
+
       <!-- Opt-in background GPS keep-alive service (location-typed). -->
       <service
         android:name=".location.LocationService"
@@ -116,6 +141,28 @@
       <receiver
         android:name=".location.DayEndActionReceiver"
         android:exported="false" />
+
+      <!-- AlarmManager target for a timed tracking pause elapsing. -->
+      <receiver
+        android:name=".location.TrackingResumeReceiver"
+        android:exported="false" />
+
+      <!-- Stop-tracking widget: pause movement detection for 1h/4h/until
+           resumed, or resume it. -->
+      <receiver
+        android:name=".location.TrackingPauseWidgetProvider"
+        android:exported="false">
+        <intent-filter>
+          <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+          <action android:name="com.kelomitapp.widget.ACTION_TRACKING_PAUSE_1H" />
+          <action android:name="com.kelomitapp.widget.ACTION_TRACKING_PAUSE_4H" />
+          <action android:name="com.kelomitapp.widget.ACTION_TRACKING_PAUSE_INF" />
+          <action android:name="com.kelomitapp.widget.ACTION_TRACKING_RESUME" />
+        </intent-filter>
+        <meta-data
+          android:name="android.appwidget.provider"
+          android:resource="@xml/widget_tracking_pause_info" />
+      </receiver>
 
       <!-- Wakes the idle location service the moment activity-recognition
            reports the user started moving (faster than the geofence exit). -->

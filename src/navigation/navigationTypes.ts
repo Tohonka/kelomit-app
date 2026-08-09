@@ -16,7 +16,7 @@ export type RootStackParamList = {
     leaveRangeId?: number;
     initialTab?: 'note' | 'leave';
   };
-  QuickAddModal: {date?: string; dayId: number; entryType: EntryType};
+  QuickAddModal: {date?: string; dayId: number; entryType: EntryType; autoCapture?: boolean};
   ProjectsScreen: undefined;
   TagsScreen: undefined;
   TagsProjectsSettings: undefined;

@@ -6,6 +6,7 @@ import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import com.kelomitapp.location.TrackingPauseWidgetProvider
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -110,9 +111,12 @@ class WidgetSessionModule(reactContext: ReactApplicationContext) :
   @ReactMethod
   fun requestPinWidget(type: String, promise: Promise) {
     val mgr = AppWidgetManager.getInstance(context)
-    val cls =
-      if (type == "toggle") SessionToggleWidgetProvider::class.java
-      else SessionWidgetProvider::class.java
+    val cls = when (type) {
+      "toggle" -> SessionToggleWidgetProvider::class.java
+      "addnote" -> AddNoteWidgetProvider::class.java
+      "tracking" -> TrackingPauseWidgetProvider::class.java
+      else -> SessionWidgetProvider::class.java
+    }
     val ok = mgr != null &&
       mgr.isRequestPinAppWidgetSupported &&
       mgr.requestPinAppWidget(ComponentName(context, cls), null, null)

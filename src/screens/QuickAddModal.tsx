@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useMemo} from 'react';
+import React, {useState, useEffect, useMemo, useRef} from 'react';
 import {useTranslation} from 'react-i18next';
 import {
   View,
@@ -13,9 +13,11 @@ import {useTheme, typography, spacing, radius} from '../theme';
 import type {Colors} from '../theme';
 import Button from '../components/ui/Button';
 import AttachmentsSection, {type EditorMedia} from '../components/media/AttachmentsSection';
+import {capturePhoto} from '../utils/mediaCapture';
 import {ensureMediaDir} from '../utils/mediaUtils';
 import {haptic, HAPTIC_SAVE} from '../utils/haptics';
 import {useSaveQuickNote} from '../components/quickadd/useSaveQuickNote';
+import {autoTitleVoiceNote} from '../services/autoTitle';
 import type {RootStackScreenProps} from '../navigation/navigationTypes';
 
 type Props = RootStackScreenProps<'QuickAddModal'>;
@@ -65,7 +67,7 @@ const makeStyles = (c: Colors) =>
   });
 
 export default function QuickAddModal({navigation, route}: Props) {
-  const {dayId, entryType} = route.params;
+  const {dayId, entryType, autoCapture} = route.params;
   const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -87,10 +89,51 @@ export default function QuickAddModal({navigation, route}: Props) {
     ensureMediaDir().catch(() => {});
   }, [settingsLoaded, loadSettings]);
 
+  // Widget photo flow: open the camera immediately; the shot lands in `media`.
+  // Cancelling the camera just leaves the normal quick-add screen.
+  const autoCaptured = useRef(false);
+  useEffect(() => {
+    if (autoCapture && entryType === 'photo' && !autoCaptured.current) {
+      autoCaptured.current = true;
+      capturePhoto(false)
+        .then(m => { if (m) { setMedia(prev => [...prev, m]); } })
+        .catch(() => {});
+    }
+  }, [autoCapture, entryType]);
+
+  // Widget voice flow: AttachmentsSection latches this into its initial
+  // `recording` state on first render, so the recorder auto-starts once on
+  // arrival. Disarmed here — component-local state, NOT route.params — right
+  // after mount, so a later VoiceRecorder remount (after a discard, or the
+  // user tapping the mic again) sees `autoStart: false` and lands on the idle
+  // "tap to record" state instead of auto-recording again. React commits
+  // child effects before parent effects, so this disarm still runs after
+  // AttachmentsSection's first-render state already captured the `true`.
+  // `route.params.autoCapture` is deliberately left untouched: save-time code
+  // reads it to tell a widget-initiated capture from a manual one, so do NOT
+  // "helpfully" convert this back into `navigation.setParams`.
+  const [voiceAutoStart, setVoiceAutoStart] = useState(autoCapture && entryType === 'voice');
+  useEffect(() => {
+    setVoiceAutoStart(false);
+  }, []);
+
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await saveQuickNote({dayId, title, durationMinutes, media});
+      const saved = await saveQuickNote({dayId, title, durationMinutes, media});
+      if (
+        autoCapture &&
+        entryType === 'voice' &&
+        useSettingsStore.getState().widget_voice_auto_title
+      ) {
+        // Fire and forget — titling must never hold up the save UX.
+        autoTitleVoiceNote({
+          entryId: saved.entry.id,
+          dayId,
+          media: saved.media,
+          userTitled: title.trim().length > 0,
+        }).catch(() => {});
+      }
       haptic(HAPTIC_SAVE);
       navigation.goBack();
     } catch (e) {
@@ -118,6 +161,7 @@ export default function QuickAddModal({navigation, route}: Props) {
         media={media}
         onAdd={m => setMedia(prev => [...prev, m])}
         onRemove={i => setMedia(prev => prev.filter((_, idx) => idx !== i))}
+        autoStartVoice={voiceAutoStart}
       />
 
       <Text style={styles.sectionLabel}>{t('entries.title')}</Text>

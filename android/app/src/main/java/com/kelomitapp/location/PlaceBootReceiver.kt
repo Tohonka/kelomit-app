@@ -10,6 +10,8 @@ class PlaceBootReceiver : BroadcastReceiver() {
     // device rebooted, the notification is gone until some transition fires —
     // repost it here so it doesn't wait on the app being opened.
     com.kelomitapp.widget.TimerNotification.sync(context)
+    TrackingPause.expireIfDue(context)
+    if (NativeTrackingSettings(context).isPaused()) return
     if (!NativeTrackingSettings(context).enabled) return
     val pending = goAsync()
     PlaceMonitor.sync(context).addOnCompleteListener { task ->

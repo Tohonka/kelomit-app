@@ -1,10 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- minResizeWidth/minResizeHeight must stay below WidgetCommon's
+     COMPACT_WIDTH_DP (180dp) and SHORT_HEIGHT_DP (90dp) adaptive thresholds —
+     otherwise the launcher never lets the widget shrink small enough to
+     trigger the compact layout, and that logic is dead on device. -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:minWidth="250dp"
     android:minHeight="110dp"
     android:targetCellWidth="4"
     android:targetCellHeight="2"
     android:resizeMode="horizontal|vertical"
+    android:minResizeWidth="110dp"
+    android:minResizeHeight="40dp"
     android:widgetCategory="home_screen"
     android:description="@string/widget_full_description"
     android:previewLayout="@layout/widget_session"
