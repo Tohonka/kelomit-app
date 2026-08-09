@@ -26,7 +26,11 @@ import {getUpcomingTodos} from '../../db/entries';
 import {getLeaveRangesInRange} from '../../db/leaveRanges';
 import {formatDate, nextDayDates, shiftDate} from '../../utils/dateUtils';
 import {calcDayWorkSecs, calcHourBreakdown} from '../../utils/hoursUtils';
-import {getCurrentGeofenceDetection, type GeofenceDetection} from '../../services/gpsService';
+import {
+  ensureDetectionSeed,
+  getCurrentGeofenceDetection,
+  type GeofenceDetection,
+} from '../../services/gpsService';
 import type {Day, Entry, LeaveRange, Project, Tag} from '../../types';
 import LeaveBadges from '../entries/LeaveBadges';
 
@@ -139,7 +143,15 @@ export default function DayView({
   // Poll geofence membership for the "where am I" line.
   useEffect(() => {
     if (!isToday) { return; }
-    const tick = () => setDetected(getCurrentGeofenceDetection());
+    // While parked the native service delivers no fixes (IDLE mode), so ask
+    // for a one-shot seed when nothing is known — internally guarded, so
+    // calling it every tick is free once a position exists.
+    const tick = () => {
+      setDetected(getCurrentGeofenceDetection());
+      ensureDetectionSeed()
+        .then(() => setDetected(getCurrentGeofenceDetection()))
+        .catch(() => {});
+    };
     tick();
     const id = setInterval(tick, 4000);
     return () => clearInterval(id);

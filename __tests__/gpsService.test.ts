@@ -14,12 +14,17 @@ const mockRefreshRouteDay = jest.fn();
 let mockBackgroundTracking = true;
 let mockPausedUntil = 0;
 
+const mockGetCurrentPosition = jest.fn();
 jest.mock('@react-native-community/geolocation', () => ({
   setRNConfiguration: jest.fn(),
   watchPosition: (callback: (position: unknown) => void) =>
     mockWatchPosition(callback),
   clearWatch: jest.fn(),
-  getCurrentPosition: jest.fn(),
+  getCurrentPosition: (
+    success: (position: unknown) => void,
+    error: (err: unknown) => void,
+    options: unknown,
+  ) => mockGetCurrentPosition(success, error, options),
 }));
 jest.mock('react-native-permissions', () => ({
   check: jest.fn().mockResolvedValue('granted'),
@@ -42,7 +47,10 @@ jest.mock('../src/store/settingsStore', () => ({
     getState: () => ({background_tracking: mockBackgroundTracking}),
   },
 }));
-jest.mock('../src/db/locations', () => ({getLocations: jest.fn().mockResolvedValue([])}));
+const mockGetLocations = jest.fn().mockResolvedValue([]);
+jest.mock('../src/db/locations', () => ({
+  getLocations: (...args: unknown[]) => mockGetLocations(...args),
+}));
 jest.mock('../src/services/permissionService', () => ({
   ensureActivityRecognitionPermission: jest.fn().mockResolvedValue(true),
 }));
@@ -74,6 +82,7 @@ beforeEach(() => {
   mockBackgroundTracking = true;
   mockPausedUntil = 0;
   watchCallback = null;
+  mockGetLocations.mockResolvedValue([]);
   mockReadFixBuffer.mockResolvedValue([]);
   mockInsertGpsPoint.mockResolvedValue(undefined);
   mockGetOrCreateDay.mockResolvedValue({id: 1});
@@ -261,5 +270,58 @@ describe('detectionFromPosition', () => {
 
   it('returns unknown with no position', () => {
     expect(detectionFromPosition(null, [place({})])).toBe('unknown');
+  });
+});
+
+// Tests for the Home-label seed: the native service requests no location
+// updates while parked (IDLE), so without an active one-shot the label
+// would stick on Unknown after every app start at home/work.
+import {
+  ensureDetectionSeed,
+  getCurrentGeofenceDetection,
+} from '../src/services/gpsService';
+
+describe('ensureDetectionSeed', () => {
+  it('seeds detection with a one-shot fix when no live fix exists', async () => {
+    mockGetLocations.mockResolvedValue([place({kind: 'work'})]);
+    mockGetCurrentPosition.mockImplementation((success: (p: unknown) => void) =>
+      success({
+        coords: {latitude: 60.45, longitude: 22.26, accuracy: 20},
+        timestamp: Date.now(),
+      }),
+    );
+
+    expect(getCurrentGeofenceDetection()).toBe('unknown');
+    await ensureDetectionSeed();
+    expect(getCurrentGeofenceDetection()).toBe('work');
+  });
+
+  it('does not re-request within the cooldown after a failed lookup', async () => {
+    mockGetCurrentPosition.mockImplementation(
+      (_s: unknown, error: (e: unknown) => void) =>
+        error({code: 2, message: 'unavailable'}),
+    );
+
+    await ensureDetectionSeed();
+    // One seed = high-accuracy try + low-accuracy fallback.
+    expect(mockGetCurrentPosition).toHaveBeenCalledTimes(2);
+    await ensureDetectionSeed();
+    expect(mockGetCurrentPosition).toHaveBeenCalledTimes(2);
+  });
+
+  it('is a no-op once a position is known', async () => {
+    mockGetLocations.mockResolvedValue([place({kind: 'home'})]);
+    mockGetCurrentPosition.mockImplementation((success: (p: unknown) => void) =>
+      success({
+        coords: {latitude: 60.45, longitude: 22.26, accuracy: 20},
+        timestamp: Date.now(),
+      }),
+    );
+
+    await ensureDetectionSeed();
+    expect(getCurrentGeofenceDetection()).toBe('home');
+    await ensureDetectionSeed();
+    // Still just the one lookup (2 calls would mean a second one-shot ran).
+    expect(mockGetCurrentPosition).toHaveBeenCalledTimes(1);
   });
 });
