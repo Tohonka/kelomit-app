@@ -1,12 +1,13 @@
 <resources>
-    <!-- Warm Kelomit palette, mirrored from src/theme/colors.ts (light) for the
-         home-screen widgets, which can't read the JS theme. The dark variants
-         live in values-night/colors.xml so the widgets follow the system theme. -->
-    <color name="widget_bg">#FFF8F0</color>
-    <color name="widget_bg_active">#FBE3D4</color>
-    <color name="widget_primary">#C85C2D</color>
-    <color name="widget_text_primary">#3D2B1F</color>
-    <color name="widget_text_muted">#A08070</color>
-    <color name="widget_border">#DDD0C0</color>
+    <!-- "Liquid glass" Kelomit palette, mirrored from src/theme/colors.ts
+         (lightColors) for the home-screen widgets, which can't read the JS
+         theme. The dark variants live in values-night/colors.xml so the widgets
+         follow the system theme. -->
+    <color name="widget_bg">#FAFCFF</color>
+    <color name="widget_bg_active">#FBE6F1</color>
+    <color name="widget_primary">#D0268C</color>
+    <color name="widget_text_primary">#11161F</color>
+    <color name="widget_text_muted">#6D727B</color>
+    <color name="widget_border">#D0D4DC</color>
     <color name="widget_on_primary">#FFFFFF</color>
 </resources>
