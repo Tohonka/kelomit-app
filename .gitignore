@@ -52,3 +52,4 @@ AGENTS.md
 /.superpowers/brainstorm
 envCreds/setmyip.py
 server/.env
+.DS_Store
