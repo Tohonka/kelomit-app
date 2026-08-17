@@ -133,7 +133,6 @@ export default function QuickAddModal({navigation, route}: Props) {
           entryId: saved.entry.id,
           dayId,
           media: saved.media,
-          userTitled: title.trim().length > 0,
         }).catch(() => {});
       }
       haptic(HAPTIC_SAVE);

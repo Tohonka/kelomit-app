@@ -1,12 +1,18 @@
 const mockTranscribe = jest.fn();
 const mockUpdateEntry = jest.fn();
 const mockUpdateEntryMedia = jest.fn();
+const mockGetEntry = jest.fn();
 const mockLoadEntries = jest.fn();
+const mockCleanUp = jest.fn();
 
 jest.mock('../src/services/transcription', () => ({
   transcribe: (...a: unknown[]) => mockTranscribe(...a),
 }));
+jest.mock('../src/services/transcription/cleanup', () => ({
+  cleanUpIfEnabled: (...a: unknown[]) => mockCleanUp(...a),
+}));
 jest.mock('../src/db/entries', () => ({
+  getEntry: (...a: unknown[]) => mockGetEntry(...a),
   updateEntry: (...a: unknown[]) => mockUpdateEntry(...a),
   updateEntryMedia: (...a: unknown[]) => mockUpdateEntryMedia(...a),
 }));
@@ -75,28 +81,49 @@ describe('titleFromTranscript', () => {
 });
 
 describe('autoTitleVoiceNote', () => {
+  const TRANSCRIPT = 'Meeting with the roofers. Long talk.';
+  const run = () => autoTitleVoiceNote({entryId: 9, dayId: 42, media: [voice()]});
+
   beforeEach(() => {
     jest.clearAllMocks();
-    mockTranscribe.mockResolvedValue('Meeting with the roofers. Long talk.');
+    mockTranscribe.mockResolvedValue(TRANSCRIPT);
+    mockGetEntry.mockResolvedValue({id: 9, title: null, body: null});
+    mockCleanUp.mockResolvedValue(null); // cleanup off by default
   });
 
-  it('stores the transcript and titles an untitled note', async () => {
-    await autoTitleVoiceNote({entryId: 9, dayId: 42, media: [voice()], userTitled: false});
+  it('puts the transcript in the note body and a headline in the title', async () => {
+    await run();
     expect(mockTranscribe).toHaveBeenCalledWith('/m/a.wav');
-    expect(mockUpdateEntryMedia).toHaveBeenCalledWith(7, {transcript: 'Meeting with the roofers. Long talk.'});
-    expect(mockUpdateEntry).toHaveBeenCalledWith(9, {title: 'Meeting with the roofers.'});
+    expect(mockUpdateEntryMedia).toHaveBeenCalledWith(7, {transcript: TRANSCRIPT});
+    expect(mockUpdateEntry).toHaveBeenCalledWith(9, {
+      body: TRANSCRIPT,
+      title: 'Meeting with the roofers.',
+    });
     expect(mockLoadEntries).toHaveBeenCalledWith(42);
   });
 
-  it('keeps a user-set title', async () => {
-    await autoTitleVoiceNote({entryId: 9, dayId: 42, media: [voice()], userTitled: true});
+  it('keeps a user-set title but still fills the body', async () => {
+    mockGetEntry.mockResolvedValue({id: 9, title: 'Roof job', body: null});
+    await run();
+    expect(mockUpdateEntry).toHaveBeenCalledWith(9, {body: TRANSCRIPT});
+  });
+
+  it('never overwrites a body the user already wrote', async () => {
+    mockGetEntry.mockResolvedValue({id: 9, title: null, body: 'typed while it transcribed'});
+    await run();
+    expect(mockUpdateEntry).toHaveBeenCalledWith(9, {title: 'Meeting with the roofers.'});
+  });
+
+  it('writes nothing when the note is already titled and filled', async () => {
+    mockGetEntry.mockResolvedValue({id: 9, title: 'Roof job', body: 'notes'});
+    await run();
     expect(mockUpdateEntryMedia).toHaveBeenCalled(); // transcript still stored
     expect(mockUpdateEntry).not.toHaveBeenCalled();
   });
 
   it('no-ops without a voice attachment', async () => {
     await autoTitleVoiceNote({
-      entryId: 9, dayId: 42, userTitled: false,
+      entryId: 9, dayId: 42,
       media: [voice({media_type: 'photo'})],
     });
     expect(mockTranscribe).not.toHaveBeenCalled();
@@ -104,9 +131,27 @@ describe('autoTitleVoiceNote', () => {
 
   it('swallows transcription failure', async () => {
     mockTranscribe.mockRejectedValue(new Error('offline'));
-    await expect(
-      autoTitleVoiceNote({entryId: 9, dayId: 42, media: [voice()], userTitled: false}),
-    ).resolves.toBeUndefined();
+    await expect(run()).resolves.toBeUndefined();
     expect(mockUpdateEntry).not.toHaveBeenCalled();
+  });
+
+  it('uses the cleaned text and LLM headline when cleanup is on', async () => {
+    mockCleanUp.mockResolvedValue({text: 'Meeting with the roofers.', title: 'Roofers'});
+    await run();
+    expect(mockUpdateEntry).toHaveBeenCalledWith(9, {
+      body: 'Meeting with the roofers.',
+      title: 'Roofers',
+    });
+    // The raw transcript still goes to the media row, cleaned or not.
+    expect(mockUpdateEntryMedia).toHaveBeenCalledWith(7, {transcript: TRANSCRIPT});
+  });
+
+  it('falls back to the plain headline when cleanup returns no title', async () => {
+    mockCleanUp.mockResolvedValue({text: 'Cleaned it up nicely. Second bit.', title: null});
+    await run();
+    expect(mockUpdateEntry).toHaveBeenCalledWith(9, {
+      body: 'Cleaned it up nicely. Second bit.',
+      title: 'Cleaned it up nicely.',
+    });
   });
 });

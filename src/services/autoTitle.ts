@@ -1,5 +1,6 @@
 import {transcribe} from './transcription';
-import {updateEntry, updateEntryMedia} from '../db/entries';
+import {cleanUpIfEnabled} from './transcription/cleanup';
+import {getEntry, updateEntry, updateEntryMedia} from '../db/entries';
 import {useEntryStore} from '../store/entryStore';
 import type {EntryMedia} from '../types';
 
@@ -36,15 +37,20 @@ export function titleFromTranscript(transcript: string): string | null {
 
 /**
  * Widget voice flow, "auto-title" setting: transcribe the note's voice clip in
- * the background, store the transcript, and title an untitled note from the
- * spoken words. Every failure is silent — the note is already saved and manual
- * transcription stays available.
+ * the background, then fill the note from the spoken words — transcript as the
+ * note body, a short headline derived from it as the title. Two steps, because
+ * the transcript IS the note; the title is only a label for it.
+ *
+ * The raw transcript also stays on the media row next to the .wav, so the
+ * original is always verifiable no matter what ends up in the body.
+ *
+ * Every failure is silent — the note is already saved and manual transcription
+ * stays available.
  */
 export async function autoTitleVoiceNote(input: {
   entryId: number;
   dayId: number;
   media: EntryMedia[];
-  userTitled: boolean;
 }): Promise<void> {
   try {
     const clip = input.media.find(m => m.media_type === 'voice');
@@ -53,11 +59,29 @@ export async function autoTitleVoiceNote(input: {
     }
     const transcript = await transcribe(clip.file_path);
     await updateEntryMedia(clip.id, {transcript});
-    if (!input.userTitled) {
-      const title = titleFromTranscript(transcript);
+
+    // Optional second pass: an LLM rewrite of the mis-heard words, plus a real
+    // headline. Null whenever it's off, unavailable or failed — the raw
+    // transcript is always a working fallback.
+    const cleaned = await cleanUpIfEnabled(transcript);
+    const noteText = cleaned?.text ?? transcript;
+
+    // Re-read rather than trusting what the note looked like at save time:
+    // transcription takes seconds, and the user can open the note and start
+    // typing while it runs. Whatever they wrote wins.
+    const current = await getEntry(input.entryId);
+    const patch: {title?: string; body?: string} = {};
+    if (!current?.body?.trim()) {
+      patch.body = noteText;
+    }
+    if (!current?.title?.trim()) {
+      const title = cleaned?.title ?? titleFromTranscript(noteText);
       if (title) {
-        await updateEntry(input.entryId, {title});
+        patch.title = title;
       }
+    }
+    if (Object.keys(patch).length > 0) {
+      await updateEntry(input.entryId, patch);
     }
     await useEntryStore.getState().loadEntriesForDay(input.dayId);
   } catch {

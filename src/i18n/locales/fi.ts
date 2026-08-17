@@ -415,6 +415,11 @@ const fi: typeof en = {
     retranscribe: 'Litteroi uudelleen',
     transcriptLabel: 'Litterointi',
     useAsNote: 'Käytä muistiinpanon tekstinä',
+    cleanupTitle: 'Siisti tekoälyllä',
+    cleanupLabel: 'Korjaa sanat ja kirjoita otsikko',
+    cleanupHint:
+      'Lähettää litteroinnin OpenAI:lle, joka korjaa väärin kuullut sanat ja keksii lyhyen otsikon. Vaatii yllä olevan API-avaimen. Äänitys ja alkuperäinen litterointi säilyvät aina.',
+    cleanupNeedsKey: 'Aseta alle OpenAI API-avain käyttääksesi tätä.',
     errNoKey: 'Aseta ensin OpenAI API-avain.',
     errModelMissing: 'Laitteen mallia ei ole ladattu. Avaa asetukset ladataksesi sen.',
     errAuth: 'API-avain hylättiin. Tarkista se asetuksista.',

@@ -413,6 +413,11 @@ const en = {
     retranscribe: 'Re-transcribe',
     transcriptLabel: 'Transcript',
     useAsNote: 'Use as note text',
+    cleanupTitle: 'Clean up with AI',
+    cleanupLabel: 'Fix wording and write the title',
+    cleanupHint:
+      'Sends the transcript to OpenAI to fix mis-heard words and derive a short title. Needs the API key above. The recording and the raw transcript are always kept.',
+    cleanupNeedsKey: 'Set an OpenAI API key below to use this.',
     errNoKey: 'Set an OpenAI API key first.',
     errModelMissing: 'The on-device model isn\'t downloaded. Open settings to download it.',
     errAuth: 'API key was rejected. Check it in settings.',
