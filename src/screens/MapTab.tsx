@@ -25,7 +25,7 @@ import PlaceNameSheet, {
   type LocalPlaceChoice,
   type PlaceNameChoice,
 } from '../components/map/PlaceNameSheet';
-import TripList, {tripEndpointNames} from '../components/map/TripList';
+import TripList, {tripEndpointNames, type TripNotePrefill} from '../components/map/TripList';
 import TripDetailsModal from '../components/map/TripDetailsModal';
 import type {DayRouteSegment, DayRouteStop, Entry} from '../types';
 import type {PlaceCandidate} from '../services/placesService';
@@ -36,7 +36,7 @@ import type {RootStackParamList, RootStackScreenProps} from '../navigation/navig
 // persisted places visited that day. Shared by the Map tab
 // (today) and the pushed DayMap route (any day from the calendar).
 export function MapOverview({
-  dayId, title, topInset, bottomInset, onFullScreen, onOpenEntry,
+  dayId, title, topInset, bottomInset, onFullScreen, onOpenEntry, onAddNote,
 }: {
   dayId: number;
   title: string;
@@ -44,6 +44,7 @@ export function MapOverview({
   bottomInset: number;
   onFullScreen: () => void;
   onOpenEntry: (entry: Entry) => void;
+  onAddNote: (prefill: TripNotePrefill) => void;
 }) {
   const {t} = useTranslation();
   const {colors} = useTheme();
@@ -259,6 +260,7 @@ export function MapOverview({
           segments={segments}
           stops={activeStops}
           onPress={setSelectedSegment}
+          onAddNote={onAddNote}
         />
         <Text style={[styles.sectionHeader, styles.tripsHeader]}>
           {t('map.places')}
@@ -324,6 +326,7 @@ export default function MapTab() {
       bottomInset={shellPad.paddingBottom}
       onFullScreen={() => navigation.navigate('DayMapFull', {dayId: today.id, date: today.date})}
       onOpenEntry={entry => navigation.navigate('EntryDetailScreen', {entryId: entry.id, dayId: today.id})}
+      onAddNote={prefill => navigation.navigate('AddEntryModal', {dayId: today.id, date: today.date, prefill})}
     />
   );
 }
@@ -344,6 +347,7 @@ export function DayMapOverviewScreen({navigation, route}: RootStackScreenProps<'
       bottomInset={spacing.md}
       onFullScreen={() => navigation.navigate('DayMapFull', {dayId, date})}
       onOpenEntry={entry => navigation.navigate('EntryDetailScreen', {entryId: entry.id, dayId})}
+      onAddNote={prefill => navigation.navigate('AddEntryModal', {dayId, date, prefill})}
     />
   );
 }

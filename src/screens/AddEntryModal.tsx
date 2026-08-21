@@ -248,6 +248,7 @@ export default function AddEntryModal({navigation, route}: Props) {
   const {dayId, entryId, leaveRangeId, initialTab} = route.params;
   const entryDate = route.params.date ?? todayDate();
   const isEdit = entryId != null;
+  const prefill = isEdit ? undefined : route.params.prefill;
   const canSwitchTabs = entryId == null && leaveRangeId == null;
   const {addEntry, editEntry, loadEntriesForDay} = useEntryStore();
   const {projects, loaded: projectsLoaded, load: loadProjects, add: addProject} = useProjectStore();
@@ -267,7 +268,7 @@ export default function AddEntryModal({navigation, route}: Props) {
     leaveRangeId != null ? 'leave' : initialTab ?? 'note',
   );
   const [title, setTitle] = useState('');
-  const [body, setBody] = useState('');
+  const [body, setBody] = useState(prefill?.body ?? '');
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
   const [tagInput, setTagInput] = useState('');
@@ -279,12 +280,14 @@ export default function AddEntryModal({navigation, route}: Props) {
   const [removedMedia, setRemovedMedia] = useState<EditorMedia[]>([]);
 
   type TimeMode = 'none' | 'duration' | 'range';
-  const [timeMode, setTimeMode] = useState<TimeMode>('none');
+  const [timeMode, setTimeMode] = useState<TimeMode>(
+    prefill?.timeFrom ? 'range' : 'none',
+  );
   const [durationMinutes, setDurationMinutes] = useState('');
   // Optional explicit start for duration entries; null → default to "now" on save.
   const [durationStart, setDurationStart] = useState<string | null>(null);
-  const [timeFrom, setTimeFrom] = useState<string | null>(null);
-  const [timeTo, setTimeTo] = useState<string | null>(null);
+  const [timeFrom, setTimeFrom] = useState<string | null>(prefill?.timeFrom ?? null);
+  const [timeTo, setTimeTo] = useState<string | null>(prefill?.timeTo ?? null);
   const defaultsApplied = useRef(false);
 
   const [isTodo, setIsTodo] = useState(false);

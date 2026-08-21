@@ -190,6 +190,7 @@ function overview(dayId: number) {
       bottomInset={0}
       onFullScreen={jest.fn()}
       onOpenEntry={jest.fn()}
+      onAddNote={jest.fn()}
     />
   );
 }

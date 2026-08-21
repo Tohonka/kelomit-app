@@ -130,6 +130,9 @@ const fi: typeof en = {
     unknown: 'Tuntematon',
     dayStart: 'Päivän alku',
     dayEnd: 'Päivän loppu',
+    addTripToNote: 'Lisää matka muistiinpanoon',
+    saveTripsAsNote_one: 'Tallenna matka muistiinpanoksi',
+    saveTripsAsNote_other: 'Tallenna {{count}} matkaa muistiinpanoksi',
   },
   gallery: {
     groupDay: 'Päivä',

@@ -128,6 +128,9 @@ const en = {
     unknown: 'Unknown',
     dayStart: 'Day start',
     dayEnd: 'Day end',
+    addTripToNote: 'Add trip to note',
+    saveTripsAsNote_one: 'Save trip as note',
+    saveTripsAsNote_other: 'Save {{count}} trips as note',
   },
   gallery: {
     groupDay: 'Day',
