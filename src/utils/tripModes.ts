@@ -79,10 +79,19 @@ export function buildModeSpans(
     return [];
   }
 
+  // A newer enter supersedes a stale open interval (dropped AR exits):
+  // truncate at the next span's start.
+  for (let i = 0; i < clipped.length - 1; i += 1) {
+    if (clipped[i].endMs > clipped[i + 1].startMs) {
+      clipped[i] = {...clipped[i], endMs: clipped[i + 1].startMs};
+    }
+  }
+  const disjoint = clipped.filter(span => span.endMs > span.startMs);
+
   // Fill gaps (AR off / journal gap) with 'unknown'.
   const filled: Array<{mode: TripMode; startMs: number; endMs: number}> = [];
   let cursor = startMs;
-  for (const span of clipped) {
+  for (const span of disjoint) {
     if (span.startMs > cursor) {
       filled.push({mode: 'unknown', startMs: cursor, endMs: span.startMs});
     }

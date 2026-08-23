@@ -54,6 +54,51 @@ describe('buildModeSpans', () => {
   it('returns [] when no events overlap the window', () => {
     expect(buildModeSpans([], iso(0), iso(600))).toEqual([]);
   });
+
+  it('resolves overlapping intervals from dropped AR exits: newer enter supersedes stale open span', () => {
+    // vehicle enters but never exits → will be closed at throughMs (900s)
+    // walking enters at 600 and exits at 900 → overlaps vehicle from 600-900
+    // walking should win the 600-900 region; vehicle truncated to 600
+    const spans = buildModeSpans(
+      [ev('vehicle', 'enter', 0), ev('walking', 'enter', 600), ev('walking', 'exit', 900)],
+      iso(0),
+      iso(900),
+    );
+    expect(spans).toEqual([
+      {mode: 'vehicle', startTs: iso(0), endTs: iso(600)},
+      {mode: 'foot', startTs: iso(600), endTs: iso(900)},
+    ]);
+  });
+
+  it('produces deterministic result regardless of event order', () => {
+    // Same events, different order
+    const ordered = [ev('vehicle', 'enter', 0), ev('vehicle', 'exit', 300), ev('walking', 'enter', 400), ev('walking', 'exit', 600)];
+    const unordered = [ev('walking', 'exit', 600), ev('vehicle', 'enter', 0), ev('walking', 'enter', 400), ev('vehicle', 'exit', 300)];
+    const spansOrdered = buildModeSpans(ordered, iso(0), iso(600));
+    const spansUnordered = buildModeSpans(unordered, iso(0), iso(600));
+    expect(spansUnordered).toEqual(spansOrdered);
+  });
+
+  it('ignores exit events without matching enter', () => {
+    const spans = buildModeSpans(
+      [ev('vehicle', 'exit', 300), ev('walking', 'enter', 400), ev('walking', 'exit', 600)],
+      iso(0),
+      iso(600),
+    );
+    expect(spans).toEqual([
+      {mode: 'unknown', startTs: iso(0), endTs: iso(400)},
+      {mode: 'foot', startTs: iso(400), endTs: iso(600)},
+    ]);
+  });
+
+  it('absorbs leading sub-15s blip into following span', () => {
+    const spans = buildModeSpans(
+      [ev('still', 'enter', 0), ev('still', 'exit', 10), ev('vehicle', 'enter', 10), ev('vehicle', 'exit', 200)],
+      iso(0),
+      iso(200),
+    );
+    expect(spans).toEqual([{mode: 'vehicle', startTs: iso(0), endTs: iso(200)}]);
+  });
 });
 
 describe('aggregateModeDurations', () => {
