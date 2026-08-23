@@ -420,4 +420,15 @@ export const migrations: Migration[] = [
             (SELECT MAX(tally) + 1 FROM entry_projects WHERE project_id = projects.id), 1)`,
     ],
   },
+  {
+    version: 25,
+    up: [
+      // Routes iteration 1 — per-trip enrichment computed at derivation time
+      // (raw gps/activity data prunes at 45 days; these survive). Null = row
+      // predates v25 / raw data was gone: UI falls back to today's rendering.
+      'ALTER TABLE day_route_segments ADD COLUMN mode_spans_json TEXT',
+      'ALTER TABLE day_route_segments ADD COLUMN still_seconds REAL',
+      'ALTER TABLE day_route_segments ADD COLUMN via_json TEXT',
+    ],
+  },
 ];

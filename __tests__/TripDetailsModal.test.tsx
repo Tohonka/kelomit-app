@@ -51,6 +51,9 @@ const segment: DayRouteSegment = {
   average_speed_mps: 10,
   maximum_speed_mps: 12.5,
   raw_last_ts: '2026-07-24T09:00:00.000Z',
+  mode_spans: null,
+  still_seconds: null,
+  via: null,
   created_at: '',
   updated_at: '',
 };

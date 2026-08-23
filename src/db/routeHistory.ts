@@ -113,6 +113,9 @@ function rowToSegment(row: RawRow): DayRouteSegment | null {
     average_speed_mps: row.average_speed_mps as number,
     maximum_speed_mps: row.maximum_speed_mps as number,
     raw_last_ts: row.raw_last_ts as string,
+    mode_spans: null,
+    still_seconds: null,
+    via: null,
     created_at: row.created_at as string,
     updated_at: row.updated_at as string,
   };

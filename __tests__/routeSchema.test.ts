@@ -38,3 +38,14 @@ describe('route schema migration', () => {
     expect(activityUp).toContain("'route_derivation_version', '1'");
   });
 });
+
+describe('trip enrichment migration (v25)', () => {
+  const migration = migrations.find(item => item.version === 25);
+  const up = migration?.up.join('\n') ?? '';
+
+  it('adds nullable enrichment columns to day_route_segments', () => {
+    expect(up).toContain('ALTER TABLE day_route_segments ADD COLUMN mode_spans_json TEXT');
+    expect(up).toContain('ALTER TABLE day_route_segments ADD COLUMN still_seconds REAL');
+    expect(up).toContain('ALTER TABLE day_route_segments ADD COLUMN via_json TEXT');
+  });
+});
