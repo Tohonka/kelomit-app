@@ -18,14 +18,35 @@ jest.mock('@react-navigation/native', () => ({
 jest.mock('react-i18next', () => ({
   initReactI18next: {type: '3rdParty', init: jest.fn()},
   useTranslation: () => ({
-    t: (key: string) => ({
-      'map.tripDetails': 'Trip details',
-      'dayMap.distance': 'Distance',
-      'dayMap.duration': 'Duration',
-      'map.averageSpeed': 'Average speed',
-      'map.maximumSpeed': 'Maximum speed',
-      'common.close': 'Close',
-    })[key] ?? key,
+    t: (key: string, opts?: Record<string, string>) => {
+      const table: Record<string, string> = {
+        'map.tripDetails': 'Trip details',
+        'dayMap.distance': 'Distance',
+        'dayMap.duration': 'Duration',
+        'map.averageSpeed': 'Average speed',
+        'map.maximumSpeed': 'Maximum speed',
+        'common.close': 'Close',
+        'map.averagePace': 'Average pace',
+        'map.notMoving': 'Not moving',
+        'map.modes': 'Travel modes',
+        'map.modeVehicle': 'Driving',
+        'map.modeFoot': 'Walking',
+        'map.modeCycle': 'Cycling',
+        'map.modeStill': 'Paused',
+        'map.modeUnknown': 'Unknown',
+        'map.viaHeader': 'During the trip',
+        'map.viaPause': 'Paused {{duration}} at {{name}} ({{time}})',
+        'map.viaPassthrough': 'Passed {{name}} ({{time}})',
+        'map.viaUnnamed': 'unnamed stop',
+      };
+      let value = table[key] ?? key;
+      if (opts) {
+        for (const [k, v] of Object.entries(opts)) {
+          value = value.replace(`{{${k}}}`, v);
+        }
+      }
+      return value;
+    },
   }),
 }));
 jest.mock('../src/theme', () => {
@@ -34,7 +55,7 @@ jest.mock('../src/theme', () => {
   return {...actual, useTheme: () => ({colors: lightColors, isDark: false})};
 });
 
-import TripDetailsModal from '../src/components/map/TripDetailsModal';
+import TripDetailsModal, {formatPace} from '../src/components/map/TripDetailsModal';
 import type {DayRouteSegment} from '../src/types';
 
 const segment: DayRouteSegment = {
@@ -81,7 +102,8 @@ it('shows trip endpoints, timing, distance, duration, and speeds', () => {
   });
 
   expect(texts(renderer.root)).toEqual(expect.arrayContaining([
-    'Workshop → Customer',
+    'Workshop',
+    'Customer',
     '11:30 – 12:00',
     '1.3 km',
     '30m',
@@ -110,4 +132,76 @@ it('dismisses from the close button, backdrop, and Android back', () => {
   act(() => renderer.root.findByProps({testID: 'trip-details-backdrop'}).props.onPress());
   act(() => renderer.root.findByType(Modal).props.onRequestClose());
   expect(onClose).toHaveBeenCalledTimes(3);
+});
+
+it('formats pace as m:ss per km and omits it under 200 m', () => {
+  expect(formatPace(2000, 600)).toBe('5:00 /km');
+  expect(formatPace(150, 60)).toBeNull();
+  // 1000 m / 299.6 s => 299.6 s/km; naive Math.round(secPerKm % 60) yields
+  // minutes=4, seconds=60 ("4:60 /km") unless the carry is handled.
+  expect(formatPace(1000, 299.6)).toBe('5:00 /km');
+});
+
+it('shows still time, mode breakdown and via rows when data exists', () => {
+  const enriched: DayRouteSegment = {
+    ...segment,
+    still_seconds: 180,
+    mode_spans: [
+      {mode: 'vehicle', startTs: '2026-07-24T08:30:00.000Z', endTs: '2026-07-24T08:50:00.000Z'},
+      {mode: 'foot', startTs: '2026-07-24T08:50:00.000Z', endTs: '2026-07-24T08:55:00.000Z'},
+      {mode: 'unknown', startTs: '2026-07-24T08:55:00.000Z', endTs: '2026-07-24T08:55:30.000Z'},
+    ],
+    via: [
+      {
+        kind: 'pause',
+        startTs: '2026-07-24T08:40:00.000Z',
+        endTs: '2026-07-24T08:45:00.000Z',
+        name: 'Citymarket',
+      },
+      {kind: 'passthrough', ts: '2026-07-24T08:52:00.000Z', name: 'Kiosk'},
+    ],
+  };
+  let renderer!: ReturnType<typeof create>;
+  act(() => {
+    renderer = create(
+      <TripDetailsModal
+        visible
+        segment={enriched}
+        originName="Workshop"
+        destinationName="Customer"
+        onClose={jest.fn()}
+      />,
+    );
+  });
+
+  const allText = texts(renderer.root).join(' | ');
+  expect(allText).toContain('3m');
+  expect(allText).toContain('Driving');
+  expect(allText).toContain('Walking');
+  expect(allText).not.toContain('Unknown');
+  expect(allText).toContain('Citymarket');
+  expect(allText).toContain('Kiosk');
+});
+
+it('renders no new rows for a legacy segment (null enrichment)', () => {
+  let renderer!: ReturnType<typeof create>;
+  act(() => {
+    renderer = create(
+      <TripDetailsModal
+        visible
+        segment={segment}
+        originName="Workshop"
+        destinationName="Customer"
+        onClose={jest.fn()}
+      />,
+    );
+  });
+
+  const allText = texts(renderer.root);
+  // Note: pace is derived from distance_m/duration_sec, which are NOT
+  // enrichment fields (they've always existed), so it legitimately shows
+  // here too — only the mode_spans/still_seconds/via-gated rows are absent.
+  expect(allText.find(text => text.includes('Not moving'))).toBeUndefined();
+  expect(allText.find(text => text.includes('Travel modes'))).toBeUndefined();
+  expect(allText.find(text => text.includes('During the trip'))).toBeUndefined();
 });
