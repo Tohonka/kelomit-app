@@ -15,14 +15,25 @@ import {bucketLocations, type LocationBucket} from '../utils/bucketLocations';
 import {regionFor} from '../utils/mapRegion';
 import {flatMapStyle} from '../components/map/mapStyle';
 import {formatDuration} from '../utils/dateUtils';
+import {sliceByModeSpans} from '../utils/tripModes';
 import LocationMarker from '../components/map/LocationMarker';
 import MarkerNotesSheet from '../components/map/MarkerNotesSheet';
+import TripDetailsModal from '../components/map/TripDetailsModal';
+import {tripEndpointNames} from '../components/map/TripList';
 import type {
   DayRouteSegment,
   DayRouteStop,
   Entry,
   RouteCoordinate,
+  TripMode,
 } from '../types';
+
+/** Dash pattern per trip mode — dots for walking, dashes for cycling, solid
+ *  (no pattern) for vehicle/still/unknown. */
+const DASH_BY_MODE: Partial<Record<TripMode, number[]>> = {
+  foot: [1, 12],
+  cycle: [14, 10],
+};
 
 export function formatDistance(m: number): string {
   return m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`;
@@ -166,6 +177,7 @@ export function DayMapCanvas({
   buckets,
   region,
   onOpenEntry,
+  onPressSegment,
   style,
   interactive = true,
 }: {
@@ -174,6 +186,7 @@ export function DayMapCanvas({
   buckets: LocationBucket[];
   region: Region | undefined;
   onOpenEntry: (entry: Entry) => void;
+  onPressSegment?: (segment: DayRouteSegment) => void;
   style?: StyleProp<ViewStyle>;
   interactive?: boolean;
 }) {
@@ -190,16 +203,22 @@ export function DayMapCanvas({
         zoomEnabled={interactive}
         rotateEnabled={interactive}
         pitchEnabled={interactive}>
-        {segments.map((segment, index) => (
-          <Polyline
-            key={segment.id}
-            coordinates={segment.coordinates}
-            strokeColor={
-              ROUTE_SEGMENT_COLORS[index % ROUTE_SEGMENT_COLORS.length]
-            }
-            strokeWidth={4}
-          />
-        ))}
+        {segments.flatMap((segment, index) => {
+          const color = ROUTE_SEGMENT_COLORS[index % ROUTE_SEGMENT_COLORS.length];
+          return sliceByModeSpans(segment.coordinates, segment.mode_spans).map(
+            (slice, sliceIndex) => (
+              <Polyline
+                key={`${segment.id}:${sliceIndex}`}
+                coordinates={slice.coordinates}
+                strokeColor={color}
+                strokeWidth={4}
+                lineDashPattern={DASH_BY_MODE[slice.mode]}
+                tappable={interactive && onPressSegment != null}
+                onPress={() => onPressSegment?.(segment)}
+              />
+            ),
+          );
+        })}
         {routeCoords.length > 0 && (
           <Marker coordinate={routeCoords[0]} anchor={{x: 0.5, y: 0.5}} tracksViewChanges={false}>
             <View style={[dotStyles.dot, dotStyles.startDot]} />
@@ -235,8 +254,15 @@ export function DayMapView({dayId, onOpenEntry, topInset = 0}: {dayId: number; o
   const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const {segments, routeCoords, buckets, region, stats, isReady, isEmpty} =
+  const {segments, stops, routeCoords, buckets, region, stats, isReady, isEmpty} =
     useDayMapData(dayId);
+  const [selectedSegment, setSelectedSegment] = useState<DayRouteSegment | null>(null);
+  const stopsById = useMemo(() => new Map(stops.map(stop => [stop.id, stop])), [stops]);
+  const endpoints = selectedSegment
+    ? tripEndpointNames(selectedSegment, stopsById, {
+        dayStart: t('map.dayStart'), dayEnd: t('map.dayEnd'), unknown: t('map.unknown'),
+      })
+    : {origin: '', destination: ''};
 
   if (!isReady || isEmpty) {
     return (
@@ -265,7 +291,15 @@ export function DayMapView({dayId, onOpenEntry, topInset = 0}: {dayId: number; o
         buckets={buckets}
         region={region}
         onOpenEntry={onOpenEntry}
+        onPressSegment={setSelectedSegment}
         style={styles.map}
+      />
+      <TripDetailsModal
+        visible={selectedSegment != null}
+        segment={selectedSegment}
+        originName={endpoints.origin}
+        destinationName={endpoints.destination}
+        onClose={() => setSelectedSegment(null)}
       />
     </SafeAreaView>
   );
