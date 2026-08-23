@@ -5,6 +5,7 @@ import {
 } from '../src/utils/routeSegments';
 import type {ActivityEvent, GpsPoint} from '../src/types';
 import fixture65196 from './fixtures/routeDay-65196.json';
+import fixtureParkkipaikka from './fixtures/routeDay-parkkipaikka.json';
 
 const METRES_PER_DEGREE = 111194.92664455874;
 const baseMs = Date.parse('2026-07-24T08:00:00.000Z');
@@ -236,6 +237,15 @@ describe('deriveRouteDay', () => {
   });
 });
 
+const deriveFixture = (fixture: unknown) => {
+  const {points, events, anchors} = fixture as {
+    points: GpsPoint[];
+    events: ActivityEvent[];
+    anchors: RouteAnchor[];
+  };
+  return deriveRouteDay(points, anchors, events);
+};
+
 describe('deriveRouteDay enrichment', () => {
   it('stamps every coordinate with its fix epoch ms', () => {
     const points = [p(0, 0, 0, 10), p(30, 100, 0, 10), p(60, 200, 0, 10)];
@@ -262,12 +272,7 @@ describe('deriveRouteDay enrichment', () => {
   });
 
   it('emits a via pause for a >=120 s still span and mode spans for the trip (fixture day 65196)', () => {
-    const {points, events, anchors} = fixture65196 as {
-      points: GpsPoint[];
-      events: ActivityEvent[];
-      anchors: RouteAnchor[];
-    };
-    const {segments} = deriveRouteDay(points, anchors, events);
+    const {segments} = deriveFixture(fixture65196);
     // The 12:14–13:04 drive contains the 12:37:37–12:42:54 walk+still errand.
     const drive = segments.find(s => s.startTs.startsWith('2026-08-21T12:14'));
 
@@ -287,6 +292,80 @@ describe('deriveRouteDay enrichment', () => {
     // genuinely 0 — the errand's stillness is AR evidence (the pause above),
     // not a speed reading. Other segments of the day do accumulate it.
     expect(segments.filter(s => s.stillSeconds > 0)).toHaveLength(3);
+  });
+
+  it('keeps the trip’s own endpoint anchors out of via (fixture day 65196)', () => {
+    const {segments} = deriveFixture(fixture65196);
+    // Home 05:51 → the Easy Turku parking lot 06:06. Home is this trip's origin
+    // stop and the lot is its destination stop: neither is a waypoint.
+    const commute = segments[1];
+
+    expect(commute.originStopKey).toBe('saved:9:2026-08-20T21:24:47.195Z');
+    expect(commute.destinationStopKey).toBe(
+      'reusable:2:2026-08-21T06:06:38.241Z',
+    );
+    expect(commute.via).toEqual([
+      // The lot keeps its AR pause — arriving early and sitting in the car is
+      // real data, and pauses are not endpoint-filtered.
+      {
+        kind: 'pause',
+        startTs: '2026-08-21T06:01:34.221Z',
+        endTs: '2026-08-21T06:04:56.117Z',
+        name: 'Easy Turku parkkipaikka',
+      },
+      // "Easy Turku" (saved:10, the office) is a different anchor from the
+      // destination stop's (reusable:2, its parking lot), so it survives.
+      {kind: 'passthrough', ts: '2026-08-21T06:05:45.193Z', name: 'Easy Turku'},
+    ]);
+  });
+
+  it('derives the parkkipaikka fixture day, pausing rather than passing through', () => {
+    const {stops, segments} = deriveFixture(fixtureParkkipaikka);
+
+    expect(stops.map(stop => stop.anchor?.name ?? null)).toEqual([
+      'Easy Turku parkkipaikka',
+      null,
+      null,
+    ]);
+    expect(segments).toHaveLength(4);
+
+    // Home 05:39 → the Easy Turku parking lot 05:48. Both AR still spans are
+    // pauses, and Home never doubles as a passthrough.
+    const morning = segments[0];
+    expect(morning.destinationStopKey).toBe(
+      'reusable:2:2026-08-19T05:48:54.857Z',
+    );
+    expect(morning.via).toEqual([
+      {
+        kind: 'pause',
+        startTs: '2026-08-19T05:42:39.078Z',
+        endTs: '2026-08-19T05:45:32.145Z',
+        name: 'Home',
+      },
+      {
+        kind: 'pause',
+        startTs: '2026-08-19T05:46:26.638Z',
+        endTs: '2026-08-19T05:48:54.857Z',
+        name: null,
+      },
+    ]);
+
+    // The 08:16 → 09:01 working trip: a genuine mid-trip passthrough of an
+    // anchor that is neither endpoint, plus an unnamed pause.
+    expect(segments[1].via).toEqual([
+      {
+        kind: 'passthrough',
+        ts: '2026-08-19T08:19:45.638Z',
+        name: 'Tyks T-sairaala',
+      },
+      {
+        kind: 'pause',
+        startTs: '2026-08-19T08:36:20.586Z',
+        endTs: '2026-08-19T08:44:43.755Z',
+        name: null,
+      },
+    ]);
+    expect(segments[1].stillSeconds).toBe(49);
   });
 
   it('emits a passthrough when the track crosses an anchor without pausing', () => {

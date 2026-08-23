@@ -394,12 +394,22 @@ function makeSegment(
     rawLastTs,
     modeSpans: buildModeSpans(activityEvents, startTs, endTs),
     stillSeconds: Math.round(stillSeconds),
-    via: buildVia(points, anchors, activityEvents),
+    via: buildVia(points, anchors, activityEvents, [
+      originStopKey,
+      destinationStopKey,
+    ]),
   };
 }
 
 const anchorKey = (anchor: RouteAnchor): string =>
   `${anchor.type}:${anchor.id}`;
+
+/** `${type}:${id}` out of a stop key (`${type}:${id}:${ts}`, or `unknown:${ts}`
+ *  for a stop no anchor covers). */
+function stopAnchorKey(stopKey: string | null): string | null {
+  const [type, id] = stopKey?.split(':') ?? [];
+  return type === 'saved' || type === 'reusable' ? `${type}:${id}` : null;
+}
 
 /** Mid-trip waypoints: AR still-spans of >= 2 min become "pause" entries named
  *  by the anchor around the nearest-in-time fix; every other anchor the track
@@ -408,6 +418,7 @@ function buildVia(
   points: GpsPoint[],
   anchors: RouteAnchor[],
   activityEvents: ActivityEvent[],
+  endpointStopKeys: Array<string | null>,
 ): TripVia[] {
   const startMs = Date.parse(points[0].timestamp);
   const endMs = Date.parse(points[points.length - 1].timestamp);
@@ -437,8 +448,13 @@ function buildVia(
   }
 
   // Passthroughs: first fix inside an anchor's radius, one per anchor, skipping
-  // anchors already credited with a pause.
+  // anchors already credited with a pause and the trip's own endpoint anchors —
+  // those are its stops, not waypoints along the way.
   const seenAnchors = new Set<string>(pausedAnchors);
+  for (const stopKey of endpointStopKeys) {
+    const key = stopAnchorKey(stopKey);
+    if (key) seenAnchors.add(key);
+  }
   for (const point of points) {
     for (const anchor of anchors) {
       const key = anchorKey(anchor);
