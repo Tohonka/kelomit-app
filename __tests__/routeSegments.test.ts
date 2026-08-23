@@ -454,6 +454,23 @@ describe('stop refinement', () => {
     expect(segments).toHaveLength(2); // walk there, walk back
   });
 
+  it('trims an anchored cluster to the place radius instead of 150 m', () => {
+    const office = anchor(1, 'Office', 0, 30); // trim radius = max(45, 40) = 45
+    const points = [
+      p(0, 120), // 120 m out: inside the 150 m cluster, outside the place
+      ...Array.from({length: 10}, (_, i) => p(60 + i * 60, 0)),
+      p(660, 120),
+    ];
+    const {stops} = deriveRouteDay(points, [office], []);
+
+    expect(stops).toHaveLength(1);
+    expect(stops[0]).toMatchObject({
+      startTs: p(60, 0).timestamp,
+      endTs: p(600, 0).timestamp,
+      anchor: office,
+    });
+  });
+
   it('resolves the office as its own stop on the blurred day (fixture day 64421)', () => {
     const {stops} = deriveFixture(fixture64421);
 
