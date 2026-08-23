@@ -61,6 +61,12 @@ const STILL_SPEED_MPS = 0.7;
 const STILL_GAP_CAP_SEC = 120;
 /** AR still-span length that surfaces as a mid-trip "pause" in via. */
 const PAUSE_MIN_MS = 120_000;
+/** A sustained walk this long with real displacement breaks a stop. */
+const FOOT_BREAK_MS = 90_000;
+const FOOT_BREAK_DISPLACEMENT_M = 50;
+/** Anchored stops shrink to max(radius*1.5, this floor) instead of 150 m. */
+const ANCHOR_TRIM_FLOOR_M = 40;
+const FOOT_ACTIVITIES = new Set(['walking', 'running', 'on_foot']);
 
 export function filteredMaximumSpeedMps(
   recordedSpeeds: number[],
@@ -92,9 +98,11 @@ export function deriveRouteDay(
     (a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp),
   );
   const rawLastTs = ordered[ordered.length - 1]?.timestamp ?? '';
-  const ranges = findStopRanges(
+  const ranges = refineStopRanges(
     ordered,
-    vehicleStateAtPoints(ordered, activityEvents),
+    findStopRanges(ordered, vehicleStateAtPoints(ordered, activityEvents)),
+    anchors,
+    activityEvents,
   );
   const stops: DerivedRouteStop[] = [];
   const segments: DerivedRouteSegment[] = [];
@@ -268,6 +276,131 @@ function findStopRanges(
     ranges.push({start: confirmedStart, end: lastContained});
   }
   return ranges;
+}
+
+/** Post-process raw dwell ranges: (1) split at sustained walks that actually
+ *  went somewhere (milk runs inside the 150 m cluster), (2) tighten anchored
+ *  clusters to the anchor's own radius so adjacent places (store vs office)
+ *  become separate stops. Pure; tuning = constants above + version bump. */
+function refineStopRanges(
+  points: GpsPoint[],
+  ranges: StopRange[],
+  anchors: RouteAnchor[],
+  activityEvents: ActivityEvent[],
+): StopRange[] {
+  const lastMs = points.length
+    ? Date.parse(points[points.length - 1].timestamp)
+    : 0;
+  const footIntervals = activityIntervals(activityEvents, lastMs).filter(
+    interval =>
+      FOOT_ACTIVITIES.has(interval.activity) &&
+      interval.endMs - interval.startMs >= FOOT_BREAK_MS,
+  );
+  const refined: StopRange[] = [];
+  for (const range of ranges) {
+    for (const part of splitRangeByFoot(points, range, footIntervals)) {
+      refined.push(trimRangeToAnchor(points, part, anchors));
+    }
+  }
+  return refined;
+}
+
+function dwellMs(points: GpsPoint[], range: StopRange): number {
+  return (
+    Date.parse(points[range.end].timestamp) -
+    Date.parse(points[range.start].timestamp)
+  );
+}
+
+function splitRangeByFoot(
+  points: GpsPoint[],
+  range: StopRange,
+  footIntervals: Array<{startMs: number; endMs: number}>,
+): StopRange[] {
+  const cuts: StopRange[] = [];
+  for (const interval of footIntervals) {
+    // Fixes inside both this foot interval and this range.
+    let first = -1;
+    let last = -1;
+    for (let index = range.start; index <= range.end; index += 1) {
+      const ms = Date.parse(points[index].timestamp);
+      if (ms >= interval.startMs && ms <= interval.endMs) {
+        if (first < 0) first = index;
+        last = index;
+      }
+    }
+    if (first < 0 || last <= first) continue;
+    // Did the walk actually go anywhere? Max displacement from its own start.
+    const origin = points[first];
+    let displacement = 0;
+    for (let index = first; index <= last; index += 1) {
+      displacement = Math.max(
+        displacement,
+        distanceMeters(
+          origin.latitude,
+          origin.longitude,
+          points[index].latitude,
+          points[index].longitude,
+        ),
+      );
+    }
+    if (displacement >= FOOT_BREAK_DISPLACEMENT_M) {
+      cuts.push({start: first, end: last});
+    }
+  }
+  if (cuts.length === 0) {
+    return [range];
+  }
+  cuts.sort((a, b) => a.start - b.start);
+  const parts: StopRange[] = [];
+  let cursor = range.start;
+  for (const cut of cuts) {
+    if (cut.start > cursor) {
+      parts.push({start: cursor, end: cut.start - 1});
+    }
+    cursor = Math.max(cursor, cut.end + 1);
+  }
+  if (cursor <= range.end) {
+    parts.push({start: cursor, end: range.end});
+  }
+  // Only keep parts that still look like stops; short leftovers rejoin movement.
+  const surviving = parts.filter(
+    part => part.end > part.start && dwellMs(points, part) >= STOP_WINDOW_MS,
+  );
+  return surviving.length > 0 ? surviving : [range];
+}
+
+function trimRangeToAnchor(
+  points: GpsPoint[],
+  range: StopRange,
+  anchors: RouteAnchor[],
+): StopRange {
+  const anchor = nearestAnchor(
+    centroid(points.slice(range.start, range.end + 1)),
+    anchors,
+  );
+  if (!anchor) {
+    return range;
+  }
+  const radius = Math.max(anchor.radiusM * 1.5, ANCHOR_TRIM_FLOOR_M);
+  const inside = (index: number) =>
+    distanceMeters(
+      points[index].latitude,
+      points[index].longitude,
+      anchor.latitude,
+      anchor.longitude,
+    ) <=
+    radius + Math.max(0, points[index].accuracy ?? 0);
+  let start = range.start;
+  let end = range.end;
+  while (start < end && !inside(start)) start += 1;
+  while (end > start && !inside(end)) end -= 1;
+  const trimmed = {start, end};
+  // Never trim a stop out of existence — keep the original if the remainder
+  // no longer satisfies the dwell window.
+  return end > start && dwellMs(points, trimmed) >= STOP_WINDOW_MS
+    ? trimmed
+    : range;
 }
 
 function narrowestWindowStart(

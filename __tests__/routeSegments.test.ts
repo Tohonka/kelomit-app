@@ -4,6 +4,7 @@ import {
   type RouteAnchor,
 } from '../src/utils/routeSegments';
 import type {ActivityEvent, GpsPoint} from '../src/types';
+import fixture64421 from './fixtures/routeDay-64421.json';
 import fixture65196 from './fixtures/routeDay-65196.json';
 import fixtureParkkipaikka from './fixtures/routeDay-parkkipaikka.json';
 
@@ -322,18 +323,21 @@ describe('deriveRouteDay enrichment', () => {
   it('derives the parkkipaikka fixture day, pausing rather than passing through', () => {
     const {stops, segments} = deriveFixture(fixtureParkkipaikka);
 
+    // Stop refinement (foot-split + anchor-trim) moved the morning stop from the
+    // parking lot to the office: the lot dwell is only 3 m 28 s once the walk to
+    // the office is cut out, so the surviving part is the office arrival.
     expect(stops.map(stop => stop.anchor?.name ?? null)).toEqual([
-      'Easy Turku parkkipaikka',
+      'Easy Turku',
       null,
-      null,
+      'Easy Turku',
     ]);
     expect(segments).toHaveLength(4);
 
-    // Home 05:39 → the Easy Turku parking lot 05:48. Both AR still spans are
-    // pauses, and Home never doubles as a passthrough.
+    // Home 05:39 → the office 05:55, through the parking lot. Both AR still
+    // spans are pauses, and Home never doubles as a passthrough.
     const morning = segments[0];
     expect(morning.destinationStopKey).toBe(
-      'reusable:2:2026-08-19T05:48:54.857Z',
+      'saved:10:2026-08-19T05:55:15.020Z',
     );
     expect(morning.via).toEqual([
       {
@@ -345,8 +349,14 @@ describe('deriveRouteDay enrichment', () => {
       {
         kind: 'pause',
         startTs: '2026-08-19T05:46:26.638Z',
-        endTs: '2026-08-19T05:48:54.857Z',
+        endTs: '2026-08-19T05:49:42.145Z',
         name: null,
+      },
+      // The lot is now passed through on the way in rather than being the stop.
+      {
+        kind: 'passthrough',
+        ts: '2026-08-19T05:53:43.765Z',
+        name: 'Easy Turku parkkipaikka',
       },
     ]);
 
@@ -380,5 +390,89 @@ describe('deriveRouteDay enrichment', () => {
     expect(segments[0].via).toEqual([
       {kind: 'passthrough', ts: points[1].timestamp, name: 'Kiosk'},
     ]);
+  });
+});
+
+describe('stop refinement', () => {
+  const T0 = Date.parse('2026-08-21T08:00:00.000Z');
+  const iso = (s: number) => new Date(T0 + s * 1000).toISOString();
+  const at = (s: number, lat: number, lng: number, speed = 0): GpsPoint => ({
+    day_id: 1,
+    latitude: lat,
+    longitude: lng,
+    accuracy: 10,
+    altitude: null,
+    speed,
+    timestamp: iso(s),
+  });
+  const ev = (
+    activity: ActivityEvent['activity'],
+    transition: 'enter' | 'exit',
+    s: number,
+  ): ActivityEvent => ({activity, transition, timestamp: iso(s)});
+  // Office at 60.0, store ~120 m north — one 150 m cluster to the old derivation.
+  const OFFICE = 60.0;
+  const STORE = 60.00108;
+
+  it('splits an office dwell at a 90 s+ walk that actually went somewhere', () => {
+    const points = [
+      // 10 min at the office
+      ...Array.from({length: 20}, (_, i) => at(i * 30, OFFICE, 22.0)),
+      // 3 min walk to the store (within the old 150 m cluster)
+      ...Array.from({length: 6}, (_, i) =>
+        at(600 + i * 30, OFFICE + (STORE - OFFICE) * ((i + 1) / 6), 22.0, 1.4),
+      ),
+      // 6 min at the store
+      ...Array.from({length: 12}, (_, i) => at(780 + i * 30, STORE, 22.0)),
+      // walk back
+      ...Array.from({length: 6}, (_, i) =>
+        at(1140 + i * 30, STORE - (STORE - OFFICE) * ((i + 1) / 6), 22.0, 1.4),
+      ),
+      // 10 more office minutes
+      ...Array.from({length: 20}, (_, i) => at(1320 + i * 30, OFFICE, 22.0)),
+    ];
+    const events = [
+      ev('still', 'enter', 0),
+      ev('still', 'exit', 600),
+      ev('walking', 'enter', 600),
+      ev('walking', 'exit', 780),
+      ev('still', 'enter', 780),
+      ev('still', 'exit', 1140),
+      ev('walking', 'enter', 1140),
+      ev('walking', 'exit', 1320),
+      ev('still', 'enter', 1320),
+    ];
+    const {stops, segments} = deriveRouteDay(points, [], events);
+
+    expect(stops.map(stop => [stop.startTs, stop.endTs])).toEqual([
+      // Each stop resumes one fix after the walk's last fix: the fix at the
+      // walk's exit instant still belongs to the walk.
+      [iso(0), iso(570)], // office, up to the last fix before the walk
+      [iso(810), iso(1110)], // store
+      [iso(1350), iso(1890)], // office again
+    ]);
+    expect(segments).toHaveLength(2); // walk there, walk back
+  });
+
+  it('resolves the office as its own stop on the blurred day (fixture day 64421)', () => {
+    const {stops} = deriveFixture(fixture64421);
+
+    expect(stops.map(stop => stop.anchor?.name ?? null)).toContain('Easy Turku');
+  });
+
+  it('keeps the office and the parking lot apart (fixture day 62593)', () => {
+    const {stops, segments} = deriveFixture(fixtureParkkipaikka);
+    const names = stops.map(stop => stop.anchor?.name ?? null);
+
+    expect(names).toContain('Easy Turku');
+    // The lot is no longer a stop of its own: the user parks at 05:48:54 and is
+    // walking again by 05:52:25 — 3 m 28 s, under the 5-minute dwell window. It
+    // stays visible as a waypoint on the arrival trip instead.
+    expect(names).not.toContain('Easy Turku parkkipaikka');
+    expect(segments[0].via).toContainEqual({
+      kind: 'passthrough',
+      ts: '2026-08-19T05:53:43.765Z',
+      name: 'Easy Turku parkkipaikka',
+    });
   });
 });
