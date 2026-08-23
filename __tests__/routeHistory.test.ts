@@ -85,6 +85,9 @@ const derivedSegment = (
   averageSpeedMps: 2.5,
   maximumSpeedMps: 4,
   rawLastTs: '2026-07-24T08:20:00.000Z',
+  modeSpans: [],
+  stillSeconds: 0,
+  via: [],
   ...overrides,
 });
 

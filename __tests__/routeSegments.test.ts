@@ -3,7 +3,8 @@ import {
   filteredMaximumSpeedMps,
   type RouteAnchor,
 } from '../src/utils/routeSegments';
-import type {GpsPoint} from '../src/types';
+import type {ActivityEvent, GpsPoint} from '../src/types';
+import fixture65196 from './fixtures/routeDay-65196.json';
 
 const METRES_PER_DEGREE = 111194.92664455874;
 const baseMs = Date.parse('2026-07-24T08:00:00.000Z');
@@ -171,9 +172,9 @@ describe('deriveRouteDay', () => {
     });
     expect(out.segments).toHaveLength(2);
     expect(out.segments[0].coordinates).toEqual([
-      {latitude: p(0, -500).latitude, longitude: 0},
-      {latitude: p(50, -100).latitude, longitude: 0},
-      {latitude: p(100, 0).latitude, longitude: 0},
+      {latitude: p(0, -500).latitude, longitude: 0, t: baseMs},
+      {latitude: p(50, -100).latitude, longitude: 0, t: baseMs + 50_000},
+      {latitude: p(100, 0).latitude, longitude: 0, t: baseMs + 100_000},
     ]);
     expect(out.segments[0].destinationStopKey).toBe(out.stops[0].key);
     expect(out.segments[1].originStopKey).toBe(out.stops[0].key);
@@ -232,5 +233,73 @@ describe('deriveRouteDay', () => {
     );
 
     expect(out.segments[0].maximumSpeedMps).toBeCloseTo(10, 3);
+  });
+});
+
+describe('deriveRouteDay enrichment', () => {
+  it('stamps every coordinate with its fix epoch ms', () => {
+    const points = [p(0, 0, 0, 10), p(30, 100, 0, 10), p(60, 200, 0, 10)];
+    const {segments} = deriveRouteDay(points, [], []);
+
+    expect(segments[0].coordinates.map(c => c.t)).toEqual(
+      points.map(point => Date.parse(point.timestamp)),
+    );
+  });
+
+  it('counts still_seconds from sub-0.7 m/s fix pairs, capping each gap at 120 s', () => {
+    // Total span stays under STOP_WINDOW_MS (5 min) so this remains one moving
+    // segment and never becomes a dwell stop.
+    const points = [
+      p(0, 0, 0, 10),
+      p(30, 100, 0, 0.1), // slow pair starts
+      p(60, 100, 0, 0.2), // +30 s still
+      p(180, 100, 0, 0.1), // 120 s gap → +120 (at the cap)
+      p(210, 200, 0, 10),
+    ];
+    const {segments} = deriveRouteDay(points, [], []);
+
+    expect(segments[0].stillSeconds).toBe(150);
+  });
+
+  it('emits a via pause for a >=120 s still span and mode spans for the trip (fixture day 65196)', () => {
+    const {points, events, anchors} = fixture65196 as {
+      points: GpsPoint[];
+      events: ActivityEvent[];
+      anchors: RouteAnchor[];
+    };
+    const {segments} = deriveRouteDay(points, anchors, events);
+    // The 12:14–13:04 drive contains the 12:37:37–12:42:54 walk+still errand.
+    const drive = segments.find(s => s.startTs.startsWith('2026-08-21T12:14'));
+
+    expect(drive).toBeDefined();
+    expect(drive!.modeSpans.some(s => s.mode === 'vehicle')).toBe(true);
+    expect(drive!.modeSpans.some(s => s.mode === 'foot')).toBe(true);
+    expect(drive!.via).toEqual([
+      {
+        kind: 'pause',
+        startTs: '2026-08-21T12:38:54.263Z',
+        endTs: '2026-08-21T12:42:54.229Z',
+        name: null, // no anchor covers the errand
+      },
+    ]);
+    // Not stillSeconds: across this whole 50-minute drive only 6 fixes read
+    // below 0.7 m/s and no two are adjacent, so its GPS-speed still time is
+    // genuinely 0 — the errand's stillness is AR evidence (the pause above),
+    // not a speed reading. Other segments of the day do accumulate it.
+    expect(segments.filter(s => s.stillSeconds > 0)).toHaveLength(3);
+  });
+
+  it('emits a passthrough when the track crosses an anchor without pausing', () => {
+    const kiosk = anchor(1, 'Kiosk', 1000, 60);
+    const points = [
+      p(0, 0, 0, 10),
+      p(30, 1000, 0, 10), // inside Kiosk radius, moving
+      p(60, 2000, 0, 10),
+    ];
+    const {segments} = deriveRouteDay(points, [kiosk], []);
+
+    expect(segments[0].via).toEqual([
+      {kind: 'passthrough', ts: points[1].timestamp, name: 'Kiosk'},
+    ]);
   });
 });

@@ -1,5 +1,12 @@
 import {distanceMeters} from '../services/locationUtils';
-import type {ActivityEvent, GpsPoint, RouteCoordinate} from '../types';
+import type {
+  ActivityEvent,
+  GpsPoint,
+  ModeSpan,
+  RouteCoordinate,
+  TripVia,
+} from '../types';
+import {activityIntervals, buildModeSpans} from './tripModes';
 
 export interface RouteAnchor {
   id: number;
@@ -31,6 +38,9 @@ export interface DerivedRouteSegment {
   averageSpeedMps: number;
   maximumSpeedMps: number;
   rawLastTs: string;
+  modeSpans: ModeSpan[];
+  stillSeconds: number;
+  via: TripVia[];
 }
 
 interface StopRange {
@@ -45,6 +55,12 @@ const GO_SPEED_FIXES = 2;
 // ponytail: 70 m/s rejects clear GPS spikes; make transport-specific only if
 // collected real routes show this ceiling hides legitimate data.
 const MAX_PLAUSIBLE_SPEED_MPS = 70;
+/** Fixes at/below this speed count as "not moving" (traffic lights, jams). */
+const STILL_SPEED_MPS = 0.7;
+/** A slow-fix gap longer than this is a sampling hole, not stillness. */
+const STILL_GAP_CAP_SEC = 120;
+/** AR still-span length that surfaces as a mid-trip "pause" in via. */
+const PAUSE_MIN_MS = 120_000;
 
 export function filteredMaximumSpeedMps(
   recordedSpeeds: number[],
@@ -95,6 +111,8 @@ export function deriveRouteDay(
           originStopKey,
           destinationStopKey,
           rawLastTs,
+          anchors,
+          activityEvents,
         ),
       );
     }
@@ -304,6 +322,8 @@ function makeSegment(
   originStopKey: string | null,
   destinationStopKey: string | null,
   rawLastTs: string,
+  anchors: RouteAnchor[],
+  activityEvents: ActivityEvent[],
 ): DerivedRouteSegment {
   let distanceM = 0;
   let maximumLegSpeedMps = 0;
@@ -333,15 +353,36 @@ function makeSegment(
     .map(point => point.speed)
     .filter((speed): speed is number => speed != null);
 
+  const startTs = points[0].timestamp;
+  const endTs = points[points.length - 1].timestamp;
+
+  let stillSeconds = 0;
+  for (let index = 1; index < points.length; index += 1) {
+    const previous = points[index - 1].speed;
+    const current = points[index].speed;
+    if (
+      previous != null &&
+      current != null &&
+      previous < STILL_SPEED_MPS &&
+      current < STILL_SPEED_MPS
+    ) {
+      stillSeconds += Math.min(
+        secondsBetween(points[index - 1], points[index]),
+        STILL_GAP_CAP_SEC,
+      );
+    }
+  }
+
   return {
     sequence,
-    startTs: points[0].timestamp,
-    endTs: points[points.length - 1].timestamp,
+    startTs,
+    endTs,
     originStopKey,
     destinationStopKey,
-    coordinates: points.map(({latitude, longitude}) => ({
+    coordinates: points.map(({latitude, longitude, timestamp}) => ({
       latitude,
       longitude,
+      t: Date.parse(timestamp),
     })),
     distanceM,
     durationSec,
@@ -351,5 +392,74 @@ function makeSegment(
       maximumLegSpeedMps,
     ),
     rawLastTs,
+    modeSpans: buildModeSpans(activityEvents, startTs, endTs),
+    stillSeconds: Math.round(stillSeconds),
+    via: buildVia(points, anchors, activityEvents),
   };
+}
+
+const anchorKey = (anchor: RouteAnchor): string =>
+  `${anchor.type}:${anchor.id}`;
+
+/** Mid-trip waypoints: AR still-spans of >= 2 min become "pause" entries named
+ *  by the anchor around the nearest-in-time fix; every other anchor the track
+ *  passes through becomes one "passthrough". Sorted by time. */
+function buildVia(
+  points: GpsPoint[],
+  anchors: RouteAnchor[],
+  activityEvents: ActivityEvent[],
+): TripVia[] {
+  const startMs = Date.parse(points[0].timestamp);
+  const endMs = Date.parse(points[points.length - 1].timestamp);
+  const via: TripVia[] = [];
+  const pausedAnchors = new Set<string>();
+
+  for (const interval of activityIntervals(activityEvents, endMs)) {
+    if (interval.activity !== 'still') continue;
+    const spanStart = Math.max(interval.startMs, startMs);
+    const spanEnd = Math.min(interval.endMs, endMs);
+    if (spanEnd - spanStart < PAUSE_MIN_MS) continue;
+    const midMs = (spanStart + spanEnd) / 2;
+    const nearest = points.reduce((best, point) =>
+      Math.abs(Date.parse(point.timestamp) - midMs) <
+      Math.abs(Date.parse(best.timestamp) - midMs)
+        ? point
+        : best,
+    );
+    const anchor = nearestAnchor(nearest, anchors);
+    if (anchor) pausedAnchors.add(anchorKey(anchor));
+    via.push({
+      kind: 'pause',
+      startTs: new Date(spanStart).toISOString(),
+      endTs: new Date(spanEnd).toISOString(),
+      name: anchor?.name ?? null,
+    });
+  }
+
+  // Passthroughs: first fix inside an anchor's radius, one per anchor, skipping
+  // anchors already credited with a pause.
+  const seenAnchors = new Set<string>(pausedAnchors);
+  for (const point of points) {
+    for (const anchor of anchors) {
+      const key = anchorKey(anchor);
+      if (seenAnchors.has(key)) continue;
+      if (
+        distanceMeters(
+          point.latitude,
+          point.longitude,
+          anchor.latitude,
+          anchor.longitude,
+        ) <= anchor.radiusM
+      ) {
+        seenAnchors.add(key);
+        via.push({kind: 'passthrough', ts: point.timestamp, name: anchor.name});
+      }
+    }
+  }
+
+  return via.sort((a, b) => {
+    const left = a.kind === 'pause' ? a.startTs : a.ts;
+    const right = b.kind === 'pause' ? b.startTs : b.ts;
+    return left < right ? -1 : left > right ? 1 : 0;
+  });
 }
