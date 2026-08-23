@@ -13,6 +13,7 @@ import type {
   DerivedRouteStop,
 } from '../utils/routeSegments';
 import {getDB} from './database';
+import {clampRadius} from '../utils/geofence';
 
 type RawRow = Record<string, unknown>;
 
@@ -171,6 +172,20 @@ export async function renameNamedPlace(
      SET name = ?, updated_at = datetime('now')
      WHERE id = ?;`,
     [requiredName(name), id],
+  );
+}
+
+export async function deleteNamedPlace(id: number): Promise<void> {
+  await getDB().execute('DELETE FROM named_places WHERE id = ?;', [id]);
+}
+
+export async function updateNamedPlaceRadius(
+  id: number,
+  radiusM: number,
+): Promise<void> {
+  await getDB().execute(
+    `UPDATE named_places SET radius_m = ?, updated_at = datetime('now') WHERE id = ?;`,
+    [clampRadius(radiusM), id],
   );
 }
 

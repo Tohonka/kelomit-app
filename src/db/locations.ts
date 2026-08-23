@@ -52,6 +52,17 @@ export async function updateLocationRadius(id: number, radiusM: number): Promise
   );
 }
 
+export async function updateLocationName(id: number, name: string): Promise<void> {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    throw new Error('Name is required');
+  }
+  await getDB().execute(
+    "UPDATE locations SET name = ?, updated_at = datetime('now') WHERE id = ?;",
+    [trimmed, id],
+  );
+}
+
 export async function deleteLocation(id: number): Promise<void> {
   const db = getDB();
   await db.execute('DELETE FROM locations WHERE id = ?;', [id]);

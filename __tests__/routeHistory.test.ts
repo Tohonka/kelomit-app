@@ -7,6 +7,7 @@ import {getGpsDayIdsWithinRetention} from '../src/db/gps';
 import {
   createNamedPlace,
   createNamedPlaceForStop,
+  deleteNamedPlace,
   getDayRouteHistory,
   getEarliestDerivedTimestamp,
   getLatestDerivedRawTimestamp,
@@ -19,12 +20,14 @@ import {
   hasInvalidRouteGeometry,
   setAutomaticGoogleStopName,
   setDayStopName,
+  updateNamedPlaceRadius,
 } from '../src/db/routeHistory';
 import type {DayRouteStop} from '../src/types';
 import type {
   DerivedRouteSegment,
   DerivedRouteStop,
 } from '../src/utils/routeSegments';
+import {clampRadius} from '../src/utils/geofence';
 
 const mockGetDB = getDB as jest.MockedFunction<typeof getDB>;
 
@@ -191,6 +194,37 @@ describe('route history repository', () => {
     );
     expect(execute.mock.calls.flat().join(' ')).not.toContain(
       'day_route_stops',
+    );
+  });
+
+  it('deletes a named place without touching day-stop rows', async () => {
+    const {execute} = mockDatabase();
+
+    await deleteNamedPlace(7);
+
+    expect(execute).toHaveBeenCalledWith(
+      expect.stringMatching(/^DELETE FROM named_places/i),
+      [7],
+    );
+    expect(execute.mock.calls.flat().join(' ')).not.toContain(
+      'day_route_stops',
+    );
+  });
+
+  it('clamps a named place radius on update', async () => {
+    const {execute} = mockDatabase();
+
+    await updateNamedPlaceRadius(7, 3);
+    expect(execute).toHaveBeenCalledWith(
+      expect.stringMatching(/^UPDATE named_places/i),
+      [clampRadius(3), 7],
+    );
+
+    execute.mockClear();
+    await updateNamedPlaceRadius(7, 9999);
+    expect(execute).toHaveBeenCalledWith(
+      expect.stringMatching(/^UPDATE named_places/i),
+      [clampRadius(9999), 7],
     );
   });
 
