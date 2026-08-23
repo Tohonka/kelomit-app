@@ -74,9 +74,13 @@ describe('buildModeSpans', () => {
     // Same events, different order
     const ordered = [ev('vehicle', 'enter', 0), ev('vehicle', 'exit', 300), ev('walking', 'enter', 400), ev('walking', 'exit', 600)];
     const unordered = [ev('walking', 'exit', 600), ev('vehicle', 'enter', 0), ev('walking', 'enter', 400), ev('vehicle', 'exit', 300)];
-    const spansOrdered = buildModeSpans(ordered, iso(0), iso(600));
     const spansUnordered = buildModeSpans(unordered, iso(0), iso(600));
-    expect(spansUnordered).toEqual(spansOrdered);
+    // Verify the literal expected spans, not just that two runs match
+    expect(spansUnordered).toEqual([
+      {mode: 'vehicle', startTs: iso(0), endTs: iso(300)},
+      {mode: 'unknown', startTs: iso(300), endTs: iso(400)},
+      {mode: 'foot', startTs: iso(400), endTs: iso(600)},
+    ]);
   });
 
   it('ignores exit events without matching enter', () => {
@@ -98,6 +102,25 @@ describe('buildModeSpans', () => {
       iso(200),
     );
     expect(spans).toEqual([{mode: 'vehicle', startTs: iso(0), endTs: iso(200)}]);
+  });
+
+  it('handles nested intervals: enclosing span resumes after blip', () => {
+    // vehicle enters@0 (no exit, closed at throughMs=1800)
+    // still enters@600, exits@700 (nested blip inside vehicle)
+    // boundary sweep assigns:
+    //   [0, 600] → vehicle (only covering span)
+    //   [600, 700] → still (latest-starting covering span)
+    //   [700, 1800] → vehicle (resumed)
+    const spans = buildModeSpans(
+      [ev('vehicle', 'enter', 0), ev('still', 'enter', 600), ev('still', 'exit', 700)],
+      iso(0),
+      iso(1800),
+    );
+    expect(spans).toEqual([
+      {mode: 'vehicle', startTs: iso(0), endTs: iso(600)},
+      {mode: 'still', startTs: iso(600), endTs: iso(700)},
+      {mode: 'vehicle', startTs: iso(700), endTs: iso(1800)},
+    ]);
   });
 });
 

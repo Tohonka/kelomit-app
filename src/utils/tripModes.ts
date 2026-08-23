@@ -79,14 +79,24 @@ export function buildModeSpans(
     return [];
   }
 
-  // A newer enter supersedes a stale open interval (dropped AR exits):
-  // truncate at the next span's start.
-  for (let i = 0; i < clipped.length - 1; i += 1) {
-    if (clipped[i].endMs > clipped[i + 1].startMs) {
-      clipped[i] = {...clipped[i], endMs: clipped[i + 1].startMs};
+  // Overlapping/nested intervals (independent per-activity AR journaling, dropped
+  // exits): sweep elementary boundary slices; the latest-starting covering
+  // interval wins each slice, so a fresh enter supersedes a stale open span and
+  // an enclosing span resumes after a nested blip.
+  const bounds = [...new Set(clipped.flatMap(s => [s.startMs, s.endMs]))].sort((a, b) => a - b);
+  const disjoint: typeof clipped = [];
+  for (let i = 0; i + 1 < bounds.length; i += 1) {
+    const [a, b] = [bounds[i], bounds[i + 1]];
+    let winner: (typeof clipped)[number] | null = null;
+    for (const s of clipped) {
+      if (s.startMs <= a && s.endMs >= b) {
+        winner = s; // clipped is sorted by startMs → last covering = latest-starting
+      }
+    }
+    if (winner) {
+      disjoint.push({mode: winner.mode, startMs: a, endMs: b});
     }
   }
-  const disjoint = clipped.filter(span => span.endMs > span.startMs);
 
   // Fill gaps (AR off / journal gap) with 'unknown'.
   const filled: Array<{mode: TripMode; startMs: number; endMs: number}> = [];
