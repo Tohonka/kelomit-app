@@ -30,7 +30,17 @@ jest.mock('../src/theme', () => {
 
 import RadiusEditor from '../src/components/ui/RadiusEditor';
 
-it('increments and decrements by 1 m on press', () => {
+const REPEAT_DELAY_MS = 350;
+const REPEAT_INTERVAL_MS = 80;
+
+beforeEach(() => {
+  jest.useFakeTimers();
+});
+afterEach(() => {
+  jest.useRealTimers();
+});
+
+it('commits once with the incremented value on press release', () => {
   const onChange = jest.fn();
   let renderer!: ReturnType<typeof create>;
   act(() => {
@@ -39,11 +49,43 @@ it('increments and decrements by 1 m on press', () => {
 
   act(() => renderer.root.findByProps({accessibilityLabel: 'Increase radius'}).props.onPressIn());
   act(() => renderer.root.findByProps({accessibilityLabel: 'Increase radius'}).props.onPressOut());
-  expect(onChange).toHaveBeenLastCalledWith(151);
+
+  expect(onChange).toHaveBeenCalledTimes(1);
+  expect(onChange).toHaveBeenCalledWith(151);
+});
+
+it('commits once with the decremented value on press release', () => {
+  const onChange = jest.fn();
+  let renderer!: ReturnType<typeof create>;
+  act(() => {
+    renderer = create(<RadiusEditor value={150} onChange={onChange} />);
+  });
 
   act(() => renderer.root.findByProps({accessibilityLabel: 'Decrease radius'}).props.onPressIn());
   act(() => renderer.root.findByProps({accessibilityLabel: 'Decrease radius'}).props.onPressOut());
-  expect(onChange).toHaveBeenLastCalledWith(149);
+
+  expect(onChange).toHaveBeenCalledTimes(1);
+  expect(onChange).toHaveBeenCalledWith(149);
+});
+
+it('holding auto-repeats the display locally and commits exactly once on release', () => {
+  const onChange = jest.fn();
+  let renderer!: ReturnType<typeof create>;
+  act(() => {
+    renderer = create(<RadiusEditor value={150} onChange={onChange} />);
+  });
+
+  act(() => renderer.root.findByProps({accessibilityLabel: 'Increase radius'}).props.onPressIn());
+  // Past the initial delay plus two repeat ticks: +1 (press) +1 +1 (two ticks) = +3.
+  act(() => {
+    jest.advanceTimersByTime(REPEAT_DELAY_MS + 2 * REPEAT_INTERVAL_MS);
+  });
+  expect(onChange).not.toHaveBeenCalled(); // no commit mid-hold, only on release
+
+  act(() => renderer.root.findByProps({accessibilityLabel: 'Increase radius'}).props.onPressOut());
+
+  expect(onChange).toHaveBeenCalledTimes(1);
+  expect(onChange).toHaveBeenCalledWith(153);
 });
 
 it('commits a typed value on submit', () => {
@@ -70,6 +112,20 @@ it('does not call onChange for non-numeric typed input', () => {
 
   act(() => renderer.root.findByProps({accessibilityLabel: 'Edit radius'}).props.onPress());
   act(() => renderer.root.findByType(TextInput).props.onChangeText('abc'));
+  act(() => renderer.root.findByType(TextInput).props.onSubmitEditing());
+
+  expect(onChange).not.toHaveBeenCalled();
+});
+
+it('does not call onChange when the typed value matches the current one (tap-away no-op)', () => {
+  const onChange = jest.fn();
+  let renderer!: ReturnType<typeof create>;
+  act(() => {
+    renderer = create(<RadiusEditor value={150} onChange={onChange} />);
+  });
+
+  act(() => renderer.root.findByProps({accessibilityLabel: 'Edit radius'}).props.onPress());
+  act(() => renderer.root.findByType(TextInput).props.onChangeText('150'));
   act(() => renderer.root.findByType(TextInput).props.onSubmitEditing());
 
   expect(onChange).not.toHaveBeenCalled();

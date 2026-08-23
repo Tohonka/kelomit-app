@@ -9,7 +9,9 @@ const REPEAT_DELAY_MS = 350;
 const REPEAT_INTERVAL_MS = 80;
 
 /** ±1 m stepper with press-and-hold auto-repeat and tap-to-type. Clamps to
- *  [MIN_RADIUS_M, MAX_RADIUS_M]; the caller persists via onChange. */
+ *  [MIN_RADIUS_M, MAX_RADIUS_M]; the caller persists via onChange. Stepping
+ *  only moves a local `display` value — onChange fires once per press/hold
+ *  release — each commit costs a DB write + native geofence re-sync. */
 export default function RadiusEditor({
   value,
   onChange,
@@ -22,16 +24,22 @@ export default function RadiusEditor({
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
+  const [display, setDisplay] = useState(value);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const delay = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const latest = useRef(value);
-  latest.current = value;
+  const displayRef = useRef(value);
+
+  useEffect(() => {
+    setDisplay(value);
+    displayRef.current = value;
+  }, [value]);
 
   const step = (direction: 1 | -1) => {
-    const next = clampRadius(latest.current + direction);
-    if (next !== latest.current) {
-      onChange(next);
-    }
+    setDisplay(d => {
+      const next = clampRadius(d + direction);
+      displayRef.current = next;
+      return next;
+    });
   };
   const startRepeat = (direction: 1 | -1) => {
     step(direction);
@@ -45,28 +53,40 @@ export default function RadiusEditor({
     delay.current = null;
     timer.current = null;
   };
+  const commitStep = () => {
+    stopRepeat();
+    if (displayRef.current !== value) {
+      onChange(displayRef.current);
+    }
+  };
   // Unmount-while-held: onPressOut won't fire if the row disappears mid-press
   // (e.g. the location gets deleted), so the interval/timeout would otherwise
-  // outlive the component and keep firing onChange against a stale closure.
+  // outlive the component. Only clear timers — do NOT commit; a deleted row
+  // shouldn't write.
   useEffect(() => stopRepeat, []);
 
   const commitDraft = () => {
     setEditing(false);
     const parsed = Number.parseInt(draft, 10);
     if (Number.isFinite(parsed)) {
-      onChange(clampRadius(parsed));
+      const next = clampRadius(parsed);
+      if (next !== value) {
+        onChange(next);
+      }
+      setDisplay(next);
+      displayRef.current = next;
     }
   };
 
   return (
     <View style={styles.row}>
       <TouchableOpacity
-        style={[styles.stepBtn, value <= MIN_RADIUS_M && styles.stepBtnDisabled]}
-        disabled={value <= MIN_RADIUS_M}
+        style={[styles.stepBtn, display <= MIN_RADIUS_M && styles.stepBtnDisabled]}
+        disabled={display <= MIN_RADIUS_M}
         accessibilityRole="button"
         accessibilityLabel={t('location.decreaseRadius')}
         onPressIn={() => startRepeat(-1)}
-        onPressOut={stopRepeat}>
+        onPressOut={commitStep}>
         <Text style={styles.stepBtnText}>−</Text>
       </TouchableOpacity>
       {editing ? (
@@ -84,21 +104,21 @@ export default function RadiusEditor({
       ) : (
         <TouchableOpacity
           onPress={() => {
-            setDraft(String(value));
+            setDraft(String(display));
             setEditing(true);
           }}
           accessibilityRole="button"
           accessibilityLabel={t('location.editRadius')}>
-          <Text style={styles.value}>{t('location.radius', {m: value})}</Text>
+          <Text style={styles.value}>{t('location.radius', {m: display})}</Text>
         </TouchableOpacity>
       )}
       <TouchableOpacity
-        style={[styles.stepBtn, value >= MAX_RADIUS_M && styles.stepBtnDisabled]}
-        disabled={value >= MAX_RADIUS_M}
+        style={[styles.stepBtn, display >= MAX_RADIUS_M && styles.stepBtnDisabled]}
+        disabled={display >= MAX_RADIUS_M}
         accessibilityRole="button"
         accessibilityLabel={t('location.increaseRadius')}
         onPressIn={() => startRepeat(1)}
-        onPressOut={stopRepeat}>
+        onPressOut={commitStep}>
         <Text style={styles.stepBtnText}>+</Text>
       </TouchableOpacity>
     </View>
