@@ -189,6 +189,56 @@ it('ignores an empty name', async () => {
   expect(renderer.root.findAllByType(TextInput)).toHaveLength(0);
 });
 
+it('commits once when submit and blur both fire for one edit', async () => {
+  const renderer = await renderScreen();
+
+  act(() => {
+    press(renderer.root, 'rename-reusable-7');
+  });
+  act(() => {
+    renderer.root.findByType(TextInput).props.onChangeText('Depot');
+  });
+  const input = renderer.root.findByType(TextInput);
+  await act(async () => {
+    input.props.onSubmitEditing();
+    input.props.onBlur();
+  });
+
+  expect(renameNamedPlace).toHaveBeenCalledTimes(1);
+});
+
+it('does not write when the name is left unchanged', async () => {
+  const renderer = await renderScreen();
+
+  act(() => {
+    press(renderer.root, 'rename-saved-1');
+  });
+  await act(async () => {
+    renderer.root.findByType(TextInput).props.onBlur();
+  });
+  act(() => {
+    press(renderer.root, 'rename-reusable-7');
+  });
+  await act(async () => {
+    renderer.root.findByType(TextInput).props.onBlur();
+  });
+
+  expect(rename).not.toHaveBeenCalled();
+  expect(renameNamedPlace).not.toHaveBeenCalled();
+  expect(getNamedPlaces).toHaveBeenCalledTimes(1);
+});
+
+it('persists a radius change on a saved location', async () => {
+  const renderer = await renderScreen();
+
+  await act(async () => {
+    renderer.root.findAllByType(RadiusEditor)[0].props.onChange(200);
+  });
+
+  expect(setRadius).toHaveBeenCalledWith(1, 200);
+  expect(updateNamedPlaceRadius).not.toHaveBeenCalled();
+});
+
 it('persists a radius change on a named place', async () => {
   const renderer = await renderScreen();
   const editors = renderer.root.findAllByType(RadiusEditor);

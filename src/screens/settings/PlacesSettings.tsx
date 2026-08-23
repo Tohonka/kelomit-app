@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {View, Text, TextInput, ScrollView, TouchableOpacity, StyleSheet, Alert} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useTranslation} from 'react-i18next';
@@ -71,6 +71,10 @@ export default function PlacesSettings() {
   const [namedPlaces, setNamedPlaces] = useState<NamedPlace[]>([]);
   const [editing, setEditing] = useState<{type: RowKind; id: number} | null>(null);
   const [draft, setDraft] = useState('');
+  // Consumed-once token mirroring `editing` (savingRef pattern from
+  // PlaceNameSheet): onSubmitEditing and onBlur both fire for a single edit,
+  // and the second call sees a stale `editing` from its closure.
+  const editingRef = useRef<{type: RowKind; id: number} | null>(null);
 
   const reloadNamed = useCallback(async () => {
     setNamedPlaces(await getNamedPlaces());
@@ -83,15 +87,20 @@ export default function PlacesSettings() {
 
   const startRename = (type: RowKind, id: number, name: string) => {
     setDraft(name);
+    editingRef.current = {type, id};
     setEditing({type, id});
   };
 
-  const commitRename = async () => {
-    if (!editing) { return; }
-    const name = draft.trim();
-    const target = editing;
+  /** Commits at most one write per edit, and only when the name actually
+   *  changed — a blur after an unchanged edit would otherwise cost a DB write
+   *  plus (for saved places) a full native geofence re-sync. */
+  const commitRename = async (current: string) => {
+    const target = editingRef.current;
+    if (!target) { return; }
+    editingRef.current = null;
     setEditing(null);
-    if (!name) { return; }
+    const name = draft.trim();
+    if (!name || name === current) { return; }
     if (target.type === 'saved') {
       await rename(target.id, name);
     } else {
@@ -124,8 +133,8 @@ export default function PlacesSettings() {
             onChangeText={setDraft}
             autoFocus
             maxLength={60}
-            onBlur={commitRename}
-            onSubmitEditing={commitRename}
+            onBlur={() => commitRename(place.name)}
+            onSubmitEditing={() => commitRename(place.name)}
           />
         ) : (
           <>
