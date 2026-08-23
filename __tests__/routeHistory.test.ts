@@ -789,6 +789,127 @@ describe('route history repository', () => {
     );
   });
 
+  it('round-trips mode spans, still seconds, via and coordinate timestamps', async () => {
+    const derived = {
+      stops: [],
+      segments: [
+        derivedSegment({
+          coordinates: [
+            {latitude: 60, longitude: 22, t: 1787654400000},
+            {latitude: 60.1, longitude: 22, t: 1787655000000},
+          ],
+          modeSpans: [
+            {
+              mode: 'vehicle' as const,
+              startTs: '2026-08-21T12:00:00.000Z',
+              endTs: '2026-08-21T12:10:00.000Z',
+            },
+          ],
+          stillSeconds: 42,
+          via: [
+            {
+              kind: 'passthrough' as const,
+              ts: '2026-08-21T12:05:00.000Z',
+              name: 'Kiosk',
+            },
+          ],
+        }),
+      ],
+    };
+    const {transactionExecute} = mockDatabase([], [result([]), result()]);
+
+    await reconcileDayRouteHistory(4, derived);
+
+    const insertCall = transactionExecute.mock.calls.find(([sql]) =>
+      String(sql).includes('INSERT INTO day_route_segments'),
+    );
+    const [
+      day_id,
+      sequence,
+      start_ts,
+      end_ts,
+      origin_stop_id,
+      destination_stop_id,
+      coordinates_json,
+      distance_m,
+      duration_sec,
+      average_speed_mps,
+      maximum_speed_mps,
+      raw_last_ts,
+      mode_spans_json,
+      still_seconds,
+      via_json,
+    ] = insertCall?.[1] as unknown[];
+
+    mockDatabase([
+      result([]),
+      result([
+        {
+          id: 1,
+          day_id,
+          sequence,
+          start_ts,
+          end_ts,
+          origin_stop_id,
+          destination_stop_id,
+          coordinates_json,
+          distance_m,
+          duration_sec,
+          average_speed_mps,
+          maximum_speed_mps,
+          raw_last_ts,
+          mode_spans_json,
+          still_seconds,
+          via_json,
+          created_at: 'created',
+          updated_at: 'updated',
+        },
+      ]),
+    ]);
+
+    const {segments} = await getDayRouteHistory(4);
+
+    expect(segments[0].mode_spans).toEqual(derived.segments[0].modeSpans);
+    expect(segments[0].still_seconds).toBe(42);
+    expect(segments[0].via).toEqual(derived.segments[0].via);
+    expect(segments[0].coordinates[0].t).toBe(1787654400000);
+  });
+
+  it('yields null enrichment for pre-v25 rows', async () => {
+    mockDatabase([
+      result([]),
+      result([
+        {
+          id: 1,
+          day_id: 4,
+          sequence: 0,
+          start_ts: 'start',
+          end_ts: 'end',
+          origin_stop_id: null,
+          destination_stop_id: null,
+          coordinates_json: '[{"latitude":60.17,"longitude":24.94}]',
+          distance_m: 100,
+          duration_sec: 60,
+          average_speed_mps: 1.67,
+          maximum_speed_mps: 2,
+          raw_last_ts: 'latest',
+          mode_spans_json: null,
+          still_seconds: null,
+          via_json: null,
+          created_at: 'created',
+          updated_at: 'updated',
+        },
+      ]),
+    ]);
+
+    const {segments} = await getDayRouteHistory(4);
+
+    expect(segments[0].mode_spans).toBeNull();
+    expect(segments[0].still_seconds).toBeNull();
+    expect(segments[0].via).toBeNull();
+    expect(segments[0].coordinates[0].t).toBeUndefined();
+  });
+
   it('returns distinct raw day IDs inside the requested retention window', async () => {
     jest.spyOn(Date, 'now').mockReturnValue(
       Date.parse('2026-07-24T12:00:00.000Z'),
