@@ -93,18 +93,21 @@ export default function PlacesSettings() {
 
   /** Commits at most one write per edit, and only when the name actually
    *  changed — a blur after an unchanged edit would otherwise cost a DB write
-   *  plus (for saved places) a full native geofence re-sync. */
-  const commitRename = async (current: string) => {
+   *  plus (for saved places) a full native geofence re-sync. The token must
+   *  match the calling row: tapping row B's pencil re-arms it and unmounts
+   *  row A's input, and A's unmount blur still carries A's stale draft — an
+   *  identity-blind guard would write that draft onto row B. */
+  const commitRename = async (type: RowKind, id: number, current: string) => {
     const target = editingRef.current;
-    if (!target) { return; }
+    if (!target || target.type !== type || target.id !== id) { return; }
     editingRef.current = null;
     setEditing(null);
     const name = draft.trim();
     if (!name || name === current) { return; }
-    if (target.type === 'saved') {
-      await rename(target.id, name);
+    if (type === 'saved') {
+      await rename(id, name);
     } else {
-      await renameNamedPlace(target.id, name);
+      await renameNamedPlace(id, name);
       await reloadNamed();
     }
   };
@@ -133,8 +136,8 @@ export default function PlacesSettings() {
             onChangeText={setDraft}
             autoFocus
             maxLength={60}
-            onBlur={() => commitRename(place.name)}
-            onSubmitEditing={() => commitRename(place.name)}
+            onBlur={() => commitRename(type, place.id, place.name)}
+            onSubmitEditing={() => commitRename(type, place.id, place.name)}
           />
         ) : (
           <>

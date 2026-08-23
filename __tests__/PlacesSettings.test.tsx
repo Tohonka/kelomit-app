@@ -228,6 +228,29 @@ it('does not write when the name is left unchanged', async () => {
   expect(getNamedPlaces).toHaveBeenCalledTimes(1);
 });
 
+it('does not let a stale blur rename the row that took over editing', async () => {
+  const renderer = await renderScreen();
+
+  act(() => {
+    press(renderer.root, 'rename-saved-1');
+  });
+  act(() => {
+    renderer.root.findByType(TextInput).props.onChangeText('Studio');
+  });
+  // Capture the handler itself: once row A's input unmounts, its test
+  // instance's `props` getter throws, but RN still fires the stale closure.
+  const staleBlur = renderer.root.findByType(TextInput).props.onBlur;
+  act(() => {
+    press(renderer.root, 'rename-reusable-7');
+  });
+  await act(async () => {
+    staleBlur();
+  });
+
+  expect(rename).not.toHaveBeenCalled();
+  expect(renameNamedPlace).not.toHaveBeenCalled();
+});
+
 it('persists a radius change on a saved location', async () => {
   const renderer = await renderScreen();
 
