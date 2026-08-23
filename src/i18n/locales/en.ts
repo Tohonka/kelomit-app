@@ -579,6 +579,17 @@ const en = {
     accuracy: '±{{m}} m',
     noPlaceMatch: 'Not inside any saved place',
   },
+  places: {
+    title: 'Place names',
+    settingsSubtitle: 'Rename places, tune geofence sizes',
+    savedSection: 'Saved places',
+    reusableSection: 'Named stops',
+    rename: 'Rename',
+    renameHint: 'Renaming changes future trips; past days keep the name they were saved with.',
+    empty: 'Nothing here yet.',
+    deleteTitle: 'Delete place',
+    deleteMessage: 'Delete "{{name}}"? Past days keep their saved names.',
+  },
   permissions: {
     requiredTitle: 'Permission required',
     requiredMessage: 'Please enable this permission in your device Settings to use this feature.',

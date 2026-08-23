@@ -581,6 +581,17 @@ const fi: typeof en = {
     accuracy: '±{{m}} m',
     noPlaceMatch: 'Et ole missään tallennetussa paikassa',
   },
+  places: {
+    title: 'Paikkojen nimet',
+    settingsSubtitle: 'Nimeä paikkoja, säädä geoaitojen kokoa',
+    savedSection: 'Tallennetut paikat',
+    reusableSection: 'Nimetyt pysähdykset',
+    rename: 'Nimeä uudelleen',
+    renameHint: 'Uusi nimi näkyy tulevissa matkoissa; menneet päivät säilyttävät tallennetun nimen.',
+    empty: 'Ei vielä mitään.',
+    deleteTitle: 'Poista paikka',
+    deleteMessage: 'Poistetaanko ”{{name}}”? Menneet päivät säilyttävät nimensä.',
+  },
   permissions: {
     requiredTitle: 'Lupa tarvitaan',
     requiredMessage: 'Ota lupa käyttöön laitteen asetuksista, jotta voit käyttää tätä toimintoa.',

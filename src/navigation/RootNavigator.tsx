@@ -18,6 +18,7 @@ import ReportingSettings from '../screens/settings/ReportingSettings';
 import DataSettings from '../screens/settings/DataSettings';
 import QuickAddSettings from '../screens/settings/QuickAddSettings';
 import LocationSettings from '../screens/settings/LocationSettings';
+import PlacesSettings from '../screens/settings/PlacesSettings';
 import WidgetSettings from '../screens/settings/WidgetSettings';
 import TranscriptionSettings from '../screens/settings/TranscriptionSettings';
 import DiagnosticsSettings from '../screens/settings/DiagnosticsSettings';
@@ -132,6 +133,11 @@ export default function RootNavigator() {
         name="LocationSettings"
         component={LocationSettings}
         options={{title: t('location.title')}}
+      />
+      <Stack.Screen
+        name="PlacesSettings"
+        component={PlacesSettings}
+        options={{title: t('places.title')}}
       />
       <Stack.Screen
         name="WidgetSettings"
