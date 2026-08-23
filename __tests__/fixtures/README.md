@@ -37,5 +37,22 @@ Home — so it doesn't fit the target pattern and was skipped in favor of 62593.
 
 1185 points, 1972 events, 7 anchors.
 
+## `routeDay-64421.json`
+
+2026-08-20, day_id 64421. The bug-reproduction day, added on request after the initial
+two fixtures: this is the RED-test case for the derivation fix, kept alongside 62593 as
+the already-working comparison day. Persisted stop sequence (`day_route_stops`):
+
+1. `05:52:38.060Z` — Easy Turku parkkipaikka (spans the entire workday, 05:52 → 13:10)
+2. `13:13:55.445Z` — Home
+
+The whole workday blurs into a single "Easy Turku parkkipaikka" stop — the office
+("Easy Turku") never resolves as its own stop even though the user actually worked there,
+because today's derivation doesn't tighten the anchor away from the parking lot once the
+user is stationary near both. 62593 (2026-08-19) is the contrast case: its derivation does
+resolve a distinct "Easy Turku" stop after the parkkipaikka stop, so it's the
+already-working comparison day rather than the bug case. 252 points, 2035 events, 7
+anchors.
+
 Extracted from realUserData backup 2026-08-24; single-user app, no privacy concern (see
 kelomit-realuserdata-backups memory).
