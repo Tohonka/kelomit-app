@@ -1,5 +1,12 @@
 import {distanceMeters} from '../services/locationUtils';
-import type {ActivityEvent, GpsPoint, RouteCoordinate} from '../types';
+import type {
+  ActivityEvent,
+  GpsPoint,
+  ModeSpan,
+  RouteCoordinate,
+  TripVia,
+} from '../types';
+import {activityIntervals, buildModeSpans} from './tripModes';
 
 export interface RouteAnchor {
   id: number;
@@ -31,6 +38,9 @@ export interface DerivedRouteSegment {
   averageSpeedMps: number;
   maximumSpeedMps: number;
   rawLastTs: string;
+  modeSpans: ModeSpan[];
+  stillSeconds: number;
+  via: TripVia[];
 }
 
 interface StopRange {
@@ -45,6 +55,18 @@ const GO_SPEED_FIXES = 2;
 // ponytail: 70 m/s rejects clear GPS spikes; make transport-specific only if
 // collected real routes show this ceiling hides legitimate data.
 const MAX_PLAUSIBLE_SPEED_MPS = 70;
+/** Fixes at/below this speed count as "not moving" (traffic lights, jams). */
+const STILL_SPEED_MPS = 0.7;
+/** A slow-fix gap longer than this is a sampling hole, not stillness. */
+const STILL_GAP_CAP_SEC = 120;
+/** AR still-span length that surfaces as a mid-trip "pause" in via. */
+const PAUSE_MIN_MS = 120_000;
+/** A sustained walk this long with real displacement breaks a stop. */
+const FOOT_BREAK_MS = 90_000;
+const FOOT_BREAK_DISPLACEMENT_M = 50;
+/** Anchored stops shrink to max(radius*1.5, this floor) instead of 150 m. */
+const ANCHOR_TRIM_FLOOR_M = 40;
+const FOOT_ACTIVITIES = new Set(['walking', 'running', 'on_foot']);
 
 export function filteredMaximumSpeedMps(
   recordedSpeeds: number[],
@@ -76,9 +98,11 @@ export function deriveRouteDay(
     (a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp),
   );
   const rawLastTs = ordered[ordered.length - 1]?.timestamp ?? '';
-  const ranges = findStopRanges(
+  const ranges = refineStopRanges(
     ordered,
-    vehicleStateAtPoints(ordered, activityEvents),
+    findStopRanges(ordered, vehicleStateAtPoints(ordered, activityEvents)),
+    anchors,
+    activityEvents,
   );
   const stops: DerivedRouteStop[] = [];
   const segments: DerivedRouteSegment[] = [];
@@ -95,6 +119,8 @@ export function deriveRouteDay(
           originStopKey,
           destinationStopKey,
           rawLastTs,
+          anchors,
+          activityEvents,
         ),
       );
     }
@@ -252,6 +278,131 @@ function findStopRanges(
   return ranges;
 }
 
+/** Post-process raw dwell ranges: (1) split at sustained walks that actually
+ *  went somewhere (milk runs inside the 150 m cluster), (2) tighten anchored
+ *  clusters to the anchor's own radius so adjacent places (store vs office)
+ *  become separate stops. Pure; tuning = constants above + version bump. */
+function refineStopRanges(
+  points: GpsPoint[],
+  ranges: StopRange[],
+  anchors: RouteAnchor[],
+  activityEvents: ActivityEvent[],
+): StopRange[] {
+  const lastMs = points.length
+    ? Date.parse(points[points.length - 1].timestamp)
+    : 0;
+  const footIntervals = activityIntervals(activityEvents, lastMs).filter(
+    interval =>
+      FOOT_ACTIVITIES.has(interval.activity) &&
+      interval.endMs - interval.startMs >= FOOT_BREAK_MS,
+  );
+  const refined: StopRange[] = [];
+  for (const range of ranges) {
+    for (const part of splitRangeByFoot(points, range, footIntervals)) {
+      refined.push(trimRangeToAnchor(points, part, anchors));
+    }
+  }
+  return refined;
+}
+
+function dwellMs(points: GpsPoint[], range: StopRange): number {
+  return (
+    Date.parse(points[range.end].timestamp) -
+    Date.parse(points[range.start].timestamp)
+  );
+}
+
+function splitRangeByFoot(
+  points: GpsPoint[],
+  range: StopRange,
+  footIntervals: Array<{startMs: number; endMs: number}>,
+): StopRange[] {
+  const cuts: StopRange[] = [];
+  for (const interval of footIntervals) {
+    // Fixes inside both this foot interval and this range.
+    let first = -1;
+    let last = -1;
+    for (let index = range.start; index <= range.end; index += 1) {
+      const ms = Date.parse(points[index].timestamp);
+      if (ms >= interval.startMs && ms <= interval.endMs) {
+        if (first < 0) first = index;
+        last = index;
+      }
+    }
+    if (first < 0 || last <= first) continue;
+    // Did the walk actually go anywhere? Max displacement from its own start.
+    const origin = points[first];
+    let displacement = 0;
+    for (let index = first; index <= last; index += 1) {
+      displacement = Math.max(
+        displacement,
+        distanceMeters(
+          origin.latitude,
+          origin.longitude,
+          points[index].latitude,
+          points[index].longitude,
+        ),
+      );
+    }
+    if (displacement >= FOOT_BREAK_DISPLACEMENT_M) {
+      cuts.push({start: first, end: last});
+    }
+  }
+  if (cuts.length === 0) {
+    return [range];
+  }
+  cuts.sort((a, b) => a.start - b.start);
+  const parts: StopRange[] = [];
+  let cursor = range.start;
+  for (const cut of cuts) {
+    if (cut.start > cursor) {
+      parts.push({start: cursor, end: cut.start - 1});
+    }
+    cursor = Math.max(cursor, cut.end + 1);
+  }
+  if (cursor <= range.end) {
+    parts.push({start: cursor, end: range.end});
+  }
+  // Only keep parts that still look like stops; short leftovers rejoin movement.
+  const surviving = parts.filter(
+    part => part.end > part.start && dwellMs(points, part) >= STOP_WINDOW_MS,
+  );
+  return surviving.length > 0 ? surviving : [range];
+}
+
+function trimRangeToAnchor(
+  points: GpsPoint[],
+  range: StopRange,
+  anchors: RouteAnchor[],
+): StopRange {
+  const anchor = nearestAnchor(
+    centroid(points.slice(range.start, range.end + 1)),
+    anchors,
+  );
+  if (!anchor) {
+    return range;
+  }
+  const radius = Math.max(anchor.radiusM * 1.5, ANCHOR_TRIM_FLOOR_M);
+  const inside = (index: number) =>
+    distanceMeters(
+      points[index].latitude,
+      points[index].longitude,
+      anchor.latitude,
+      anchor.longitude,
+    ) <=
+    radius + Math.max(0, points[index].accuracy ?? 0);
+  let start = range.start;
+  let end = range.end;
+  while (start < end && !inside(start)) start += 1;
+  while (end > start && !inside(end)) end -= 1;
+  const trimmed = {start, end};
+  // Never trim a stop out of existence — keep the original if the remainder
+  // no longer satisfies the dwell window.
+  return end > start && dwellMs(points, trimmed) >= STOP_WINDOW_MS
+    ? trimmed
+    : range;
+}
+
 function narrowestWindowStart(
   points: GpsPoint[],
   floor: number,
@@ -304,6 +455,8 @@ function makeSegment(
   originStopKey: string | null,
   destinationStopKey: string | null,
   rawLastTs: string,
+  anchors: RouteAnchor[],
+  activityEvents: ActivityEvent[],
 ): DerivedRouteSegment {
   let distanceM = 0;
   let maximumLegSpeedMps = 0;
@@ -333,15 +486,36 @@ function makeSegment(
     .map(point => point.speed)
     .filter((speed): speed is number => speed != null);
 
+  const startTs = points[0].timestamp;
+  const endTs = points[points.length - 1].timestamp;
+
+  let stillSeconds = 0;
+  for (let index = 1; index < points.length; index += 1) {
+    const previous = points[index - 1].speed;
+    const current = points[index].speed;
+    if (
+      previous != null &&
+      current != null &&
+      previous < STILL_SPEED_MPS &&
+      current < STILL_SPEED_MPS
+    ) {
+      stillSeconds += Math.min(
+        secondsBetween(points[index - 1], points[index]),
+        STILL_GAP_CAP_SEC,
+      );
+    }
+  }
+
   return {
     sequence,
-    startTs: points[0].timestamp,
-    endTs: points[points.length - 1].timestamp,
+    startTs,
+    endTs,
     originStopKey,
     destinationStopKey,
-    coordinates: points.map(({latitude, longitude}) => ({
+    coordinates: points.map(({latitude, longitude, timestamp}) => ({
       latitude,
       longitude,
+      t: Date.parse(timestamp),
     })),
     distanceM,
     durationSec,
@@ -351,5 +525,90 @@ function makeSegment(
       maximumLegSpeedMps,
     ),
     rawLastTs,
+    modeSpans: buildModeSpans(activityEvents, startTs, endTs),
+    stillSeconds: Math.round(stillSeconds),
+    via: buildVia(points, anchors, activityEvents, [
+      originStopKey,
+      destinationStopKey,
+    ]),
   };
+}
+
+const anchorKey = (anchor: RouteAnchor): string =>
+  `${anchor.type}:${anchor.id}`;
+
+/** `${type}:${id}` out of a stop key (`${type}:${id}:${ts}`, or `unknown:${ts}`
+ *  for a stop no anchor covers). */
+function stopAnchorKey(stopKey: string | null): string | null {
+  const [type, id] = stopKey?.split(':') ?? [];
+  return type === 'saved' || type === 'reusable' ? `${type}:${id}` : null;
+}
+
+/** Mid-trip waypoints: AR still-spans of >= 2 min become "pause" entries named
+ *  by the anchor around the nearest-in-time fix; every other anchor the track
+ *  passes through becomes one "passthrough". Sorted by time. */
+function buildVia(
+  points: GpsPoint[],
+  anchors: RouteAnchor[],
+  activityEvents: ActivityEvent[],
+  endpointStopKeys: Array<string | null>,
+): TripVia[] {
+  const startMs = Date.parse(points[0].timestamp);
+  const endMs = Date.parse(points[points.length - 1].timestamp);
+  const via: TripVia[] = [];
+  const pausedAnchors = new Set<string>();
+
+  for (const interval of activityIntervals(activityEvents, endMs)) {
+    if (interval.activity !== 'still') continue;
+    const spanStart = Math.max(interval.startMs, startMs);
+    const spanEnd = Math.min(interval.endMs, endMs);
+    if (spanEnd - spanStart < PAUSE_MIN_MS) continue;
+    const midMs = (spanStart + spanEnd) / 2;
+    const nearest = points.reduce((best, point) =>
+      Math.abs(Date.parse(point.timestamp) - midMs) <
+      Math.abs(Date.parse(best.timestamp) - midMs)
+        ? point
+        : best,
+    );
+    const anchor = nearestAnchor(nearest, anchors);
+    if (anchor) pausedAnchors.add(anchorKey(anchor));
+    via.push({
+      kind: 'pause',
+      startTs: new Date(spanStart).toISOString(),
+      endTs: new Date(spanEnd).toISOString(),
+      name: anchor?.name ?? null,
+    });
+  }
+
+  // Passthroughs: first fix inside an anchor's radius, one per anchor, skipping
+  // anchors already credited with a pause and the trip's own endpoint anchors —
+  // those are its stops, not waypoints along the way.
+  const seenAnchors = new Set<string>(pausedAnchors);
+  for (const stopKey of endpointStopKeys) {
+    const key = stopAnchorKey(stopKey);
+    if (key) seenAnchors.add(key);
+  }
+  for (const point of points) {
+    for (const anchor of anchors) {
+      const key = anchorKey(anchor);
+      if (seenAnchors.has(key)) continue;
+      if (
+        distanceMeters(
+          point.latitude,
+          point.longitude,
+          anchor.latitude,
+          anchor.longitude,
+        ) <= anchor.radiusM
+      ) {
+        seenAnchors.add(key);
+        via.push({kind: 'passthrough', ts: point.timestamp, name: anchor.name});
+      }
+    }
+  }
+
+  return via.sort((a, b) => {
+    const left = a.kind === 'pause' ? a.startTs : a.ts;
+    const right = b.kind === 'pause' ? b.startTs : b.ts;
+    return left < right ? -1 : left > right ? 1 : 0;
+  });
 }

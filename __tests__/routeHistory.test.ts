@@ -7,6 +7,7 @@ import {getGpsDayIdsWithinRetention} from '../src/db/gps';
 import {
   createNamedPlace,
   createNamedPlaceForStop,
+  deleteNamedPlace,
   getDayRouteHistory,
   getEarliestDerivedTimestamp,
   getLatestDerivedRawTimestamp,
@@ -19,12 +20,14 @@ import {
   hasInvalidRouteGeometry,
   setAutomaticGoogleStopName,
   setDayStopName,
+  updateNamedPlaceRadius,
 } from '../src/db/routeHistory';
 import type {DayRouteStop} from '../src/types';
 import type {
   DerivedRouteSegment,
   DerivedRouteStop,
 } from '../src/utils/routeSegments';
+import {clampRadius} from '../src/utils/geofence';
 
 const mockGetDB = getDB as jest.MockedFunction<typeof getDB>;
 
@@ -85,6 +88,9 @@ const derivedSegment = (
   averageSpeedMps: 2.5,
   maximumSpeedMps: 4,
   rawLastTs: '2026-07-24T08:20:00.000Z',
+  modeSpans: [],
+  stillSeconds: 0,
+  via: [],
   ...overrides,
 });
 
@@ -188,6 +194,37 @@ describe('route history repository', () => {
     );
     expect(execute.mock.calls.flat().join(' ')).not.toContain(
       'day_route_stops',
+    );
+  });
+
+  it('deletes a named place without touching day-stop rows', async () => {
+    const {execute} = mockDatabase();
+
+    await deleteNamedPlace(7);
+
+    expect(execute).toHaveBeenCalledWith(
+      expect.stringMatching(/^DELETE FROM named_places/i),
+      [7],
+    );
+    expect(execute.mock.calls.flat().join(' ')).not.toContain(
+      'day_route_stops',
+    );
+  });
+
+  it('clamps a named place radius on update', async () => {
+    const {execute} = mockDatabase();
+
+    await updateNamedPlaceRadius(7, 3);
+    expect(execute).toHaveBeenCalledWith(
+      expect.stringMatching(/^UPDATE named_places/i),
+      [clampRadius(3), 7],
+    );
+
+    execute.mockClear();
+    await updateNamedPlaceRadius(7, 9999);
+    expect(execute).toHaveBeenCalledWith(
+      expect.stringMatching(/^UPDATE named_places/i),
+      [clampRadius(9999), 7],
     );
   });
 
@@ -681,6 +718,55 @@ describe('route history repository', () => {
     ]);
   });
 
+  it('recomputes an auto-assigned anchor name when the derivation moves the stop', async () => {
+    const existing = stopRow({
+      id: 12,
+      named_place_id: 7,
+      display_name: 'Old auto anchor',
+      name_source: 'reusable',
+      user_edited: 0,
+    });
+    const {transactionExecute} = mockDatabase([], [
+      result([existing]),
+      result(),
+      result(),
+    ]);
+    const next = derivedStop({
+      startTs: '2026-07-24T08:03:00.000Z',
+      endTs: '2026-07-24T08:13:00.000Z',
+      latitude: 60.1702,
+      longitude: 24.9402,
+      anchor: {
+        id: 99,
+        type: 'saved',
+        name: 'New derived anchor',
+        latitude: 60.17,
+        longitude: 24.94,
+        radiusM: 70,
+      },
+    });
+
+    await reconcileDayRouteHistory(4, {stops: [next], segments: []});
+
+    const update = transactionExecute.mock.calls.find(([sql]) =>
+      String(sql).includes('UPDATE day_route_stops'),
+    );
+    expect(update?.[1]).toEqual([
+      next.startTs,
+      next.endTs,
+      next.latitude,
+      next.longitude,
+      99,
+      null,
+      null,
+      'New derived anchor',
+      'saved',
+      0,
+      12,
+      4,
+    ]);
+  });
+
   it('consumes each old stop at most once during reconciliation', async () => {
     const {transactionExecute} = mockDatabase([], [
       result([stopRow({id: 10})]),
@@ -784,6 +870,127 @@ describe('route history repository', () => {
         JSON.stringify(segment.coordinates),
       ]),
     );
+  });
+
+  it('round-trips mode spans, still seconds, via and coordinate timestamps', async () => {
+    const derived = {
+      stops: [],
+      segments: [
+        derivedSegment({
+          coordinates: [
+            {latitude: 60, longitude: 22, t: 1787654400000},
+            {latitude: 60.1, longitude: 22, t: 1787655000000},
+          ],
+          modeSpans: [
+            {
+              mode: 'vehicle' as const,
+              startTs: '2026-08-21T12:00:00.000Z',
+              endTs: '2026-08-21T12:10:00.000Z',
+            },
+          ],
+          stillSeconds: 42,
+          via: [
+            {
+              kind: 'passthrough' as const,
+              ts: '2026-08-21T12:05:00.000Z',
+              name: 'Kiosk',
+            },
+          ],
+        }),
+      ],
+    };
+    const {transactionExecute} = mockDatabase([], [result([]), result()]);
+
+    await reconcileDayRouteHistory(4, derived);
+
+    const insertCall = transactionExecute.mock.calls.find(([sql]) =>
+      String(sql).includes('INSERT INTO day_route_segments'),
+    );
+    const [
+      day_id,
+      sequence,
+      start_ts,
+      end_ts,
+      origin_stop_id,
+      destination_stop_id,
+      coordinates_json,
+      distance_m,
+      duration_sec,
+      average_speed_mps,
+      maximum_speed_mps,
+      raw_last_ts,
+      mode_spans_json,
+      still_seconds,
+      via_json,
+    ] = insertCall?.[1] as unknown[];
+
+    mockDatabase([
+      result([]),
+      result([
+        {
+          id: 1,
+          day_id,
+          sequence,
+          start_ts,
+          end_ts,
+          origin_stop_id,
+          destination_stop_id,
+          coordinates_json,
+          distance_m,
+          duration_sec,
+          average_speed_mps,
+          maximum_speed_mps,
+          raw_last_ts,
+          mode_spans_json,
+          still_seconds,
+          via_json,
+          created_at: 'created',
+          updated_at: 'updated',
+        },
+      ]),
+    ]);
+
+    const {segments} = await getDayRouteHistory(4);
+
+    expect(segments[0].mode_spans).toEqual(derived.segments[0].modeSpans);
+    expect(segments[0].still_seconds).toBe(42);
+    expect(segments[0].via).toEqual(derived.segments[0].via);
+    expect(segments[0].coordinates[0].t).toBe(1787654400000);
+  });
+
+  it('yields null enrichment for pre-v25 rows', async () => {
+    mockDatabase([
+      result([]),
+      result([
+        {
+          id: 1,
+          day_id: 4,
+          sequence: 0,
+          start_ts: 'start',
+          end_ts: 'end',
+          origin_stop_id: null,
+          destination_stop_id: null,
+          coordinates_json: '[{"latitude":60.17,"longitude":24.94}]',
+          distance_m: 100,
+          duration_sec: 60,
+          average_speed_mps: 1.67,
+          maximum_speed_mps: 2,
+          raw_last_ts: 'latest',
+          mode_spans_json: null,
+          still_seconds: null,
+          via_json: null,
+          created_at: 'created',
+          updated_at: 'updated',
+        },
+      ]),
+    ]);
+
+    const {segments} = await getDayRouteHistory(4);
+
+    expect(segments[0].mode_spans).toBeNull();
+    expect(segments[0].still_seconds).toBeNull();
+    expect(segments[0].via).toBeNull();
+    expect(segments[0].coordinates[0].t).toBeUndefined();
   });
 
   it('returns distinct raw day IDs inside the requested retention window', async () => {

@@ -3,7 +3,7 @@ import type {SavedLocation, LocationKind, GeofenceEvent} from '../types';
 import {clampRadius, DEFAULT_RADIUS_M} from '../utils/geofence';
 
 // Re-export so existing call sites can keep importing from db/locations.
-export {clampRadius, radiusStep, MIN_RADIUS_M, DEFAULT_RADIUS_M} from '../utils/geofence';
+export {clampRadius, MIN_RADIUS_M, MAX_RADIUS_M, DEFAULT_RADIUS_M} from '../utils/geofence';
 
 type RawRow = Record<string, unknown>;
 
@@ -49,6 +49,17 @@ export async function updateLocationRadius(id: number, radiusM: number): Promise
   await db.execute(
     "UPDATE locations SET radius_m = ?, updated_at = datetime('now') WHERE id = ?;",
     [clampRadius(radiusM), id],
+  );
+}
+
+export async function updateLocationName(id: number, name: string): Promise<void> {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    throw new Error('Name is required');
+  }
+  await getDB().execute(
+    "UPDATE locations SET name = ?, updated_at = datetime('now') WHERE id = ?;",
+    [trimmed, id],
   );
 }
 

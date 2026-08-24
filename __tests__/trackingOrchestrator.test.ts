@@ -54,7 +54,7 @@ const locations = [{
 beforeEach(() => {
   jest.clearAllMocks();
   nativeListener = null;
-  mockGetSetting.mockResolvedValue('2');
+  mockGetSetting.mockResolvedValue('3');
   mockSetSetting.mockResolvedValue(undefined);
 });
 
@@ -104,7 +104,7 @@ it('reconciles on foreground calls and live native events', async () => {
   expect(sub.remove).toEqual(expect.any(Function));
 });
 
-it('uses ordinary stale checks after version 2 is recorded', async () => {
+it('uses ordinary stale checks after version 3 is recorded', async () => {
   mockReconcileRouteDays.mockResolvedValue(undefined);
 
   await reconcileRouteHistory();
@@ -114,13 +114,13 @@ it('uses ordinary stale checks after version 2 is recorded', async () => {
 });
 
 it('forces retained route derivation once per algorithm version', async () => {
-  mockGetSetting.mockResolvedValue('1');
+  mockGetSetting.mockResolvedValue('2');
   mockReconcileRouteDays.mockResolvedValue(undefined);
 
   await reconcileRouteHistory();
 
   expect(mockReconcileRouteDays).toHaveBeenCalledWith(true);
-  expect(mockSetSetting).toHaveBeenCalledWith('route_derivation_version', '2');
+  expect(mockSetSetting).toHaveBeenCalledWith('route_derivation_version', '3');
   expect(mockReconcileRouteDays.mock.invocationCallOrder[0])
     .toBeLessThan(mockSetSetting.mock.invocationCallOrder[0]);
 });

@@ -1,5 +1,10 @@
 import React from 'react';
-import {act, create, type ReactTestRenderer} from 'react-test-renderer';
+import {
+  act,
+  create,
+  type ReactTestInstance,
+  type ReactTestRenderer,
+} from 'react-test-renderer';
 
 const mockGetDayRouteHistory = jest.fn();
 const mockGetEntriesForDay = jest.fn();
@@ -52,8 +57,10 @@ jest.mock('../src/services/routeHistoryService', () => ({
     mockRefreshRouteDayIfStale(...args),
 }));
 
+import {Polyline} from 'react-native-maps';
 import {
   useDayMapData,
+  DayMapCanvas,
   type DayMapData,
 } from '../src/screens/DayMapScreen';
 import {useEntryStore} from '../src/store/entryStore';
@@ -76,6 +83,9 @@ const routeSegment: DayRouteSegment = {
   average_speed_mps: 0.56,
   maximum_speed_mps: 1,
   raw_last_ts: '2026-07-24T08:30:00.000Z',
+  mode_spans: null,
+  still_seconds: null,
+  via: null,
   created_at: '2026-07-24T08:30:00.000Z',
   updated_at: '2026-07-24T08:30:00.000Z',
 };
@@ -246,5 +256,96 @@ it('lets a correction reload invalidate older focus history and entries', async 
   ]);
   act(() => {
     renderer.unmount();
+  });
+});
+
+// Polyline is mocked to the same View component as MapView/Marker, so
+// distinguish by the props only Polyline sets.
+function polylines(root: ReactTestInstance): ReactTestInstance[] {
+  return root.findAll(
+    node => node.type === Polyline && node.props.strokeColor !== undefined,
+  );
+}
+
+function canvas(props: Partial<React.ComponentProps<typeof DayMapCanvas>>) {
+  return (
+    <DayMapCanvas
+      segments={props.segments ?? []}
+      routeCoords={[]}
+      buckets={[]}
+      region={undefined}
+      onOpenEntry={jest.fn()}
+      interactive={props.interactive}
+      onPressSegment={props.onPressSegment}
+    />
+  );
+}
+
+const modeSegment: DayRouteSegment = {
+  ...routeSegment,
+  id: 30,
+  coordinates: [
+    {latitude: 60, longitude: 24, t: 1000},
+    {latitude: 60.01, longitude: 24.01, t: 2000},
+    {latitude: 60.02, longitude: 24.02, t: 3000},
+  ],
+  mode_spans: [
+    {mode: 'vehicle', startTs: '1970-01-01T00:00:00.000Z', endTs: '1970-01-01T00:00:02.000Z'},
+    {mode: 'foot', startTs: '1970-01-01T00:00:02.000Z', endTs: '1970-01-01T00:00:04.000Z'},
+  ],
+};
+
+describe('DayMapCanvas mode-styled polylines', () => {
+  it('renders one dashed and one solid polyline, same color, for a mode-spanned segment', () => {
+    let renderer!: ReactTestRenderer;
+    act(() => {
+      renderer = create(canvas({segments: [modeSegment]}));
+    });
+
+    const lines = polylines(renderer.root);
+    expect(lines).toHaveLength(2);
+    const [vehicleLine, footLine] = lines;
+    expect(vehicleLine.props.lineDashPattern).toBeUndefined();
+    expect(footLine.props.lineDashPattern).toEqual([1, 12]);
+    expect(footLine.props.strokeColor).toBe(vehicleLine.props.strokeColor);
+  });
+
+  it('renders exactly one solid polyline for a legacy segment with no mode_spans', () => {
+    let renderer!: ReactTestRenderer;
+    act(() => {
+      renderer = create(canvas({segments: [routeSegment]}));
+    });
+
+    const lines = polylines(renderer.root);
+    expect(lines).toHaveLength(1);
+    expect(lines[0].props.lineDashPattern).toBeUndefined();
+  });
+
+  it('fires onPressSegment with the parent segment when a slice is tapped', () => {
+    const onPressSegment = jest.fn();
+    let renderer!: ReactTestRenderer;
+    act(() => {
+      renderer = create(
+        canvas({segments: [modeSegment], interactive: true, onPressSegment}),
+      );
+    });
+
+    const lines = polylines(renderer.root);
+    expect(lines[0].props.tappable).toBe(true);
+    act(() => {
+      lines[1].props.onPress();
+    });
+    expect(onPressSegment).toHaveBeenCalledWith(modeSegment);
+  });
+
+  it('is not tappable when non-interactive even if onPressSegment is passed', () => {
+    let renderer!: ReactTestRenderer;
+    act(() => {
+      renderer = create(
+        canvas({segments: [routeSegment], interactive: false, onPressSegment: jest.fn()}),
+      );
+    });
+
+    expect(polylines(renderer.root)[0].props.tappable).toBe(false);
   });
 });

@@ -220,7 +220,21 @@ export interface DayRouteStop {
 export interface RouteCoordinate {
   latitude: number;
   longitude: number;
+  /** Epoch ms of the source fix. Absent on rows derived before v25. */
+  t?: number;
 }
+
+export type TripMode = 'vehicle' | 'foot' | 'cycle' | 'still' | 'unknown';
+
+export interface ModeSpan {
+  mode: TripMode;
+  startTs: string; // ISO, clipped to the trip window
+  endTs: string;
+}
+
+export type TripVia =
+  | {kind: 'pause'; startTs: string; endTs: string; name: string | null}
+  | {kind: 'passthrough'; ts: string; name: string};
 
 export interface DayRouteSegment {
   id: number;
@@ -236,6 +250,9 @@ export interface DayRouteSegment {
   average_speed_mps: number;
   maximum_speed_mps: number;
   raw_last_ts: string;
+  mode_spans: ModeSpan[] | null;
+  still_seconds: number | null;
+  via: TripVia[] | null;
   created_at: string;
   updated_at: string;
 }

@@ -277,6 +277,28 @@ export function MapOverview({
         originName={selectedEndpoints.origin}
         destinationName={selectedEndpoints.destination}
         onClose={() => setSelectedSegment(null)}
+        onPressOrigin={
+          selectedSegment?.origin_stop_id != null
+            ? () => {
+                const stop = activeStops.find(s => s.id === selectedSegment.origin_stop_id);
+                if (stop) {
+                  setSelectedSegment(null);
+                  openStop(stop).catch(() => {});
+                }
+              }
+            : undefined
+        }
+        onPressDestination={
+          selectedSegment?.destination_stop_id != null
+            ? () => {
+                const stop = activeStops.find(s => s.id === selectedSegment.destination_stop_id);
+                if (stop) {
+                  setSelectedSegment(null);
+                  openStop(stop).catch(() => {});
+                }
+              }
+            : undefined
+        }
       />
       <PlaceNameSheet
         visible={activeSelectedStop != null}

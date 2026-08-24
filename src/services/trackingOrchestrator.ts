@@ -10,7 +10,7 @@ import {reconcileNativeEvents} from './nativeEventSync';
 import {reconcileRecentRouteDays} from './routeHistoryService';
 import {getSetting, setSetting} from '../db/settings';
 
-const ROUTE_DERIVATION_VERSION = '2';
+const ROUTE_DERIVATION_VERSION = '3';
 
 export interface TrackingState {
   gps_enabled: boolean;

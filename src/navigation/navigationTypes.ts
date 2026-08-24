@@ -28,6 +28,7 @@ export type RootStackParamList = {
   DataSettings: undefined;
   QuickAddSettings: undefined;
   LocationSettings: undefined;
+  PlacesSettings: undefined;
   WidgetSettings: undefined;
   TranscriptionSettings: undefined;
   DiagnosticsSettings: undefined;

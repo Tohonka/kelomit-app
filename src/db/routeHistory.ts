@@ -2,15 +2,18 @@ import {distanceMeters} from '../services/locationUtils';
 import type {
   DayRouteSegment,
   DayRouteStop,
+  ModeSpan,
   NamedPlace,
   RouteCoordinate,
   RouteStopNameSource,
+  TripVia,
 } from '../types';
 import type {
   deriveRouteDay,
   DerivedRouteStop,
 } from '../utils/routeSegments';
 import {getDB} from './database';
+import {clampRadius} from '../utils/geofence';
 
 type RawRow = Record<string, unknown>;
 
@@ -75,7 +78,7 @@ function parseCoordinates(value: unknown): RouteCoordinate[] | null {
         if (coordinate == null || typeof coordinate !== 'object') {
           return false;
         }
-        const {latitude, longitude} = coordinate as RawRow;
+        const {latitude, longitude, t} = coordinate as RawRow;
         return (
           typeof latitude === 'number' &&
           Number.isFinite(latitude) &&
@@ -84,11 +87,23 @@ function parseCoordinates(value: unknown): RouteCoordinate[] | null {
           typeof longitude === 'number' &&
           Number.isFinite(longitude) &&
           longitude >= -180 &&
-          longitude <= 180
+          longitude <= 180 &&
+          (t === undefined || (typeof t === 'number' && Number.isFinite(t)))
         );
       })
       ? (parsed as RouteCoordinate[])
       : null;
+  } catch {
+    return null;
+  }
+}
+
+function parseJsonColumn<T>(value: unknown): T | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  try {
+    return JSON.parse(value) as T;
   } catch {
     return null;
   }
@@ -113,6 +128,9 @@ function rowToSegment(row: RawRow): DayRouteSegment | null {
     average_speed_mps: row.average_speed_mps as number,
     maximum_speed_mps: row.maximum_speed_mps as number,
     raw_last_ts: row.raw_last_ts as string,
+    mode_spans: parseJsonColumn<ModeSpan[]>(row.mode_spans_json),
+    still_seconds: (row.still_seconds as number | null) ?? null,
+    via: parseJsonColumn<TripVia[]>(row.via_json),
     created_at: row.created_at as string,
     updated_at: row.updated_at as string,
   };
@@ -154,6 +172,20 @@ export async function renameNamedPlace(
      SET name = ?, updated_at = datetime('now')
      WHERE id = ?;`,
     [requiredName(name), id],
+  );
+}
+
+export async function deleteNamedPlace(id: number): Promise<void> {
+  await getDB().execute('DELETE FROM named_places WHERE id = ?;', [id]);
+}
+
+export async function updateNamedPlaceRadius(
+  id: number,
+  radiusM: number,
+): Promise<void> {
+  await getDB().execute(
+    `UPDATE named_places SET radius_m = ?, updated_at = datetime('now') WHERE id = ?;`,
+    [clampRadius(radiusM), id],
   );
 }
 
@@ -461,8 +493,16 @@ export async function reconcileDayRouteHistory(
           unmatched.findIndex(candidate => candidate.id === existing.id),
           1,
         );
+        // Only irreplaceable names survive a re-derivation: user-edited ones
+        // (setDayStopName always sets user_edited = 1, so every name the user
+        // picked — including 'day' and hand-picked saved/reusable — lands here)
+        // and Google ones (paid lookups against raw data that later prunes, so
+        // they can't be recomputed). Auto-assigned saved/reusable names are
+        // mechanical anchor lookups — they must recompute when the derivation
+        // moves stop boundaries, or a stale anchor name freezes onto a stop it
+        // no longer covers.
         const preserveIdentity =
-          existing.user_edited || Boolean(existing.display_name?.trim());
+          existing.user_edited || existing.name_source === 'google';
         await tx.execute(
           `UPDATE day_route_stops
            SET start_ts = ?, end_ts = ?, latitude = ?, longitude = ?,
@@ -536,8 +576,8 @@ export async function reconcileDayRouteHistory(
            day_id, sequence, start_ts, end_ts,
            origin_stop_id, destination_stop_id, coordinates_json,
            distance_m, duration_sec, average_speed_mps, maximum_speed_mps,
-           raw_last_ts
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+           raw_last_ts, mode_spans_json, still_seconds, via_json
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
         [
           dayId,
           segment.sequence,
@@ -555,6 +595,9 @@ export async function reconcileDayRouteHistory(
           segment.averageSpeedMps,
           segment.maximumSpeedMps,
           segment.rawLastTs,
+          segment.modeSpans.length > 0 ? JSON.stringify(segment.modeSpans) : null,
+          segment.stillSeconds,
+          segment.via.length > 0 ? JSON.stringify(segment.via) : null,
         ],
       );
     }

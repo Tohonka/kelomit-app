@@ -3,6 +3,7 @@ import {
   getLocations,
   createLocation,
   deleteLocation,
+  updateLocationName,
   updateLocationRadius,
   clampRadius,
   type CreateLocationParams,
@@ -17,6 +18,7 @@ interface LocationState {
   add: (params: CreateLocationParams) => Promise<SavedLocation>;
   remove: (id: number) => Promise<void>;
   setRadius: (id: number, radiusM: number) => Promise<void>;
+  rename: (id: number, name: string) => Promise<void>;
 }
 
 export const useLocationStore = create<LocationState>(set => ({
@@ -47,6 +49,16 @@ export const useLocationStore = create<LocationState>(set => ({
     set(state => ({
       locations: state.locations.map(l =>
         l.id === id ? {...l, radius_m: clamped} : l,
+      ),
+    }));
+    await syncSavedPlaces(await getLocations());
+  },
+
+  rename: async (id, name) => {
+    await updateLocationName(id, name);
+    set(state => ({
+      locations: state.locations.map(l =>
+        l.id === id ? {...l, name: name.trim()} : l,
       ),
     }));
     await syncSavedPlaces(await getLocations());
