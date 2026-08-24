@@ -28,6 +28,9 @@ const makeLocalStyles = (c: Colors) =>
       minHeight: 48,
     },
     actions: {flexDirection: 'row', gap: spacing.md, marginTop: spacing.md},
+    toggleRow: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md},
+    toggleLabel: {fontSize: typography.sizes.base, color: c.textPrimary, flex: 1},
+    toggleValue: {fontSize: typography.sizes.base, fontWeight: typography.weights.semibold, color: c.primary},
     engineRow: {flexDirection: 'row', gap: spacing.sm},
     btn: {flex: 1, paddingVertical: spacing.md, borderRadius: radius.md, alignItems: 'center', backgroundColor: c.primary},
     btnText: {color: '#fff', fontWeight: typography.weights.semibold, fontSize: typography.sizes.base},
@@ -47,13 +50,21 @@ export default function TranscriptionSettings() {
   const [language, setLanguage] = useState<'auto' | 'fi' | 'en'>('auto');
   const [modelState, setModelState] = useState<'missing' | 'ready'>('missing');
   const [dlPct, setDlPct] = useState<number | null>(null);
+  const [cleanup, setCleanup] = useState(false);
 
   useEffect(() => {
     getApiKey().then(k => setHasKey(!!k));
     getSetting('transcription_provider').then(v => setProvider(selectProvider(v)));
     getSetting('transcription_language').then(v => setLanguage(v === 'fi' || v === 'en' ? v : 'auto'));
+    getSetting('transcription_cleanup').then(v => setCleanup(v === 'true'));
     getModelState().then(setModelState);
   }, []);
+
+  const toggleCleanup = async () => {
+    const next = !cleanup;
+    setCleanup(next);
+    await setSetting('transcription_cleanup', String(next));
+  };
 
   const pickProvider = async (p: Provider) => {
     setProvider(p);
@@ -159,6 +170,20 @@ export default function TranscriptionSettings() {
             </View>
           </>
         )}
+
+        <Text style={styles.sectionHeader}>{t('transcription.cleanupTitle')}</Text>
+        <View style={local.block}>
+          <TouchableOpacity style={local.toggleRow} onPress={toggleCleanup}>
+            <Text style={local.toggleLabel}>{t('transcription.cleanupLabel')}</Text>
+            <Text style={local.toggleValue}>
+              {cleanup ? t('common.on') : t('common.off')}
+            </Text>
+          </TouchableOpacity>
+          <Text style={local.hint}>{t('transcription.cleanupHint')}</Text>
+          {cleanup && !hasKey && (
+            <Text style={local.hint}>{t('transcription.cleanupNeedsKey')}</Text>
+          )}
+        </View>
 
         <Text style={styles.sectionHeader}>{t('transcription.provider')}</Text>
         <View style={local.block}>

@@ -164,9 +164,13 @@ object WidgetCommon {
       views.setViewVisibility(R.id.widget_pause_button, android.view.View.GONE)
     }
     val short = minHeight < SHORT_HEIGHT_DP
-    if (short) {
-      views.setViewVisibility(R.id.widget_status, android.view.View.GONE)
-    }
+    // RemoteViews are REAPPLIED onto the live widget when the layout id matches,
+    // so visibility must be set both ways — a one-sided GONE sticks after the
+    // widget is resized back up.
+    views.setViewVisibility(
+      R.id.widget_status,
+      if (short) android.view.View.GONE else android.view.View.VISIBLE,
+    )
     // A vertical LinearLayout clips its LAST child when the content is taller
     // than the widget — and that child is the button row, so the label vanished
     // while its background stayed. Shrink the box instead of losing the words.

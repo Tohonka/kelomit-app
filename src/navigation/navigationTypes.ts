@@ -15,6 +15,7 @@ export type RootStackParamList = {
     entryId?: number;
     leaveRangeId?: number;
     initialTab?: 'note' | 'leave';
+    prefill?: {body?: string; timeFrom?: string; timeTo?: string};
   };
   QuickAddModal: {date?: string; dayId: number; entryType: EntryType; autoCapture?: boolean};
   ProjectsScreen: undefined;
@@ -30,6 +31,7 @@ export type RootStackParamList = {
   LocationSettings: undefined;
   PlacesSettings: undefined;
   WidgetSettings: undefined;
+  WidgetEdit: {appWidgetId: number};
   TranscriptionSettings: undefined;
   DiagnosticsSettings: undefined;
 };

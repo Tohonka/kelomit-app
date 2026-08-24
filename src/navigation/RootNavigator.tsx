@@ -20,6 +20,7 @@ import QuickAddSettings from '../screens/settings/QuickAddSettings';
 import LocationSettings from '../screens/settings/LocationSettings';
 import PlacesSettings from '../screens/settings/PlacesSettings';
 import WidgetSettings from '../screens/settings/WidgetSettings';
+import WidgetEdit from '../screens/settings/WidgetEdit';
 import TranscriptionSettings from '../screens/settings/TranscriptionSettings';
 import DiagnosticsSettings from '../screens/settings/DiagnosticsSettings';
 import {useTheme} from '../theme';
@@ -143,6 +144,11 @@ export default function RootNavigator() {
         name="WidgetSettings"
         component={WidgetSettings}
         options={{title: t('widgets.title')}}
+      />
+      <Stack.Screen
+        name="WidgetEdit"
+        component={WidgetEdit}
+        options={{title: t('widgets.editTitle')}}
       />
       <Stack.Screen
         name="TranscriptionSettings"

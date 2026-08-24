@@ -150,6 +150,41 @@ export function getCurrentGeofenceDetection(): GeofenceDetection {
   return detectionFromPosition(_lastPosition, _geofences);
 }
 
+// One-shot seed for the label above. ROOT CAUSE of the perma-"Unknown" Home
+// label: the native service's IDLE mode requests NO location updates while
+// parked, so after an app start at home/work no fix ever reaches JS and
+// _lastPosition stays null. An active one-shot (the exact path the Location
+// settings "check now" uses) resolves it.
+let _seedInflight = false;
+let _seedAttemptMs = 0;
+// Cooldown so a failing lookup (no permission, no signal) isn't retried on
+// every 4 s poll tick. ponytail: flat 60 s, back off if it ever matters.
+const SEED_RETRY_MS = 60_000;
+
+/** Fetch a position for the detection label when no live fix exists. Cheap to
+ *  call repeatedly — no-ops while a fix is known, a fetch is in flight, or a
+ *  recent attempt failed. */
+export async function ensureDetectionSeed(): Promise<void> {
+  if (_lastPosition !== null || _seedInflight) {
+    return;
+  }
+  if (Date.now() - _seedAttemptMs < SEED_RETRY_MS) {
+    return;
+  }
+  _seedInflight = true;
+  _seedAttemptMs = Date.now();
+  try {
+    // Saved places normally load in startTracking; cover the paths where that
+    // never ran (tracking disabled, permission denied, paused).
+    if (_geofences.length === 0) {
+      await refreshGeofences();
+    }
+    await getCurrentPositionOnce(); // stores the fresh fix into _lastPosition
+  } finally {
+    _seedInflight = false;
+  }
+}
+
 /** Reload saved geofence locations into memory. Call after editing locations. */
 export async function refreshGeofences(): Promise<void> {
   try {
@@ -227,12 +262,16 @@ export async function getCurrentPositionOnce(): Promise<KnownPosition | null> {
   }
   ensureConfigured();
 
-  let pos = await tryGet(true, 15_000, 300_000); // GPS — outdoors
+  const pos =
+    (await tryGet(true, 15_000, 300_000)) ?? // GPS — outdoors
+    (await tryGet(false, 15_000, 600_000)); // network — indoors
   if (pos) {
-    return pos;
-  }
-  pos = await tryGet(false, 15_000, 600_000); // network — indoors
-  if (pos) {
+    // Remember the fresh fix: while parked the native service requests no
+    // location updates (IDLE), so this one-shot may be the only position the
+    // "where am I" label and note location-tagging ever get.
+    if (pos.timestamp > (_lastPosition?.timestamp ?? 0)) {
+      _lastPosition = pos;
+    }
     return pos;
   }
 
@@ -396,6 +435,8 @@ export function stopTracking(): void {
   _lastMovingFixMs = 0;
   _lastPosition = null;
   _lastRecordedPosition = null;
+  _geofences = [];
+  _seedAttemptMs = 0; // fresh session may seed the label immediately
   _trackingMode = 'fast';
   _stationaryStreak = 0;
   _currentIntervalMs = FAST_INTERVAL_MS;

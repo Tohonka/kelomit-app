@@ -49,6 +49,25 @@ describe('getSyncConfig', () => {
       token: 'abc',
     });
   });
+
+  // A bearer token must never ride plain http. Worse: the http→https redirect
+  // makes Android's OkHttp DROP the Authorization header, so an http URL is a
+  // guaranteed 401 with a perfectly good token.
+  it('upgrades an http url to https', async () => {
+    stubSettings({sync_url: 'http://kelmi.pico.fi', sync_token: 'abc'});
+    await expect(getSyncConfig()).resolves.toEqual({
+      url: 'https://kelmi.pico.fi',
+      token: 'abc',
+    });
+  });
+
+  it('prepends https to a bare host', async () => {
+    stubSettings({sync_url: 'kelmi.pico.fi', sync_token: 'abc'});
+    await expect(getSyncConfig()).resolves.toEqual({
+      url: 'https://kelmi.pico.fi',
+      token: 'abc',
+    });
+  });
 });
 
 describe('status', () => {

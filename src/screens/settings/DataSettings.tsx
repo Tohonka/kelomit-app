@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   TextInput,
   StyleSheet,
+  ActivityIndicator,
   Alert,
   Platform,
 } from 'react-native';
@@ -88,6 +89,17 @@ const makeLocalStyles = (c: Colors) =>
     syncStatus: {
       marginHorizontal: spacing.lg,
       marginBottom: spacing.sm,
+      fontSize: typography.sizes.sm,
+      color: c.textMuted,
+    },
+    syncBusyRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      marginHorizontal: spacing.lg,
+      marginBottom: spacing.sm,
+    },
+    syncBusyText: {
       fontSize: typography.sizes.sm,
       color: c.textMuted,
     },
@@ -316,7 +328,17 @@ export default function DataSettings(_props: Props) {
           secureTextEntry
         />
 
-        <Text style={local.syncStatus}>{syncStatusText}</Text>
+        {syncBusy ? (
+          // Live feedback instead of the stale last-result line: a sync can
+          // take a while (media uploads), and "failed" lingering on screen
+          // during a retry reads as if nothing is happening.
+          <View style={local.syncBusyRow}>
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text style={local.syncBusyText}>{t('settings.syncing')}</Text>
+          </View>
+        ) : (
+          <Text style={local.syncStatus}>{syncStatusText}</Text>
+        )}
 
         <TouchableOpacity style={styles.row} onPress={handleSyncNow} disabled={syncBusy}>
           <Text style={styles.rowLabel}>

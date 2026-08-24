@@ -52,3 +52,7 @@ AGENTS.md
 /.superpowers/brainstorm
 envCreds/setmyip.py
 server/.env
+.DS_Store
+.DS_Store
+/plans_etc
+plans_etc/work-hours-report-implementation-plan-2026-07-23.md

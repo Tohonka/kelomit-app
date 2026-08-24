@@ -3,7 +3,6 @@ import {useTranslation} from 'react-i18next';
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   StyleSheet,
   ScrollView,
@@ -11,33 +10,23 @@ import {
   AppState,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {useProjectStore} from '../../store/projectStore';
-import {useSettingsStore} from '../../store/settingsStore';
+import {useSettingsStore, type WidgetVoiceMode} from '../../store/settingsStore';
 import {useTheme, typography, spacing, radius} from '../../theme';
 import type {Colors} from '../../theme';
-import ProjectPicker from '../../components/entries/ProjectPicker';
 import {
   isWidgetBridgeAvailable,
   nativeGetWidgets,
-  nativeSetWidgetConfig,
   nativeRequestPinWidget,
-  type WidgetConfig,
   type WidgetInfo,
 } from '../../native/widgetSession';
-import type {ActivityType} from '../../types';
+import type {RootStackScreenProps} from '../../navigation/navigationTypes';
 
-const ACTIVITY_TYPES: {type: ActivityType; labelKey: string}[] = [
-  {type: 'work', labelKey: 'activity.work'},
-  {type: 'personal_work', labelKey: 'activity.personal_work'},
-  {type: 'personal', labelKey: 'activity.personal'},
+type Props = RootStackScreenProps<'WidgetSettings'>;
+
+const VOICE_MODES: {mode: WidgetVoiceMode; labelKey: string}[] = [
+  {mode: 'confirm', labelKey: 'widgets.voiceModeConfirm'},
+  {mode: 'auto', labelKey: 'widgets.voiceModeAuto'},
 ];
-
-const defaultConfig = (): WidgetConfig => ({
-  project_id: null,
-  activity_type: 'work',
-  tags: [],
-  name: null,
-});
 
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
@@ -59,66 +48,63 @@ const makeStyles = (c: Colors) =>
       color: c.textSecondary,
       lineHeight: 22,
     },
-    widgetCard: {
-      backgroundColor: c.bgCard,
-      borderRadius: radius.lg,
-      borderWidth: 1,
-      borderColor: c.border,
-      margin: spacing.lg,
-      marginBottom: 0,
-      padding: spacing.lg,
-      gap: spacing.sm,
-    },
-    widgetTitle: {
-      fontSize: typography.sizes.base,
-      fontWeight: typography.weights.semibold,
-      color: c.textPrimary,
-    },
-    label: {
+    sectionLabel: {
       fontSize: typography.sizes.xs,
       fontWeight: typography.weights.semibold,
       color: c.textMuted,
       textTransform: 'uppercase',
       letterSpacing: 0.5,
-      marginTop: spacing.sm,
+      paddingHorizontal: spacing.lg,
+      marginTop: spacing.lg,
+      marginBottom: spacing.xs,
     },
-    activityRow: {flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap'},
-    activityBtn: {
-      paddingHorizontal: spacing.md,
+    modeRow: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+      paddingHorizontal: spacing.lg,
+    },
+    modeBtn: {
+      flex: 1,
       paddingVertical: spacing.sm,
       borderRadius: radius.pill,
-      backgroundColor: c.bg,
+      backgroundColor: c.bgCard,
       borderWidth: 1.5,
       borderColor: c.border,
-    },
-    activityBtnActive: {borderColor: c.primary, backgroundColor: c.primary + '15'},
-    activityLabel: {fontSize: typography.sizes.sm, color: c.textSecondary, fontWeight: typography.weights.medium},
-    activityLabelActive: {color: c.primary, fontWeight: typography.weights.semibold},
-    input: {
-      backgroundColor: c.bg,
-      borderRadius: radius.md,
-      borderWidth: 1,
-      borderColor: c.border,
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
-      fontSize: typography.sizes.base,
-      color: c.textPrimary,
-      minHeight: 48,
-    },
-    saveBtn: {
-      marginTop: spacing.md,
-      minHeight: 48,
-      borderRadius: radius.md,
-      backgroundColor: c.primary,
       alignItems: 'center',
-      justifyContent: 'center',
+    },
+    modeBtnActive: {borderColor: c.primary, backgroundColor: c.primary + '15'},
+    modeLabel: {
+      fontSize: typography.sizes.sm,
+      color: c.textSecondary,
+      fontWeight: typography.weights.medium,
+    },
+    modeLabelActive: {color: c.primary, fontWeight: typography.weights.semibold},
+    hint: {
+      fontSize: typography.sizes.xs,
+      color: c.textMuted,
+      paddingHorizontal: spacing.lg,
+      marginTop: spacing.xs,
+    },
+    autoTitleRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: spacing.lg,
+      marginTop: spacing.sm,
+      minHeight: 44,
+    },
+    autoTitleLabel: {fontSize: typography.sizes.base, color: c.textPrimary},
+    autoTitleValue: {
+      fontSize: typography.sizes.sm,
+      fontWeight: typography.weights.semibold,
+      color: c.primary,
     },
     addRow: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: spacing.sm,
       paddingHorizontal: spacing.lg,
-      marginTop: spacing.md,
+      marginTop: spacing.sm,
     },
     addBtn: {
       flex: 1,
@@ -129,81 +115,72 @@ const makeStyles = (c: Colors) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
-    saveBtnText: {
+    addBtnText: {
       fontSize: typography.sizes.base,
       fontWeight: typography.weights.semibold,
       color: c.white,
     },
-    saved: {
-      textAlign: 'center',
-      marginTop: spacing.xs,
-      fontSize: typography.sizes.xs,
-      color: c.success,
-    },
-    autoTitleRow: {
+    widgetRow: {
       flexDirection: 'row',
-      justifyContent: 'space-between',
       alignItems: 'center',
-      paddingHorizontal: spacing.lg,
-      marginTop: spacing.md,
-      minHeight: 44,
+      backgroundColor: c.bgCard,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: c.border,
+      marginHorizontal: spacing.lg,
+      marginTop: spacing.sm,
+      paddingHorizontal: spacing.md,
+      minHeight: 56,
+      gap: spacing.sm,
     },
-    autoTitleLabel: {fontSize: typography.sizes.base, color: c.textPrimary},
-    autoTitleValue: {
-      fontSize: typography.sizes.sm,
+    widgetRowText: {flex: 1},
+    widgetRowName: {
+      fontSize: typography.sizes.base,
       fontWeight: typography.weights.semibold,
-      color: c.primary,
+      color: c.textPrimary,
     },
-    autoTitleHint: {
+    widgetRowType: {
       fontSize: typography.sizes.xs,
       color: c.textMuted,
-      paddingHorizontal: spacing.lg,
-      marginTop: 2,
+      marginTop: 1,
+    },
+    chevron: {
+      fontSize: typography.sizes.lg,
+      color: c.textMuted,
     },
   });
 
 /**
- * Maps each placed home-screen session widget (by appWidgetId) to a project +
- * activity + tag (Iteration 3 Phase 9.2). The widget reads this mapping
- * natively when its Start is tapped.
+ * Lists every placed home-screen session widget as a thin row; tapping one
+ * opens WidgetEdit. Global widget behavior (voice mode) lives up top.
  */
-export default function WidgetSettings() {
+export default function WidgetSettings({navigation}: Props) {
   const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const {projects, loaded: projectsLoaded, load: loadProjects, add: addProject} =
-    useProjectStore();
-  const {widget_voice_auto_title, setWidgetVoiceAutoTitle} = useSettingsStore();
+  const {
+    widget_voice_mode,
+    setWidgetVoiceMode,
+    widget_voice_auto_title,
+    setWidgetVoiceAutoTitle,
+  } = useSettingsStore();
 
   const [widgets, setWidgets] = useState<WidgetInfo[]>([]);
-  const [configs, setConfigs] = useState<Record<number, WidgetConfig>>({});
-  const [tagText, setTagText] = useState<Record<number, string>>({});
-  const [savedId, setSavedId] = useState<number | null>(null);
   const available = isWidgetBridgeAvailable();
 
   const refresh = useCallback(async () => {
-    const list = await nativeGetWidgets();
-    setWidgets(list);
-    setConfigs(prev => {
-      const next: Record<number, WidgetConfig> = {};
-      for (const w of list) {
-        next[w.appWidgetId] = prev[w.appWidgetId] ?? w.config ?? defaultConfig();
-      }
-      return next;
-    });
-    setTagText(prev => {
-      const next: Record<number, string> = {};
-      for (const w of list) {
-        next[w.appWidgetId] = prev[w.appWidgetId] ?? (w.config?.tags ?? []).join(', ');
-      }
-      return next;
-    });
+    setWidgets(await nativeGetWidgets());
   }, []);
 
   useEffect(() => {
-    if (!projectsLoaded) { loadProjects(); }
     if (available) { refresh().catch(() => {}); }
-  }, [projectsLoaded, loadProjects, available, refresh]);
+  }, [available, refresh]);
+
+  // Names are edited on WidgetEdit; re-read on the way back so rows update.
+  useEffect(() => {
+    if (!available) { return; }
+    return navigation.addListener('focus', () => refresh().catch(() => {}));
+  }, [available, navigation, refresh]);
 
   // The pin flow hands off to the launcher's overlay; refresh on return so a
   // freshly placed widget appears in the list without leaving the screen.
@@ -222,54 +199,70 @@ export default function WidgetSettings() {
     }
   };
 
-  const update = (id: number, patch: Partial<WidgetConfig>) =>
-    setConfigs(prev => ({...prev, [id]: {...prev[id], ...patch}}));
-
-  const handleSave = async (id: number) => {
-    const cfg = configs[id] ?? defaultConfig();
-    const tags = (tagText[id] ?? '')
-      .split(',')
-      .map(s => s.trim())
-      .filter(Boolean);
-    const toSave: WidgetConfig = {...cfg, tags, name: cfg.name?.trim() || null};
-    await nativeSetWidgetConfig(id, toSave);
-    update(id, {tags, name: toSave.name});
-    setSavedId(id);
-    setTimeout(() => setSavedId(s => (s === id ? null : s)), 1500);
-  };
-
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.intro}>{t('widgets.intro')}</Text>
 
-        <TouchableOpacity
-          style={styles.autoTitleRow}
-          onPress={() =>
-            setWidgetVoiceAutoTitle(!widget_voice_auto_title).catch(() => {})
-          }>
-          <Text style={styles.autoTitleLabel}>{t('widgets.voiceAutoTitle')}</Text>
-          <Text style={styles.autoTitleValue}>
-            {widget_voice_auto_title ? t('common.on') : t('common.off')}
-          </Text>
-        </TouchableOpacity>
-        <Text style={styles.autoTitleHint}>{t('widgets.voiceAutoTitleHint')}</Text>
+        <Text style={styles.sectionLabel}>{t('widgets.voiceMode')}</Text>
+        <View style={styles.modeRow}>
+          {VOICE_MODES.map(({mode, labelKey}) => (
+            <TouchableOpacity
+              key={mode}
+              style={[styles.modeBtn, widget_voice_mode === mode && styles.modeBtnActive]}
+              onPress={() => setWidgetVoiceMode(mode).catch(() => {})}>
+              <Text
+                style={[
+                  styles.modeLabel,
+                  widget_voice_mode === mode && styles.modeLabelActive,
+                ]}>
+                {t(labelKey)}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <Text style={styles.hint}>
+          {t(
+            widget_voice_mode === 'auto'
+              ? 'widgets.voiceModeAutoHint'
+              : 'widgets.voiceModeConfirmHint',
+          )}
+        </Text>
+
+        {widget_voice_mode === 'confirm' && (
+          <>
+            <TouchableOpacity
+              style={styles.autoTitleRow}
+              onPress={() =>
+                setWidgetVoiceAutoTitle(!widget_voice_auto_title).catch(() => {})
+              }>
+              <Text style={styles.autoTitleLabel}>{t('widgets.voiceAutoTitle')}</Text>
+              <Text style={styles.autoTitleValue}>
+                {widget_voice_auto_title ? t('common.on') : t('common.off')}
+              </Text>
+            </TouchableOpacity>
+            <Text style={styles.hint}>{t('widgets.voiceAutoTitleHint')}</Text>
+          </>
+        )}
 
         {available && (
-          <View style={styles.addRow}>
-            <TouchableOpacity style={styles.addBtn} onPress={() => handleAddWidget('full')}>
-              <Text style={styles.saveBtnText}>{t('widgets.addFull')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.addBtn} onPress={() => handleAddWidget('toggle')}>
-              <Text style={styles.saveBtnText}>{t('widgets.addToggle')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.addBtn} onPress={() => handleAddWidget('addnote')}>
-              <Text style={styles.saveBtnText}>{t('widgets.addAddNote')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.addBtn} onPress={() => handleAddWidget('tracking')}>
-              <Text style={styles.saveBtnText}>{t('widgets.addTracking')}</Text>
-            </TouchableOpacity>
-          </View>
+          <>
+            <Text style={styles.sectionLabel}>{t('widgets.addSection')}</Text>
+            <View style={styles.addRow}>
+              <TouchableOpacity style={styles.addBtn} onPress={() => handleAddWidget('full')}>
+                <Text style={styles.addBtnText}>{t('widgets.addFull')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.addBtn} onPress={() => handleAddWidget('toggle')}>
+                <Text style={styles.addBtnText}>{t('widgets.addToggle')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.addBtn} onPress={() => handleAddWidget('addnote')}>
+                <Text style={styles.addBtnText}>{t('widgets.addAddNote')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.addBtn} onPress={() => handleAddWidget('tracking')}>
+                <Text style={styles.addBtnText}>{t('widgets.addTracking')}</Text>
+              </TouchableOpacity>
+            </View>
+          </>
         )}
 
         {(!available || widgets.length === 0) && (
@@ -280,67 +273,25 @@ export default function WidgetSettings() {
           </View>
         )}
 
+        {widgets.length > 0 && (
+          <Text style={styles.sectionLabel}>{t('widgets.placedSection')}</Text>
+        )}
         {widgets.map(w => {
-          const cfg = configs[w.appWidgetId] ?? defaultConfig();
+          const typeLabel = t(w.type === 'toggle' ? 'widgets.typeToggle' : 'widgets.typeFull');
+          const name = w.config?.name?.trim();
           return (
-            <View key={w.appWidgetId} style={styles.widgetCard}>
-              <Text style={styles.widgetTitle}>
-                {t(w.type === 'full' ? 'widgets.typeFull' : 'widgets.typeToggle')}
-              </Text>
-
-              <Text style={styles.label}>{t('widgets.name')}</Text>
-              <TextInput
-                style={styles.input}
-                value={cfg.name ?? ''}
-                onChangeText={txt => update(w.appWidgetId, {name: txt})}
-                placeholder={t('widgets.namePlaceholder')}
-                placeholderTextColor={colors.textMuted}
-                maxLength={40}
-              />
-
-              <Text style={styles.label}>{t('entries.activity')}</Text>
-              <View style={styles.activityRow}>
-                {ACTIVITY_TYPES.map(({type, labelKey}) => (
-                  <TouchableOpacity
-                    key={type}
-                    style={[styles.activityBtn, cfg.activity_type === type && styles.activityBtnActive]}
-                    onPress={() => update(w.appWidgetId, {activity_type: type})}>
-                    <Text
-                      style={[
-                        styles.activityLabel,
-                        cfg.activity_type === type && styles.activityLabelActive,
-                      ]}>
-                      {t(labelKey)}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+            <TouchableOpacity
+              key={w.appWidgetId}
+              style={styles.widgetRow}
+              onPress={() => navigation.navigate('WidgetEdit', {appWidgetId: w.appWidgetId})}>
+              <View style={styles.widgetRowText}>
+                <Text style={styles.widgetRowName} numberOfLines={1}>
+                  {name || typeLabel}
+                </Text>
+                {!!name && <Text style={styles.widgetRowType}>{typeLabel}</Text>}
               </View>
-
-              <Text style={styles.label}>{t('entries.projectOptional')}</Text>
-              <ProjectPicker
-                projects={projects}
-                selectedProjectId={cfg.project_id}
-                onSelect={id => update(w.appWidgetId, {project_id: id})}
-                onCreate={addProject}
-              />
-
-              <Text style={styles.label}>{t('entries.tags')}</Text>
-              <TextInput
-                style={styles.input}
-                value={tagText[w.appWidgetId] ?? ''}
-                onChangeText={txt => setTagText(prev => ({...prev, [w.appWidgetId]: txt}))}
-                placeholder={t('widgets.tagPlaceholder')}
-                placeholderTextColor={colors.textMuted}
-                autoCapitalize="none"
-              />
-
-              <TouchableOpacity style={styles.saveBtn} onPress={() => handleSave(w.appWidgetId)}>
-                <Text style={styles.saveBtnText}>{t('common.save')}</Text>
-              </TouchableOpacity>
-              {savedId === w.appWidgetId && (
-                <Text style={styles.saved}>{t('widgets.saved')}</Text>
-              )}
-            </View>
+              <Text style={styles.chevron}>›</Text>
+            </TouchableOpacity>
           );
         })}
       </ScrollView>

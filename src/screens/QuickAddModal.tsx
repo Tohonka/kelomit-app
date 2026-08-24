@@ -121,17 +121,18 @@ export default function QuickAddModal({navigation, route}: Props) {
     setIsSaving(true);
     try {
       const saved = await saveQuickNote({dayId, title, durationMinutes, media});
+      const {widget_voice_mode, widget_voice_auto_title} = useSettingsStore.getState();
       if (
         autoCapture &&
         entryType === 'voice' &&
-        useSettingsStore.getState().widget_voice_auto_title
+        // Full-auto always titles; in confirm mode it stays opt-in.
+        (widget_voice_mode === 'auto' || widget_voice_auto_title)
       ) {
         // Fire and forget — titling must never hold up the save UX.
         autoTitleVoiceNote({
           entryId: saved.entry.id,
           dayId,
           media: saved.media,
-          userTitled: title.trim().length > 0,
         }).catch(() => {});
       }
       haptic(HAPTIC_SAVE);
@@ -142,6 +143,28 @@ export default function QuickAddModal({navigation, route}: Props) {
       setIsSaving(false);
     }
   };
+
+  // Widget voice full-auto: once the recording lands in `media`, save without
+  // waiting for the Save tap. Mode is read at trigger time (same as the
+  // auto-title gate above) so a cold start doesn't race the settings load —
+  // by the time a recording finishes, load() has long since resolved.
+  // Discarding the recording adds no media, so nothing fires and the user can
+  // just back out. The ref makes this one-shot even if `media` changes again.
+  const autoSaved = useRef(false);
+  useEffect(() => {
+    if (
+      autoCapture &&
+      entryType === 'voice' &&
+      !autoSaved.current &&
+      media.some(m => m.media_type === 'voice') &&
+      useSettingsStore.getState().widget_voice_mode === 'auto'
+    ) {
+      autoSaved.current = true;
+      handleSave();
+    }
+    // handleSave is recreated every render; media is the real trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [media, autoCapture, entryType]);
 
   return (
     <ScrollView
