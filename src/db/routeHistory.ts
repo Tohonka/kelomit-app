@@ -493,8 +493,16 @@ export async function reconcileDayRouteHistory(
           unmatched.findIndex(candidate => candidate.id === existing.id),
           1,
         );
+        // Only irreplaceable names survive a re-derivation: user-edited ones
+        // (setDayStopName always sets user_edited = 1, so every name the user
+        // picked — including 'day' and hand-picked saved/reusable — lands here)
+        // and Google ones (paid lookups against raw data that later prunes, so
+        // they can't be recomputed). Auto-assigned saved/reusable names are
+        // mechanical anchor lookups — they must recompute when the derivation
+        // moves stop boundaries, or a stale anchor name freezes onto a stop it
+        // no longer covers.
         const preserveIdentity =
-          existing.user_edited || Boolean(existing.display_name?.trim());
+          existing.user_edited || existing.name_source === 'google';
         await tx.execute(
           `UPDATE day_route_stops
            SET start_ts = ?, end_ts = ?, latitude = ?, longitude = ?,

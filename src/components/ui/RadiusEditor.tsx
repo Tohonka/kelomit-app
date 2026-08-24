@@ -70,7 +70,10 @@ export default function RadiusEditor({
     const parsed = Number.parseInt(draft, 10);
     if (Number.isFinite(parsed)) {
       const next = clampRadius(parsed);
-      if (next !== value) {
+      // Compare against displayRef, not the `value` prop: the prop is stale
+      // right after a step commit (parent hasn't re-rendered yet), which both
+      // dropped a typed write and let Android's blur+submit double-commit.
+      if (next !== displayRef.current) {
         onChange(next);
       }
       setDisplay(next);

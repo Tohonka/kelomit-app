@@ -4,7 +4,6 @@
  *  hard-blocking. Enforced in the UI and at the DB write boundary. */
 export const MIN_RADIUS_M = 6;
 export const MAX_RADIUS_M = 2000; // typo guard for typed entry
-export const RADIUS_CAUTION_M = 20;
 export const DEFAULT_RADIUS_M = 150;
 
 /** Clamp a radius to bounds and round to whole metres. */

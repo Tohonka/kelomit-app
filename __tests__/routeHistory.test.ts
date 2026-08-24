@@ -718,6 +718,55 @@ describe('route history repository', () => {
     ]);
   });
 
+  it('recomputes an auto-assigned anchor name when the derivation moves the stop', async () => {
+    const existing = stopRow({
+      id: 12,
+      named_place_id: 7,
+      display_name: 'Old auto anchor',
+      name_source: 'reusable',
+      user_edited: 0,
+    });
+    const {transactionExecute} = mockDatabase([], [
+      result([existing]),
+      result(),
+      result(),
+    ]);
+    const next = derivedStop({
+      startTs: '2026-07-24T08:03:00.000Z',
+      endTs: '2026-07-24T08:13:00.000Z',
+      latitude: 60.1702,
+      longitude: 24.9402,
+      anchor: {
+        id: 99,
+        type: 'saved',
+        name: 'New derived anchor',
+        latitude: 60.17,
+        longitude: 24.94,
+        radiusM: 70,
+      },
+    });
+
+    await reconcileDayRouteHistory(4, {stops: [next], segments: []});
+
+    const update = transactionExecute.mock.calls.find(([sql]) =>
+      String(sql).includes('UPDATE day_route_stops'),
+    );
+    expect(update?.[1]).toEqual([
+      next.startTs,
+      next.endTs,
+      next.latitude,
+      next.longitude,
+      99,
+      null,
+      null,
+      'New derived anchor',
+      'saved',
+      0,
+      12,
+      4,
+    ]);
+  });
+
   it('consumes each old stop at most once during reconciliation', async () => {
     const {transactionExecute} = mockDatabase([], [
       result([stopRow({id: 10})]),

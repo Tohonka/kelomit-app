@@ -117,6 +117,27 @@ it('does not call onChange for non-numeric typed input', () => {
   expect(onChange).not.toHaveBeenCalled();
 });
 
+it('commits a typed value that differs from the stepped display even when it equals the stale prop', () => {
+  // Step first (parent hasn't re-rendered, so `value` is still 150 while the
+  // display is 151), then type the original 150 back. The write must land.
+  const onChange = jest.fn();
+  let renderer!: ReturnType<typeof create>;
+  act(() => {
+    renderer = create(<RadiusEditor value={150} onChange={onChange} />);
+  });
+
+  act(() => renderer.root.findByProps({accessibilityLabel: 'Increase radius'}).props.onPressIn());
+  act(() => renderer.root.findByProps({accessibilityLabel: 'Increase radius'}).props.onPressOut());
+  expect(onChange).toHaveBeenLastCalledWith(151);
+
+  act(() => renderer.root.findByProps({accessibilityLabel: 'Edit radius'}).props.onPress());
+  act(() => renderer.root.findByType(TextInput).props.onChangeText('150'));
+  act(() => renderer.root.findByType(TextInput).props.onSubmitEditing());
+
+  expect(onChange).toHaveBeenCalledTimes(2);
+  expect(onChange).toHaveBeenLastCalledWith(150);
+});
+
 it('does not call onChange when the typed value matches the current one (tap-away no-op)', () => {
   const onChange = jest.fn();
   let renderer!: ReturnType<typeof create>;
