@@ -2,6 +2,9 @@ import {create} from 'zustand';
 import {getAllSettings, getRawSettings, setSetting} from '../db/settings';
 import type {Settings, ActivityType} from '../types';
 import type {ThemeMode, TimeSelectorMode} from '../theme';
+// Straight from colors (not the theme index) — the index pulls in useTheme,
+// which imports this store back; a value import through it would cycle.
+import {resolveColorTheme, type ColorTheme} from '../theme/colors';
 import i18n, {resolveLanguageSetting, type Language} from '../i18n';
 import {DAY_LIST_MODES, type DayListMode} from '../utils/entrySort';
 import {parseWeekdayHours, type WeekdayHours, type WeekdayOverride} from '../utils/usualHours';
@@ -12,6 +15,8 @@ export type WidgetVoiceMode = 'confirm' | 'auto';
 interface SettingsState extends Settings {
   loaded: boolean;
   theme_mode: ThemeMode;
+  /** Which named color palette to use; light/dark still comes from theme_mode. */
+  color_theme: ColorTheme;
   show_week_numbers: boolean;
   /** Show a second "personal hours" line under the work total in the header. */
   show_personal_hours: boolean;
@@ -40,6 +45,7 @@ interface SettingsState extends Settings {
   setDefaultActivityType: (type: ActivityType) => Promise<void>;
   setDefaultProjectId: (id: number | null) => Promise<void>;
   setThemeMode: (mode: ThemeMode) => Promise<void>;
+  setColorTheme: (theme: ColorTheme) => Promise<void>;
   setShowWeekNumbers: (show: boolean) => Promise<void>;
   setShowPersonalHours: (show: boolean) => Promise<void>;
   setNavVisibility: (mode: NavVisibility) => Promise<void>;
@@ -72,6 +78,7 @@ export const useSettingsStore = create<SettingsState>(set => ({
   prefill_from_usual: false,
   pay_period_start_day: 1,
   theme_mode: 'system',
+  color_theme: 'default',
   show_week_numbers: false,
   show_personal_hours: false,
   nav_visibility: 'always',
@@ -94,6 +101,7 @@ export const useSettingsStore = create<SettingsState>(set => ({
       raw.theme_mode === 'light' || raw.theme_mode === 'dark'
         ? raw.theme_mode
         : 'system';
+    const color_theme = resolveColorTheme(raw.color_theme);
     const show_week_numbers = raw.show_week_numbers === 'true';
     const show_personal_hours = raw.show_personal_hours === 'true';
     const nav_visibility: NavVisibility =
@@ -124,6 +132,7 @@ export const useSettingsStore = create<SettingsState>(set => ({
     set({
       ...settings,
       theme_mode,
+      color_theme,
       show_week_numbers,
       show_personal_hours,
       nav_visibility,
@@ -164,6 +173,11 @@ export const useSettingsStore = create<SettingsState>(set => ({
   setThemeMode: async mode => {
     await setSetting('theme_mode', mode);
     set({theme_mode: mode});
+  },
+
+  setColorTheme: async theme => {
+    await setSetting('color_theme', theme);
+    set({color_theme: theme});
   },
 
   setShowWeekNumbers: async show => {

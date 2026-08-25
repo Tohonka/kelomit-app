@@ -1,5 +1,5 @@
-export {lightColors, darkColors, lightColors as colors} from './colors';
-export type {Colors} from './colors';
+export {lightColors, darkColors, lightColors as colors, themes, resolveColorTheme} from './colors';
+export type {Colors, ColorTheme} from './colors';
 export {useTheme} from './useTheme';
 export type {ThemeMode, TimeSelectorMode} from './useTheme';
 

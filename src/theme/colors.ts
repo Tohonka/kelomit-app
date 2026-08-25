@@ -71,3 +71,81 @@ export const darkColors: Colors = {
 };
 
 export type Colors = typeof lightColors;
+
+// "Hornet" black/yellow test theme. Same token contract as default; activity
+// categories keep three tellable-apart hues:
+//   Work → yellow · Personal@work → orange · Personal → ice blue
+const hornetLight: Colors = {
+  bg: '#F7F5EF',
+  bgCard: '#FFFDF7',
+  bgMuted: '#E4E0D3',
+  swatch: '#ECE8DB',
+  primary: '#8A6D00', // ochre — pure yellow is unreadable on white
+  primaryLight: '#A8860A',
+  primaryDark: '#6B5500',
+  accent: '#B35C00', // orange
+  accentLight: '#CC7A1F',
+  accentPink: '#8A6D00', // work
+  accentCyan: '#00688F', // personal
+  accentAmber: '#B35C00', // personal@work
+  textPrimary: '#171410',
+  textSecondary: '#565143',
+  textMuted: '#736E5E',
+  badgeWork: '#8A6D00',
+  badgePersonalWork: '#B35C00',
+  badgePersonal: '#00688F',
+  error: '#C0293A',
+  success: '#398526',
+  border: '#D6D1C1',
+  shadow: '#3F3A2C',
+  white: '#FFFFFF',
+  glassTopBar: 'rgba(247,245,239,0.94)',
+  glassPill: 'rgba(255,253,247,0.96)',
+  glassBorder: 'rgba(0,0,0,0.06)',
+  glassHighlight: 'rgba(0,0,0,0.12)',
+  timerBg: '#F6ECC8',
+  timerBorder: '#D9BE5E',
+};
+
+const hornetDark: Colors = {
+  bg: '#0B0A06',
+  bgCard: '#16140C',
+  bgMuted: '#262215',
+  swatch: '#1E1B10',
+  primary: '#FFD60A', // yellow
+  primaryLight: '#FFE14D',
+  primaryDark: '#D9B007',
+  accent: '#FF9F0A', // orange
+  accentLight: '#FFB340',
+  accentPink: '#FFD60A', // work
+  accentCyan: '#64D2FF', // personal
+  accentAmber: '#FF9F0A', // personal@work
+  textPrimary: '#F5F2E6',
+  textSecondary: '#AFAA97',
+  textMuted: '#7C7767',
+  badgeWork: '#FFD60A',
+  badgePersonalWork: '#FF9F0A',
+  badgePersonal: '#64D2FF',
+  error: '#E5484D',
+  success: '#5EB749',
+  border: '#312D1D',
+  shadow: '#000000',
+  white: '#FFFFFF',
+  glassTopBar: 'rgba(24,22,14,0.92)',
+  glassPill: 'rgba(32,29,18,0.95)',
+  glassBorder: 'rgba(255,214,10,0.14)',
+  glassHighlight: 'rgba(255,214,10,0.28)',
+  timerBg: '#2A2410',
+  timerBorder: '#8F7A14',
+};
+
+export const themes = {
+  default: {light: lightColors, dark: darkColors},
+  hornet: {light: hornetLight, dark: hornetDark},
+} as const;
+
+export type ColorTheme = keyof typeof themes;
+
+export function resolveColorTheme(raw: string | undefined): ColorTheme {
+  return raw != null && raw in themes ? (raw as ColorTheme) : 'default';
+}
