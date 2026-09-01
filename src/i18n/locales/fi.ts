@@ -202,6 +202,8 @@ const fi: typeof en = {
     weekNumbers: 'Viikkonumerot',
     personalHours: 'Näytä henkilökohtaiset tunnit',
     personalHoursDescription: 'Lisää työtuntien alle toisen rivin henkilökohtaiselle ajalle',
+    subnotesExpanded: 'Näytä alimerkinnät oletuksena',
+    subnotesExpandedDescription: 'Päivälistat avautuvat alimerkinnät näkyvissä',
     navVisibility: 'Alanavigaatio',
     navVisibilityDescription: 'Missä välilehtipalkki näkyy',
     navVisibilityAlways: 'Aina',
@@ -627,6 +629,8 @@ const fi: typeof en = {
     subnoteOf: 'Alimerkintä merkinnälle',
     partOf: 'Osa merkintää',
     untitled: 'Nimetön merkintä',
+    showAll: 'Näytä alimerkinnät',
+    collapse: 'Piilota alimerkinnät',
   },
 };
 

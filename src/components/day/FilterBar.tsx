@@ -13,6 +13,8 @@ interface Props {
   onSelectProject: (id: number | null) => void;
   onToggleTag: (id: number) => void;
   onClear: () => void;
+  /** Present when the day has subnotes: expand/collapse chip. */
+  subnotesToggle?: {expanded: boolean; onToggle: () => void};
 }
 
 const makeStyles = (c: Colors) =>
@@ -65,6 +67,7 @@ export default function FilterBar({
   onSelectProject,
   onToggleTag,
   onClear,
+  subnotesToggle,
 }: Props) {
   const {t: translate} = useTranslation();
   const {colors} = useTheme();
@@ -72,9 +75,20 @@ export default function FilterBar({
 
   const hasFilter = selectedProjectId != null || selectedTagIds.length > 0;
 
-  if (projects.length === 0 && tags.length === 0) {
+  if (projects.length === 0 && tags.length === 0 && !subnotesToggle) {
     return null;
   }
+
+  const subChip = subnotesToggle ? (
+    <TouchableOpacity
+      style={[styles.chip, subnotesToggle.expanded && styles.chipActive]}
+      onPress={subnotesToggle.onToggle}>
+      <Text style={[styles.chipText, subnotesToggle.expanded && styles.chipTextActive]}>
+        {subnotesToggle.expanded ? '▾ ' : '▸ '}
+        {translate(subnotesToggle.expanded ? 'subnotes.collapse' : 'subnotes.showAll')}
+      </Text>
+    </TouchableOpacity>
+  ) : null;
 
   // The clear chip rides on the first row that renders (projects, else tags).
   const clearChip = (
@@ -88,6 +102,7 @@ export default function FilterBar({
       {projects.length > 0 && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
           {hasFilter && clearChip}
+          {subChip}
           {projects.map(p => (
             <TouchableOpacity
               key={`p-${p.id}`}
@@ -103,6 +118,7 @@ export default function FilterBar({
       {tags.length > 0 && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
           {hasFilter && projects.length === 0 && clearChip}
+          {projects.length === 0 && subChip}
           {tags.map(t => (
             <TouchableOpacity
               key={`t-${t.id}`}
@@ -115,6 +131,7 @@ export default function FilterBar({
           ))}
         </ScrollView>
       )}
+      {projects.length === 0 && tags.length === 0 && <View style={styles.row}>{subChip}</View>}
     </View>
   );
 }

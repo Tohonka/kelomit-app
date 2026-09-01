@@ -104,6 +104,8 @@ export default function DayView({
   const {loadDay, daysCache, updateDayTimes} = useDayStore();
   const {entriesByDay, loadEntriesForDay} = useEntryStore();
   const showPersonalHours = useSettingsStore(s => s.show_personal_hours);
+  const subnotesDefault = useSettingsStore(s => s.subnotes_expanded);
+  const [showSubnotes, setShowSubnotes] = useState(subnotesDefault);
 
   const day = daysCache[date];
   const allEntries = useMemo(() => (day ? (entriesByDay[day.id] ?? []) : []), [day, entriesByDay]);
@@ -121,6 +123,8 @@ export default function DayView({
 
   // Reset filters when the viewed date changes (detail swipe).
   useEffect(() => { setSelectedProjectId(null); setSelectedTagIds([]); }, [date]);
+  // Subnote expansion: per-visit override of the Interface default.
+  useEffect(() => { setShowSubnotes(subnotesDefault); }, [date, subnotesDefault]);
 
   // Lift the day-note card above the keyboard once it's shown.
   useEffect(() => {
@@ -219,7 +223,8 @@ export default function DayView({
     return out;
   }, [upcoming]);
 
-  const hasFilterable = dayProjects.length > 0 || dayTags.length > 0;
+  const hasSubnotes = allEntries.some(e => e.parent_id != null);
+  const hasFilterable = dayProjects.length > 0 || dayTags.length > 0 || hasSubnotes;
 
   return (
     <GestureDetector gesture={swipe}>
@@ -257,6 +262,7 @@ export default function DayView({
               onSelectProject={setSelectedProjectId}
               onToggleTag={toggleTag}
               onClear={clearFilters}
+              subnotesToggle={hasSubnotes ? {expanded: showSubnotes, onToggle: () => setShowSubnotes(v => !v)} : undefined}
             />
           )}
           {isToday && <DayEndConfirmBanner />}
@@ -270,7 +276,14 @@ export default function DayView({
             <DaySummaryCard day={day} entries={allEntries} onUpdateTimes={fields => updateDayTimes(date, fields)} />
           )}
           {day && <DaySplitBar entries={allEntries} />}
-          <EntryList inline card entries={filteredEntries} onPressEntry={onOpenEntry} onAddSubnote={onAddSubnote} />
+          <EntryList
+            inline
+            card
+            entries={filteredEntries}
+            showSubnotes={showSubnotes}
+            onPressEntry={onOpenEntry}
+            onAddSubnote={onAddSubnote}
+          />
           {isToday && upcoming.length > 0 && (
             <View style={styles.comingUp}>
               <Text style={styles.comingUpHeader}>{t('todo.comingUp')}</Text>

@@ -32,6 +32,8 @@ export function calcHourBreakdown(entries: Entry[]): HourBreakdown {
   let personalSeconds = 0;
 
   for (const e of entries) {
+    // Subnotes sit inside their parent's time; the parent already counts it.
+    if (e.parent_id != null) { continue; }
     const secs = entryTrackedSeconds(e);
     if (secs === 0) { continue; }
     if (e.activity_type === 'work') { workSeconds += secs; }
@@ -167,6 +169,7 @@ export function calcDayWorkBreakdown(day: Day, entries: Entry[]): DayWorkBreakdo
   if (legUnion.length === 0) {
     let workSeconds = 0;
     for (const entry of entries) {
+      if (entry.parent_id != null) { continue; } // inside the parent's time
       const activity = dayWorkActivity(entry);
       if (activity === 'work' || activity === 'personal_work') {
         workSeconds += entryTrackedSeconds(entry);

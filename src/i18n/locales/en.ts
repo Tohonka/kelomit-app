@@ -200,6 +200,8 @@ const en = {
     weekNumbers: 'Week numbers',
     personalHours: 'Show personal hours',
     personalHoursDescription: 'Adds a second personal-time line under the work total',
+    subnotesExpanded: 'Expand subnotes by default',
+    subnotesExpandedDescription: 'Day lists open with subnotes shown under their note',
     navVisibility: 'Bottom navigation',
     navVisibilityDescription: 'Where the tab bar is shown',
     navVisibilityAlways: 'Always',
@@ -625,6 +627,8 @@ const en = {
     subnoteOf: 'Subnote of',
     partOf: 'Part of',
     untitled: 'Untitled note',
+    showAll: 'Show subnotes',
+    collapse: 'Hide subnotes',
   },
 };
 
