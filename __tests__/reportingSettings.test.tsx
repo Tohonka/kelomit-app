@@ -227,7 +227,10 @@ it('disables export and defensively rejects an invalid date range', async () => 
   act(() => {
     root.findByProps({testID: 'date-picker'}).props.onChange(
       {type: 'set'},
-      new Date(2026, 7, 1),
+      // Far future so the start is after the default (today-based) end date
+      // regardless of when the suite runs — this asserted 2026-08-01 before,
+      // which silently became a valid range once real time passed it.
+      new Date(2099, 0, 1),
     );
   });
 
