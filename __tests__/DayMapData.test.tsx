@@ -96,6 +96,7 @@ const entry = (id: number, latitude: number, longitude: number): Entry => ({
   entry_type: 'note',
   activity_type: 'work',
   project_id: null,
+  parent_id: null,
   tally: null,
   title: `Note ${id}`,
   body: null,

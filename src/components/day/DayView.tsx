@@ -39,6 +39,7 @@ interface Props {
   variant: 'today' | 'detail';
   onRequestDate: (date: string) => void;
   onOpenEntry: (entry: Entry) => void;
+  onAddSubnote?: (entry: Entry) => void;
   onOpenLeave?: (range: LeaveRange) => void;
   onDayLoaded?: (day: Day | null) => void;
 }
@@ -82,6 +83,7 @@ export default function DayView({
   variant,
   onRequestDate,
   onOpenEntry,
+  onAddSubnote,
   onOpenLeave,
   onDayLoaded,
 }: Props) {
@@ -268,7 +270,7 @@ export default function DayView({
             <DaySummaryCard day={day} entries={allEntries} onUpdateTimes={fields => updateDayTimes(date, fields)} />
           )}
           {day && <DaySplitBar entries={allEntries} />}
-          <EntryList inline card entries={filteredEntries} onPressEntry={onOpenEntry} />
+          <EntryList inline card entries={filteredEntries} onPressEntry={onOpenEntry} onAddSubnote={onAddSubnote} />
           {isToday && upcoming.length > 0 && (
             <View style={styles.comingUp}>
               <Text style={styles.comingUpHeader}>{t('todo.comingUp')}</Text>

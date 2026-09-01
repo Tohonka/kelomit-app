@@ -1,6 +1,7 @@
 import React, {useMemo} from 'react';
 import {useTranslation} from 'react-i18next';
 import {FlatList, Text, StyleSheet, TouchableOpacity, Pressable, View} from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import type {Entry, ActivityType} from '../../types';
 import EntryListItem from './EntryListItem';
 import MediaThumbnail from '../media/MediaThumbnail';
@@ -18,6 +19,8 @@ import {
 interface Props {
   entries: Entry[];
   onPressEntry: (entry: Entry) => void;
+  /** Card rows only: shows a trailing + on top-level notes. */
+  onAddSubnote?: (entry: Entry) => void;
   inline?: boolean;
   /** Redesign look: compact rows inside a rounded card (Today / Day). */
   card?: boolean;
@@ -133,11 +136,20 @@ const makeStyles = (c: Colors) =>
       justifyContent: 'center',
     },
     countText: {fontSize: 11, fontWeight: typography.weights.bold, color: c.textSecondary},
+    addSub: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: c.bgMuted,
+    },
   });
 
 function CardRow({
   entry,
   onPress,
+  onAddSubnote,
   first,
   styles,
   colors,
@@ -145,6 +157,7 @@ function CardRow({
 }: {
   entry: Entry;
   onPress: () => void;
+  onAddSubnote?: () => void;
   first: boolean;
   styles: ReturnType<typeof makeStyles>;
   colors: Colors;
@@ -187,11 +200,20 @@ function CardRow({
           <Text style={styles.countText}>{media.length}</Text>
         </View>
       ) : null}
+      {onAddSubnote && entry.parent_id == null ? (
+        <Pressable
+          style={styles.addSub}
+          hitSlop={8}
+          onPress={onAddSubnote}
+          accessibilityLabel={t('subnotes.add')}>
+          <Icon name="plus" size={18} color={colors.textSecondary} />
+        </Pressable>
+      ) : null}
     </Pressable>
   );
 }
 
-export default function EntryList({entries, onPressEntry, inline, card}: Props) {
+export default function EntryList({entries, onPressEntry, onAddSubnote, inline, card}: Props) {
   const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -239,6 +261,7 @@ export default function EntryList({entries, onPressEntry, inline, card}: Props) 
                 entry={item}
                 first={i === 0}
                 onPress={() => onPressEntry(item)}
+                onAddSubnote={onAddSubnote ? () => onAddSubnote(item) : undefined}
                 styles={styles}
                 colors={colors}
                 t={t}

@@ -28,6 +28,7 @@ function rowToEntry(row: RawRow, tags: Tag[], project: Project | null, media: En
     entry_type: row.entry_type as Entry['entry_type'],
     activity_type: row.activity_type as Entry['activity_type'],
     project_id: (row.project_id as number | null) ?? null,
+    parent_id: (row.parent_id as number | null) ?? null,
     tally: (row.tally as number | null) ?? null,
     title: (row.title as string | null) ?? null,
     body: (row.body as string | null) ?? null,
@@ -282,6 +283,8 @@ export interface CreateEntryParams {
   entry_type: Entry['entry_type'];
   activity_type?: Entry['activity_type'];
   project_id?: number | null;
+  /** Parent note id → this entry is a subnote (schema v26). */
+  parent_id?: number | null;
   title?: string | null;
   body?: string | null;
   file_path?: string | null;
@@ -323,8 +326,8 @@ export async function createEntry(params: CreateEntryParams): Promise<Entry> {
        day_id, entry_type, activity_type, project_id, title, body,
        file_path, thumbnail_path, duration_sec, time_from, time_to,
        latitude, longitude, location_label, is_todo, is_overtime,
-       scheduled_date, completed_at, reminder_at
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       scheduled_date, completed_at, reminder_at, parent_id
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      RETURNING *;`,
     [
       params.day_id,
@@ -350,6 +353,7 @@ export async function createEntry(params: CreateEntryParams): Promise<Entry> {
       params.scheduled_date ?? null,
       params.completed_at ?? null,
       params.reminder_at ?? null,
+      params.parent_id ?? null,
     ],
   );
 
@@ -462,6 +466,44 @@ export async function updateEntry(
 export async function deleteEntry(id: number): Promise<void> {
   const db = getDB();
   await db.execute('DELETE FROM entries WHERE id = ?;', [id]);
+}
+
+// ─── Subnotes ───────────────────────────────────────────────────────────────
+
+/** Direct children of a note, oldest first (with tags/project/media). */
+export async function getSubnotes(parentId: number): Promise<Entry[]> {
+  const db = getDB();
+  const result = await db.execute(
+    'SELECT e.*, ep.tally AS tally FROM entries e LEFT JOIN entry_projects ep ON ep.entry_id = e.id AND ep.project_id = e.project_id WHERE e.parent_id = ? ORDER BY e.time_from ASC, e.created_at ASC;',
+    [parentId],
+  );
+  const rows = (result.rows ?? []) as RawRow[];
+  if (rows.length === 0) { return []; }
+  const ids = rows.map(r => r.id as number);
+  const [tagsMap, mediaMap, projectsMap] = await Promise.all([
+    fetchTagsForEntries(ids),
+    fetchMediaForEntries(ids),
+    fetchProjectsForRows(rows),
+  ]);
+  return rows.map(r =>
+    rowToEntry(
+      r,
+      tagsMap.get(r.id as number) ?? [],
+      projectsMap.get(r.project_id as number) ?? null,
+      mediaMap.get(r.id as number) ?? [],
+    ),
+  );
+}
+
+/** Re-parent entries (null = make top-level). */
+export async function setEntryParent(ids: number[], parentId: number | null): Promise<void> {
+  if (ids.length === 0) { return; }
+  const db = getDB();
+  const placeholders = ids.map(() => '?').join(',');
+  await db.execute(
+    `UPDATE entries SET parent_id = ?, updated_at = datetime('now') WHERE id IN (${placeholders});`,
+    [parentId, ...ids],
+  );
 }
 
 /**

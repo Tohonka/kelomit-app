@@ -621,6 +621,13 @@ const fi: typeof en = {
     more: 'Lisää',
     less: 'Vähemmän',
   },
+  subnotes: {
+    title: 'Alimerkinnät',
+    add: 'Lisää alimerkintä',
+    subnoteOf: 'Alimerkintä merkinnälle',
+    partOf: 'Osa merkintää',
+    untitled: 'Nimetön merkintä',
+  },
 };
 
 export default fi;

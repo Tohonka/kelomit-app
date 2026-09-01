@@ -44,6 +44,8 @@ export interface Entry {
   entry_type: EntryType;
   activity_type: ActivityType;
   project_id: number | null;
+  /** Subnote of this entry (schema v26). Null = top-level note. */
+  parent_id: number | null;
   /** Per-project note number (entry_projects join). Null when no project, or
    *  in read paths that don't fetch it (search, gallery, todos). */
   tally: number | null;

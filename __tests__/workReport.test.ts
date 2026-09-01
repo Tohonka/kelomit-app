@@ -27,6 +27,7 @@ function makeEntry(overrides: Partial<Entry> = {}): Entry {
     entry_type: 'note',
     activity_type: 'work',
     project_id: null,
+    parent_id: null,
     tally: null,
     title: null,
     body: null,

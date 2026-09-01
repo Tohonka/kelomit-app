@@ -619,6 +619,13 @@ const en = {
     more: 'More',
     less: 'Less',
   },
+  subnotes: {
+    title: 'Subnotes',
+    add: 'Add subnote',
+    subnoteOf: 'Subnote of',
+    partOf: 'Part of',
+    untitled: 'Untitled note',
+  },
 };
 
 export default en;
