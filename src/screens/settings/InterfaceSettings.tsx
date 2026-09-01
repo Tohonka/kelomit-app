@@ -5,7 +5,7 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import {useSettingsStore} from '../../store/settingsStore';
 import type {NavVisibility} from '../../store/settingsStore';
 import {useTheme} from '../../theme';
-import type {ThemeMode, TimeSelectorMode} from '../../theme';
+import type {ThemeMode, TimeSelectorMode, ColorTheme} from '../../theme';
 import type {Language} from '../../i18n';
 import {makeSettingsStyles} from './settingsStyles';
 
@@ -13,6 +13,11 @@ const THEME_MODES: {mode: ThemeMode; labelKey: string}[] = [
   {mode: 'system', labelKey: 'settings.themeAuto'},
   {mode: 'light', labelKey: 'settings.themeLight'},
   {mode: 'dark', labelKey: 'settings.themeDark'},
+];
+
+const COLOR_THEMES: {theme: ColorTheme; labelKey: string}[] = [
+  {theme: 'default', labelKey: 'settings.colorThemeDefault'},
+  {theme: 'hornet', labelKey: 'settings.colorThemeHornet'},
 ];
 
 const NAV_VISIBILITY_OPTIONS: {mode: NavVisibility; labelKey: string}[] = [
@@ -36,6 +41,7 @@ export default function InterfaceSettings() {
   const styles = useMemo(() => makeSettingsStyles(colors), [colors]);
   const {
     theme_mode, setThemeMode,
+    color_theme, setColorTheme,
     language, setLanguage,
     show_week_numbers, setShowWeekNumbers,
     show_personal_hours, setShowPersonalHours,
@@ -57,6 +63,22 @@ export default function InterfaceSettings() {
                 style={[styles.segmentBtn, theme_mode === mode && styles.segmentBtnActive]}
                 onPress={() => setThemeMode(mode)}>
                 <Text style={[styles.segmentBtnText, theme_mode === mode && styles.segmentBtnTextActive]}>
+                  {t(labelKey)}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.row}>
+          <Text style={styles.rowLabel}>{t('settings.colorTheme')}</Text>
+          <View style={styles.segment}>
+            {COLOR_THEMES.map(({theme: option, labelKey}) => (
+              <TouchableOpacity
+                key={option}
+                style={[styles.segmentBtn, color_theme === option && styles.segmentBtnActive]}
+                onPress={() => setColorTheme(option)}>
+                <Text style={[styles.segmentBtnText, color_theme === option && styles.segmentBtnTextActive]}>
                   {t(labelKey)}
                 </Text>
               </TouchableOpacity>
