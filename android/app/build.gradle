@@ -99,6 +99,16 @@ project.ext {
     ]
 }
 
+// Version is generated per-build by scripts/gen-version.js (see plans_etc/PLAN-20260901-01).
+// Runs at configuration time so defaultConfig below reads fresh values.
+def genVersion = ["node", "${projectDir}/../../scripts/gen-version.js"].execute()
+genVersion.waitForProcessOutput(System.out, System.err)
+if (genVersion.exitValue() != 0) {
+    throw new GradleException("gen-version.js failed — is node on PATH?")
+}
+def kelomitVersionProps = new Properties()
+file("version.properties").withInputStream { kelomitVersionProps.load(it) }
+
 android {
     ndkVersion = rootProject.ext.ndkVersion
     buildToolsVersion = rootProject.ext.buildToolsVersion
@@ -109,8 +119,8 @@ android {
         applicationId "com.kelomitapp"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 5
-        versionName "0.3.84"
+        versionCode kelomitVersionProps.getProperty("VERSION_CODE").toInteger()
+        versionName kelomitVersionProps.getProperty("VERSION_NAME")
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         manifestPlaceholders = [MAPS_API_KEY: mapsApiKey]
         // Same key exposed to JS (via BackgroundLocation.getConstants) so the
