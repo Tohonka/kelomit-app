@@ -20,6 +20,8 @@ interface SettingsState extends Settings {
   show_week_numbers: boolean;
   /** Show a second "personal hours" line under the work total in the header. */
   show_personal_hours: boolean;
+  /** Day lists open with subnotes expanded (the filter-bar toggle overrides per visit). */
+  subnotes_expanded: boolean;
   nav_visibility: NavVisibility;
   /** Day-list ordering/grouping mode (Home + Day), cycled via the sort pill. */
   day_list_mode: DayListMode;
@@ -48,6 +50,7 @@ interface SettingsState extends Settings {
   setColorTheme: (theme: ColorTheme) => Promise<void>;
   setShowWeekNumbers: (show: boolean) => Promise<void>;
   setShowPersonalHours: (show: boolean) => Promise<void>;
+  setSubnotesExpanded: (expanded: boolean) => Promise<void>;
   setNavVisibility: (mode: NavVisibility) => Promise<void>;
   setDayListMode: (mode: DayListMode) => Promise<void>;
   /** Set (or clear, with null) the override for one weekday (0=Sun..6=Sat). */
@@ -81,6 +84,7 @@ export const useSettingsStore = create<SettingsState>(set => ({
   color_theme: 'default',
   show_week_numbers: false,
   show_personal_hours: false,
+  subnotes_expanded: false,
   nav_visibility: 'always',
   day_list_mode: 'time_desc',
   weekday_hours: {},
@@ -104,6 +108,7 @@ export const useSettingsStore = create<SettingsState>(set => ({
     const color_theme = resolveColorTheme(raw.color_theme);
     const show_week_numbers = raw.show_week_numbers === 'true';
     const show_personal_hours = raw.show_personal_hours === 'true';
+    const subnotes_expanded = raw.subnotes_expanded === 'true';
     const nav_visibility: NavVisibility =
       raw.nav_visibility === 'home_only' ? 'home_only' : 'always';
     const day_list_mode: DayListMode = DAY_LIST_MODES.includes(
@@ -135,6 +140,7 @@ export const useSettingsStore = create<SettingsState>(set => ({
       color_theme,
       show_week_numbers,
       show_personal_hours,
+      subnotes_expanded,
       nav_visibility,
       day_list_mode,
       weekday_hours,
@@ -188,6 +194,11 @@ export const useSettingsStore = create<SettingsState>(set => ({
   setShowPersonalHours: async show => {
     await setSetting('show_personal_hours', String(show));
     set({show_personal_hours: show});
+  },
+
+  setSubnotesExpanded: async expanded => {
+    await setSetting('subnotes_expanded', String(expanded));
+    set({subnotes_expanded: expanded});
   },
 
   setNavVisibility: async mode => {

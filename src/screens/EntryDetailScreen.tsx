@@ -1,4 +1,4 @@
-import React, {useEffect, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {
   View,
@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {GestureDetector, Gesture} from 'react-native-gesture-handler';
-import {getEntry, deleteEntryMedia, updateEntry} from '../db/entries';
+import {getEntry, getSubnotes, deleteEntryMedia, updateEntry} from '../db/entries';
 import {mergeTranscriptIntoBody} from '../utils/transcript';
 import {useEntryStore} from '../store/entryStore';
 import {useTheme, typography, spacing, radius} from '../theme';
@@ -30,6 +30,8 @@ import {deleteMediaFile, fileUri} from '../utils/mediaUtils';
 import {scheduleTodoReminder, cancelTodoReminder} from '../services/notificationService';
 
 type Props = RootStackScreenProps<'EntryDetailScreen'>;
+
+const TYPE_GLYPH: Record<string, string> = {note: '✏️', photo: '📷', video: '🎥', voice: '🎙️'};
 
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
@@ -138,6 +140,38 @@ const makeStyles = (c: Colors) =>
     todoBtnText: {color: c.white, fontSize: typography.sizes.sm, fontWeight: typography.weights.semibold},
     todoBtnTextReopen: {color: c.textSecondary},
     todoHint: {fontSize: typography.sizes.xs, color: c.textMuted},
+    partOf: {
+      fontSize: typography.sizes.sm,
+      color: c.primary,
+      fontWeight: typography.weights.semibold,
+      marginBottom: spacing.md,
+    },
+    subSection: {
+      borderTopWidth: 1,
+      borderTopColor: c.border,
+      marginTop: spacing.lg,
+      paddingTop: spacing.md,
+    },
+    subHeader: {
+      fontSize: typography.sizes.sm,
+      color: c.textMuted,
+      fontWeight: typography.weights.medium,
+      marginBottom: spacing.xs,
+    },
+    subRow: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.sm},
+    subGlyph: {fontSize: 16},
+    subTitle: {flex: 1, fontSize: typography.sizes.base, color: c.textPrimary, fontWeight: typography.weights.medium},
+    subMeta: {fontSize: typography.sizes.sm, color: c.textMuted},
+    subAddBtn: {
+      alignSelf: 'flex-start',
+      marginTop: spacing.sm,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.xs,
+      borderRadius: radius.pill,
+      borderWidth: 1.5,
+      borderColor: c.border,
+    },
+    subAddText: {color: c.textSecondary, fontSize: typography.sizes.sm, fontWeight: typography.weights.semibold},
     deleteBtn: {marginTop: spacing.xxl, alignItems: 'center', paddingVertical: spacing.md},
     deleteBtnText: {
       color: c.error,
@@ -153,26 +187,39 @@ export default function EntryDetailScreen({navigation, route}: Props) {
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [entry, setEntry] = useState<Entry | null>(null);
+  const [subnotes, setSubnotes] = useState<Entry[]>([]);
+  const [parent, setParent] = useState<Entry | null>(null);
   const [zoomUri, setZoomUri] = useState<string | null>(null);
+
+  const loadTree = useCallback(async (e: Entry | null) => {
+    setEntry(e);
+    if (!e) { return; }
+    const [subs, par] = await Promise.all([
+      getSubnotes(e.id),
+      e.parent_id != null ? getEntry(e.parent_id) : Promise.resolve(null),
+    ]);
+    setSubnotes(subs);
+    setParent(par);
+  }, []);
 
   useEffect(() => {
     getEntry(entryId).then(e => {
-      setEntry(e);
+      loadTree(e);
       if (e?.title) {
         navigation.setOptions({title: e.title});
       }
     });
-  }, [entryId, navigation]);
+  }, [entryId, navigation, loadTree]);
 
-  // Refresh after returning from edit
+  // Refresh after returning from edit / add-subnote
   useEffect(() => {
     const unsub = navigation.addListener('focus', () => {
       getEntry(entryId).then(e => {
-        if (e) { setEntry(e); }
+        if (e) { loadTree(e); }
       });
     });
     return unsub;
-  }, [navigation, entryId]);
+  }, [navigation, entryId, loadTree]);
 
   const handleEdit = () => {
     if (!entry) { return; }
@@ -352,6 +399,15 @@ export default function EntryDetailScreen({navigation, route}: Props) {
           </View>
         ) : null}
 
+        {parent ? (
+          <TouchableOpacity
+            onPress={() => navigation.push('EntryDetailScreen', {entryId: parent.id, dayId: parent.day_id})}>
+            <Text style={styles.partOf} numberOfLines={1}>
+              {translate('subnotes.partOf')}: {parent.title || parent.body || translate('subnotes.untitled')}
+            </Text>
+          </TouchableOpacity>
+        ) : null}
+
         {entry.title ? <Text style={styles.title}>{entry.title}</Text> : null}
         {entry.body ? <Text style={styles.body}>{entry.body}</Text> : null}
 
@@ -395,6 +451,29 @@ export default function EntryDetailScreen({navigation, route}: Props) {
         {(entry.tags ?? []).length > 0 ? (
           <View style={styles.tags}>
             {(entry.tags ?? []).map(t => <TagChip key={t.id} name={t.name} />)}
+          </View>
+        ) : null}
+
+        {entry.parent_id == null ? (
+          <View style={styles.subSection}>
+            <Text style={styles.subHeader}>{translate('subnotes.title')}</Text>
+            {subnotes.map(sub => (
+              <TouchableOpacity
+                key={sub.id}
+                style={styles.subRow}
+                onPress={() => navigation.push('EntryDetailScreen', {entryId: sub.id, dayId: sub.day_id})}>
+                <Text style={styles.subGlyph}>{TYPE_GLYPH[sub.media?.[0]?.media_type ?? 'note']}</Text>
+                <Text style={styles.subTitle} numberOfLines={1}>
+                  {sub.title || sub.body || translate('subnotes.untitled')}
+                </Text>
+                <Text style={styles.subMeta}>{formatTime(sub.time_from ?? sub.created_at)}</Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity
+              style={styles.subAddBtn}
+              onPress={() => navigation.navigate('AddEntryModal', {dayId, parentId: entry.id})}>
+              <Text style={styles.subAddText}>+ {translate('subnotes.add')}</Text>
+            </TouchableOpacity>
           </View>
         ) : null}
 

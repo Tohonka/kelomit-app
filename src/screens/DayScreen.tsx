@@ -53,6 +53,7 @@ export default function DayScreen({navigation, route}: Props) {
         date={currentDate}
         onRequestDate={setCurrentDate}
         onOpenEntry={entry => navigation.navigate('EntryDetailScreen', {entryId: entry.id, dayId: entry.day_id})}
+        onAddSubnote={entry => navigation.navigate('AddEntryModal', {dayId: entry.day_id, date: currentDate, parentId: entry.id})}
         onOpenLeave={range => day && navigation.navigate('AddEntryModal', {
           dayId: day.id,
           date: currentDate,

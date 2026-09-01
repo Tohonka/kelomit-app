@@ -38,6 +38,7 @@ function makeEntry(overrides: Partial<Entry>): Entry {
     entry_type: 'note',
     activity_type: 'work',
     project_id: null,
+    parent_id: null,
     tally: null,
     title: null,
     body: null,
@@ -125,6 +126,14 @@ describe('calcHourBreakdown', () => {
     const result = calcHourBreakdown(entries);
     expect(result.workSeconds).toBe(0);
   });
+
+  it('skips subnotes so parent + subnote never double-count', () => {
+    const entries = [
+      makeEntry({id: 1, time_from: '2026-06-11T09:00:00.000Z', time_to: '2026-06-11T11:00:00.000Z'}),
+      makeEntry({id: 2, parent_id: 1, time_from: '2026-06-11T09:30:00.000Z', time_to: '2026-06-11T10:30:00.000Z'}),
+    ];
+    expect(calcHourBreakdown(entries).workSeconds).toBe(7200);
+  });
 });
 
 describe('calcDayWorkBreakdown (work-day model)', () => {
@@ -137,6 +146,23 @@ describe('calcDayWorkBreakdown (work-day model)', () => {
     const b = calcDayWorkBreakdown(day, entries);
     expect(b.hasDayLegs).toBe(false);
     expect(b.workSeconds).toBe(2 * H); // only work entries, personal ignored
+  });
+
+  it('no-legs fallback skips subnotes (parent already counts them)', () => {
+    const entries = [
+      makeEntry({id: 1, activity_type: 'work', time_from: at(9), time_to: at(11)}),
+      makeEntry({id: 2, parent_id: 1, activity_type: 'work', time_from: at(9.5), time_to: at(10.5)}),
+    ];
+    expect(calcDayWorkSecs(makeDay({}), entries)).toBe(2 * H);
+  });
+
+  it('a personal subnote inside the day span still deducts from work', () => {
+    const day = makeDay({started_at: at(8), ended_at: at(16)});
+    const entries = [
+      makeEntry({id: 1, activity_type: 'work', time_from: at(9), time_to: at(11)}),
+      makeEntry({id: 2, parent_id: 1, activity_type: 'personal', time_from: at(9.5), time_to: at(10.5)}),
+    ];
+    expect(calcDayWorkSecs(day, entries)).toBe(7 * H);
   });
 
   it('counts personal_work when entries are the only work signal', () => {

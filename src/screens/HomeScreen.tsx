@@ -48,6 +48,7 @@ export default function HomeScreen({navigation}: Props) {
       date={date}
       onRequestDate={d => navigation.navigate('DayScreen', {date: d})}
       onOpenEntry={entry => navigation.navigate('EntryDetailScreen', {entryId: entry.id, dayId: entry.day_id})}
+      onAddSubnote={entry => navigation.navigate('AddEntryModal', {dayId: entry.day_id, date, parentId: entry.id})}
       onOpenLeave={range => today && navigation.navigate('AddEntryModal', {
         dayId: today.id,
         date,

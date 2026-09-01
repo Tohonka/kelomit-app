@@ -16,6 +16,8 @@ export type RootStackParamList = {
     leaveRangeId?: number;
     initialTab?: 'note' | 'leave';
     prefill?: {body?: string; timeFrom?: string; timeTo?: string};
+    /** Create mode only: the new note becomes a subnote of this entry. */
+    parentId?: number;
   };
   QuickAddModal: {date?: string; dayId: number; entryType: EntryType; autoCapture?: boolean};
   ProjectsScreen: undefined;

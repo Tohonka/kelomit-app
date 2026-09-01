@@ -15,6 +15,12 @@ export function nextDayListMode(mode: DayListMode): DayListMode {
   return DAY_LIST_MODES[(i + 1) % DAY_LIST_MODES.length];
 }
 
+export interface EntryGroupItem {
+  entry: Entry;
+  /** Direct subnotes (schema v26), oldest first. Empty for leaf notes. */
+  subnotes: Entry[];
+}
+
 export interface EntryGroup {
   /** Stable React key. */
   key: string;
@@ -23,7 +29,7 @@ export interface EntryGroup {
    * For 'type' mode this is the ActivityType so the caller can translate it.
    */
   title: string | null;
-  entries: Entry[];
+  items: EntryGroupItem[];
 }
 
 // time_from is a full datetime string (see entries.ts strftime usage); for
@@ -38,22 +44,38 @@ const ACTIVITY_ORDER: ActivityType[] = ['work', 'personal_work', 'personal'];
 
 /**
  * Order/group entries for the day list. Within grouped modes, entries are
- * newest-first inside each group. Pure — UI/translation stays in the caller.
+ * newest-first inside each group. Subnotes nest under their parent (oldest
+ * first); a subnote whose parent isn't in the input is shown top-level rather
+ * than dropped. Pure — UI/translation stays in the caller.
  */
-export function groupEntries(entries: Entry[], mode: DayListMode): EntryGroup[] {
+export function groupEntries(all: Entry[], mode: DayListMode): EntryGroup[] {
+  const ids = new Set(all.map(e => e.id));
+  const children = new Map<number, Entry[]>();
+  const entries: Entry[] = [];
+  for (const e of all) {
+    if (e.parent_id != null && ids.has(e.parent_id)) {
+      const list = children.get(e.parent_id);
+      if (list) { list.push(e); } else { children.set(e.parent_id, [e]); }
+    } else {
+      entries.push(e);
+    }
+  }
+  const wrap = (list: Entry[]): EntryGroupItem[] =>
+    list.map(entry => ({entry, subnotes: (children.get(entry.id) ?? []).sort(byTimeAsc)}));
+
   if (mode === 'time_asc') {
-    return [{key: 'all', title: null, entries: [...entries].sort(byTimeAsc)}];
+    return [{key: 'all', title: null, items: wrap([...entries].sort(byTimeAsc))}];
   }
   if (mode === 'time_desc') {
-    return [{key: 'all', title: null, entries: [...entries].sort(byTimeDesc)}];
+    return [{key: 'all', title: null, items: wrap([...entries].sort(byTimeDesc))}];
   }
 
   if (mode === 'type') {
     return ACTIVITY_ORDER.map(type => ({
       key: type,
       title: type,
-      entries: entries.filter(e => e.activity_type === type).sort(byTimeDesc),
-    })).filter(g => g.entries.length > 0);
+      items: wrap(entries.filter(e => e.activity_type === type).sort(byTimeDesc)),
+    })).filter(g => g.items.length > 0);
   }
 
   // mode === 'project': one group per project, alphabetical, "No project" last.
@@ -70,11 +92,11 @@ export function groupEntries(entries: Entry[], mode: DayListMode): EntryGroup[] 
   const named: EntryGroup[] = [];
   let noProject: EntryGroup | null = null;
   for (const [id, list] of buckets) {
-    const sorted = list.sort(byTimeDesc);
+    const sorted = wrap(list.sort(byTimeDesc));
     if (id == null) {
-      noProject = {key: 'no-project', title: null, entries: sorted};
+      noProject = {key: 'no-project', title: null, items: sorted};
     } else {
-      named.push({key: `p-${id}`, title: list[0].project!.name, entries: sorted});
+      named.push({key: `p-${id}`, title: list[0].project!.name, items: sorted});
     }
   }
   named.sort((a, b) => (a.title ?? '').localeCompare(b.title ?? ''));

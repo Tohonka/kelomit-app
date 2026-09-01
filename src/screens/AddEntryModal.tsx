@@ -34,7 +34,7 @@ import {getEntry, addEntryMedia, deleteEntryMedia} from '../db/entries';
 import {getOrCreateDay} from '../db/days';
 import {formatDate, todayDate} from '../utils/dateUtils';
 import type {RootStackScreenProps} from '../navigation/navigationTypes';
-import type {ActivityType, Tag} from '../types';
+import type {ActivityType, Entry, Tag} from '../types';
 
 function localDateStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -241,6 +241,12 @@ const makeStyles = (c: Colors) =>
       justifyContent: 'space-between',
       marginTop: spacing.sm,
     },
+    subnoteOf: {
+      fontSize: typography.sizes.sm,
+      color: c.primary,
+      fontWeight: typography.weights.semibold,
+      marginBottom: spacing.xs,
+    },
   });
 
 export default function AddEntryModal({navigation, route}: Props) {
@@ -249,7 +255,10 @@ export default function AddEntryModal({navigation, route}: Props) {
   const entryDate = route.params.date ?? todayDate();
   const isEdit = entryId != null;
   const prefill = isEdit ? undefined : route.params.prefill;
-  const canSwitchTabs = entryId == null && leaveRangeId == null;
+  // Subnote mode (create only): inherits the parent's project + day, no to-do.
+  const parentId = isEdit ? undefined : route.params.parentId;
+  const [parent, setParent] = useState<Entry | null>(null);
+  const canSwitchTabs = entryId == null && leaveRangeId == null && parentId == null;
   const {addEntry, editEntry, loadEntriesForDay} = useEntryStore();
   const {projects, loaded: projectsLoaded, load: loadProjects, add: addProject} = useProjectStore();
   const {tags, loaded: tagsLoaded, load: loadTags, getOrCreate} = useTagStore();
@@ -273,7 +282,7 @@ export default function AddEntryModal({navigation, route}: Props) {
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const [loadingEntry, setLoadingEntry] = useState(isEdit);
+  const [loadingEntry, setLoadingEntry] = useState(isEdit || parentId != null);
 
   // A note's media attachments (Iteration 4). Existing ones carry an `id`.
   const [media, setMediaList] = useState<EditorMedia[]>([]);
@@ -368,6 +377,14 @@ export default function AddEntryModal({navigation, route}: Props) {
     setSelectedProjectId(default_project_id);
     defaultsApplied.current = true;
   }, [isEdit, settingsLoaded, default_activity_type, default_project_id]);
+
+  useEffect(() => {
+    if (parentId == null) { return; }
+    getEntry(parentId).then(p => {
+      setParent(p);
+      setLoadingEntry(false);
+    });
+  }, [parentId]);
 
   // Pre-fill fields when editing
   useEffect(() => {
@@ -503,7 +520,10 @@ export default function AddEntryModal({navigation, route}: Props) {
       } else {
         const gps = getLastKnownPosition();
         // A to-do is attached to the day it's scheduled for, not today's day.
-        const targetDayId = isTodo ? (await getOrCreateDay(scheduledDate)).id : dayId;
+        // A subnote lives on its parent's day and inherits its project.
+        const targetDayId = parent
+          ? parent.day_id
+          : isTodo ? (await getOrCreateDay(scheduledDate)).id : dayId;
         refreshDayId = targetDayId;
         const reminderIso = isTodo && reminderEnabled ? reminderAt : null;
         const created = await addEntry({
@@ -513,7 +533,8 @@ export default function AddEntryModal({navigation, route}: Props) {
           is_overtime: isOvertime,
           title: title.trim() || null,
           body: body.trim() || null,
-          project_id: selectedProjectId,
+          project_id: parent ? parent.project_id : selectedProjectId,
+          parent_id: parent?.id ?? null,
           tagIds: selectedTags.map(t => t.id),
           duration_sec: durationSec,
           time_from: finalFrom,
@@ -609,6 +630,11 @@ export default function AddEntryModal({navigation, route}: Props) {
         keyboardDismissMode="on-drag">
 
       {tabs}
+      {parent && (
+        <Text style={styles.subnoteOf} numberOfLines={1}>
+          {translate('subnotes.subnoteOf')}: {parent.title || parent.body || translate('subnotes.untitled')}
+        </Text>
+      )}
       <Text style={styles.sectionLabel}>{translate('entries.activity')}</Text>
       <View style={styles.activityRow}>
         {ACTIVITY_TYPES.map(({type, labelKey}) => (
@@ -676,7 +702,7 @@ export default function AddEntryModal({navigation, route}: Props) {
         textAlignVertical="top"
       />
 
-      <View onLayout={rememberY('project')}>
+      {!parent && <View onLayout={rememberY('project')}>
         <Text style={styles.sectionLabel}>{translate('entries.projectOptional')}</Text>
         <ProjectPicker
           projects={activeProjects}
@@ -685,7 +711,7 @@ export default function AddEntryModal({navigation, route}: Props) {
           onCreate={addProject}
           onSearchFocus={onFieldFocus('project')}
         />
-      </View>
+      </View>}
 
       <Text style={styles.sectionLabel}>{translate('entries.tags')}</Text>
       <View style={styles.tagInputRow} onLayout={rememberY('tags')}>
@@ -781,7 +807,7 @@ export default function AddEntryModal({navigation, route}: Props) {
         </View>
       )}
 
-      {!isEdit && (
+      {!isEdit && !parent && (
         <>
           <TouchableOpacity
             style={styles.todoRow}

@@ -1,6 +1,7 @@
 import React, {useMemo} from 'react';
 import {useTranslation} from 'react-i18next';
 import {FlatList, Text, StyleSheet, TouchableOpacity, Pressable, View} from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import type {Entry, ActivityType} from '../../types';
 import EntryListItem from './EntryListItem';
 import MediaThumbnail from '../media/MediaThumbnail';
@@ -18,6 +19,10 @@ import {
 interface Props {
   entries: Entry[];
   onPressEntry: (entry: Entry) => void;
+  /** Card rows only: shows a trailing + on top-level notes. */
+  onAddSubnote?: (entry: Entry) => void;
+  /** Render subnotes nested under their parent (else a ▸ N badge). */
+  showSubnotes?: boolean;
   inline?: boolean;
   /** Redesign look: compact rows inside a rounded card (Today / Day). */
   card?: boolean;
@@ -117,6 +122,7 @@ const makeStyles = (c: Colors) =>
     },
     row: {flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: 14},
     rowDivider: {borderTopWidth: 1, borderTopColor: c.bgMuted},
+    rowNested: {paddingLeft: spacing.lg + 20, paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth},
     swatch: {width: 34, height: 34, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center'},
     swatchGlyph: {fontSize: 16},
     rowBody: {flex: 1},
@@ -133,19 +139,35 @@ const makeStyles = (c: Colors) =>
       justifyContent: 'center',
     },
     countText: {fontSize: 11, fontWeight: typography.weights.bold, color: c.textSecondary},
+    addSub: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: c.bgMuted,
+    },
   });
 
 function CardRow({
   entry,
   onPress,
+  onAddSubnote,
   first,
+  nested,
+  subCount,
   styles,
   colors,
   t,
 }: {
   entry: Entry;
   onPress: () => void;
+  onAddSubnote?: () => void;
   first: boolean;
+  /** Rendered under a parent: indented, no + button. */
+  nested?: boolean;
+  /** Collapsed subnote count badge. */
+  subCount?: number;
   styles: ReturnType<typeof makeStyles>;
   colors: Colors;
   t: (k: string) => string;
@@ -168,7 +190,7 @@ function CardRow({
   const tint = colors[ACTIVITY_TINT[entry.activity_type]];
 
   return (
-    <Pressable style={[styles.row, !first && styles.rowDivider]} onPress={onPress}>
+    <Pressable style={[styles.row, !first && styles.rowDivider, nested && styles.rowNested]} onPress={onPress}>
       {photo ? (
         <MediaThumbnail entryType="photo" thumbnailPath={photo.thumbnail_path || photo.file_path} size={34} />
       ) : (
@@ -187,11 +209,25 @@ function CardRow({
           <Text style={styles.countText}>{media.length}</Text>
         </View>
       ) : null}
+      {subCount ? (
+        <View style={styles.countBadge}>
+          <Text style={styles.countText}>▸ {subCount}</Text>
+        </View>
+      ) : null}
+      {onAddSubnote && !nested && entry.parent_id == null ? (
+        <Pressable
+          style={styles.addSub}
+          hitSlop={8}
+          onPress={onAddSubnote}
+          accessibilityLabel={t('subnotes.add')}>
+          <Icon name="plus" size={18} color={colors.textSecondary} />
+        </Pressable>
+      ) : null}
     </Pressable>
   );
 }
 
-export default function EntryList({entries, onPressEntry, inline, card}: Props) {
+export default function EntryList({entries, onPressEntry, onAddSubnote, showSubnotes, inline, card}: Props) {
   const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -233,16 +269,31 @@ export default function EntryList({entries, onPressEntry, inline, card}: Props) 
         <View key={g.key}>
           {header != null && <Text style={styles.cardHeader}>{header}</Text>}
           <View style={styles.card}>
-            {g.entries.map((item, i) => (
-              <CardRow
-                key={item.id}
-                entry={item}
-                first={i === 0}
-                onPress={() => onPressEntry(item)}
-                styles={styles}
-                colors={colors}
-                t={t}
-              />
+            {g.items.map(({entry: item, subnotes}, i) => (
+              <React.Fragment key={item.id}>
+                <CardRow
+                  entry={item}
+                  first={i === 0}
+                  subCount={!showSubnotes ? subnotes.length : undefined}
+                  onPress={() => onPressEntry(item)}
+                  onAddSubnote={onAddSubnote ? () => onAddSubnote(item) : undefined}
+                  styles={styles}
+                  colors={colors}
+                  t={t}
+                />
+                {showSubnotes && subnotes.map(sub => (
+                  <CardRow
+                    key={sub.id}
+                    entry={sub}
+                    first={false}
+                    nested
+                    onPress={() => onPressEntry(sub)}
+                    styles={styles}
+                    colors={colors}
+                    t={t}
+                  />
+                ))}
+              </React.Fragment>
             ))}
           </View>
         </View>
@@ -251,7 +302,7 @@ export default function EntryList({entries, onPressEntry, inline, card}: Props) 
     return (
       <View key={g.key}>
         {header != null && <Text style={styles.groupHeader}>{header}</Text>}
-        {g.entries.map(item => (
+        {g.items.flatMap(({entry: item, subnotes}) => [item, ...subnotes]).map(item => (
           <EntryListItem key={item.id} entry={item} onPress={() => onPressEntry(item)} />
         ))}
       </View>

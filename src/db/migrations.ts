@@ -431,4 +431,13 @@ export const migrations: Migration[] = [
       'ALTER TABLE day_route_segments ADD COLUMN via_json TEXT',
     ],
   },
+  {
+    version: 26,
+    up: [
+      // Subnotes (plan 2026-09-01 Task 3): a note may belong to a parent note.
+      // Children share the parent's day_id; deleting a parent deletes its subnotes.
+      'ALTER TABLE entries ADD COLUMN parent_id INTEGER REFERENCES entries(id) ON DELETE CASCADE',
+      'CREATE INDEX IF NOT EXISTS idx_entries_parent ON entries(parent_id)',
+    ],
+  },
 ];

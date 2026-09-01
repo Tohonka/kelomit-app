@@ -8,6 +8,8 @@ import {useFocusEffect} from '@react-navigation/native';
 import {useDayStore} from '../../store/dayStore';
 import {useEntryStore} from '../../store/entryStore';
 import {useSettingsStore} from '../../store/settingsStore';
+import {useSessionStore} from '../../store/sessionStore';
+import {useTimerParent} from '../../services/timerSubnotes';
 import {useTheme, typography, spacing} from '../../theme';
 import type {Colors} from '../../theme';
 import {getDateFnsLocale} from '../../i18n';
@@ -39,6 +41,7 @@ interface Props {
   variant: 'today' | 'detail';
   onRequestDate: (date: string) => void;
   onOpenEntry: (entry: Entry) => void;
+  onAddSubnote?: (entry: Entry) => void;
   onOpenLeave?: (range: LeaveRange) => void;
   onDayLoaded?: (day: Day | null) => void;
 }
@@ -82,6 +85,7 @@ export default function DayView({
   variant,
   onRequestDate,
   onOpenEntry,
+  onAddSubnote,
   onOpenLeave,
   onDayLoaded,
 }: Props) {
@@ -102,9 +106,20 @@ export default function DayView({
   const {loadDay, daysCache, updateDayTimes} = useDayStore();
   const {entriesByDay, loadEntriesForDay} = useEntryStore();
   const showPersonalHours = useSettingsStore(s => s.show_personal_hours);
+  const subnotesDefault = useSettingsStore(s => s.subnotes_expanded);
+  const [showSubnotes, setShowSubnotes] = useState(subnotesDefault);
+
+  const sessionActive = useSessionStore(s => s.active != null);
+  const timerParentId = useTimerParent(s => s.parentId);
 
   const day = daysCache[date];
-  const allEntries = useMemo(() => (day ? (entriesByDay[day.id] ?? []) : []), [day, entriesByDay]);
+  const allEntries = useMemo(() => {
+    const list = day ? (entriesByDay[day.id] ?? []) : [];
+    // The running timer's note + its subnotes stay off the list until it stops.
+    return sessionActive && timerParentId != null
+      ? list.filter(e => e.id !== timerParentId && e.parent_id !== timerParentId)
+      : list;
+  }, [day, entriesByDay, sessionActive, timerParentId]);
 
   useEffect(() => { loadDay(date); }, [date, loadDay]);
   useEffect(() => { if (day) { loadEntriesForDay(day.id); } }, [day, loadEntriesForDay]);
@@ -119,6 +134,8 @@ export default function DayView({
 
   // Reset filters when the viewed date changes (detail swipe).
   useEffect(() => { setSelectedProjectId(null); setSelectedTagIds([]); }, [date]);
+  // Subnote expansion: per-visit override of the Interface default.
+  useEffect(() => { setShowSubnotes(subnotesDefault); }, [date, subnotesDefault]);
 
   // Lift the day-note card above the keyboard once it's shown.
   useEffect(() => {
@@ -217,7 +234,8 @@ export default function DayView({
     return out;
   }, [upcoming]);
 
-  const hasFilterable = dayProjects.length > 0 || dayTags.length > 0;
+  const hasSubnotes = allEntries.some(e => e.parent_id != null);
+  const hasFilterable = dayProjects.length > 0 || dayTags.length > 0 || hasSubnotes;
 
   return (
     <GestureDetector gesture={swipe}>
@@ -255,6 +273,7 @@ export default function DayView({
               onSelectProject={setSelectedProjectId}
               onToggleTag={toggleTag}
               onClear={clearFilters}
+              subnotesToggle={hasSubnotes ? {expanded: showSubnotes, onToggle: () => setShowSubnotes(v => !v)} : undefined}
             />
           )}
           {isToday && <DayEndConfirmBanner />}
@@ -268,7 +287,14 @@ export default function DayView({
             <DaySummaryCard day={day} entries={allEntries} onUpdateTimes={fields => updateDayTimes(date, fields)} />
           )}
           {day && <DaySplitBar entries={allEntries} />}
-          <EntryList inline card entries={filteredEntries} onPressEntry={onOpenEntry} />
+          <EntryList
+            inline
+            card
+            entries={filteredEntries}
+            showSubnotes={showSubnotes}
+            onPressEntry={onOpenEntry}
+            onAddSubnote={onAddSubnote}
+          />
           {isToday && upcoming.length > 0 && (
             <View style={styles.comingUp}>
               <Text style={styles.comingUpHeader}>{t('todo.comingUp')}</Text>

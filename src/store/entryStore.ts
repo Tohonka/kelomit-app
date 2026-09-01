@@ -7,6 +7,7 @@ import {
   setTodoCompleted,
   type CreateEntryParams,
 } from '../db/entries';
+import {resolveTimerParent} from '../services/timerSubnotes';
 import type {Entry} from '../types';
 
 interface EntryState {
@@ -54,7 +55,11 @@ export const useEntryStore = create<EntryState>(set => ({
     })),
 
   addEntry: async (params: CreateEntryParams) => {
-    const entry = await createEntry(params);
+    // While a timer runs, new notes become subnotes of its lazily created
+    // note. Explicit subnotes (Part A flow) and scheduled to-dos are left alone.
+    const parent_id =
+      params.parent_id ?? (params.is_todo ? null : await resolveTimerParent());
+    const entry = await createEntry({...params, parent_id});
     set(state => {
       const existing = state.entriesByDay[params.day_id] ?? [];
       return {

@@ -20,6 +20,12 @@ jest.mock('../src/store/settingsStore', () => {
   return {useSettingsStore};
 });
 
+// Active timer snapshot; tests set `active` to simulate a running session.
+const mockSession: {active: {paused_at: string | null} | null} = {active: null};
+jest.mock('../src/store/sessionStore', () => ({
+  useSessionStore: {getState: () => mockSession},
+}));
+
 const mockSaveQuickNote = jest.fn();
 jest.mock('../src/components/quickadd/useSaveQuickNote', () => ({
   useSaveQuickNote: () => mockSaveQuickNote,
@@ -86,6 +92,7 @@ const renderModal = async (goBack: jest.Mock) => {
 beforeEach(() => {
   jest.clearAllMocks();
   attachmentsProps = null;
+  mockSession.active = null;
   mockSaveQuickNote.mockResolvedValue({
     entry: {id: 42},
     media: [{id: 7, ...voiceMedia}],
@@ -121,5 +128,33 @@ describe('widget voice full-auto save', () => {
 
     expect(mockSaveQuickNote).not.toHaveBeenCalled();
     expect(goBack).not.toHaveBeenCalled();
+  });
+});
+
+describe('silent capture while a timer runs', () => {
+  it('confirm mode + running timer: saves with a placeholder title, no auto-title', async () => {
+    mockSettings.widget_voice_mode = 'confirm';
+    mockSession.active = {paused_at: null};
+    const goBack = jest.fn();
+    await renderModal(goBack);
+
+    await act(async () => {
+      attachmentsProps!.onAdd(voiceMedia);
+    });
+
+    expect(mockSaveQuickNote).toHaveBeenCalledTimes(1);
+    expect(mockSaveQuickNote.mock.calls[0][0].title).toBe('subnotes.voiceSaved');
+    expect(mockAutoTitle).not.toHaveBeenCalled();
+    expect(goBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('a paused timer is not running: nothing saves by itself', async () => {
+    mockSettings.widget_voice_mode = 'confirm';
+    mockSession.active = {paused_at: '2026-09-01T09:00:00.000Z'};
+    await renderModal(jest.fn());
+    await act(async () => {
+      attachmentsProps!.onAdd(voiceMedia);
+    });
+    expect(mockSaveQuickNote).not.toHaveBeenCalled();
   });
 });
