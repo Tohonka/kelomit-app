@@ -15,6 +15,8 @@ interface Props {
   onClear: () => void;
   /** Present when the day has subnotes: expand/collapse chip. */
   subnotesToggle?: {expanded: boolean; onToggle: () => void};
+  /** Present when the day has small tasks: "only tasks" filter chip. */
+  smallTasksFilter?: {active: boolean; onToggle: () => void};
 }
 
 const makeStyles = (c: Colors) =>
@@ -68,14 +70,16 @@ export default function FilterBar({
   onToggleTag,
   onClear,
   subnotesToggle,
+  smallTasksFilter,
 }: Props) {
   const {t: translate} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
-  const hasFilter = selectedProjectId != null || selectedTagIds.length > 0;
+  const hasFilter =
+    selectedProjectId != null || selectedTagIds.length > 0 || smallTasksFilter?.active === true;
 
-  if (projects.length === 0 && tags.length === 0 && !subnotesToggle) {
+  if (projects.length === 0 && tags.length === 0 && !subnotesToggle && !smallTasksFilter) {
     return null;
   }
 
@@ -89,6 +93,16 @@ export default function FilterBar({
       </Text>
     </TouchableOpacity>
   ) : null;
+  const tasksChip = smallTasksFilter ? (
+    <TouchableOpacity
+      style={[styles.chip, smallTasksFilter.active && styles.chipActive]}
+      onPress={smallTasksFilter.onToggle}>
+      <Text style={[styles.chipText, smallTasksFilter.active && styles.chipTextActive]}>
+        {translate('smallTask.groupTitle')}
+      </Text>
+    </TouchableOpacity>
+  ) : null;
+  const extraChips = <>{subChip}{tasksChip}</>;
 
   // The clear chip rides on the first row that renders (projects, else tags).
   const clearChip = (
@@ -102,7 +116,7 @@ export default function FilterBar({
       {projects.length > 0 && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
           {hasFilter && clearChip}
-          {subChip}
+          {extraChips}
           {projects.map(p => (
             <TouchableOpacity
               key={`p-${p.id}`}
@@ -118,7 +132,7 @@ export default function FilterBar({
       {tags.length > 0 && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
           {hasFilter && projects.length === 0 && clearChip}
-          {projects.length === 0 && subChip}
+          {projects.length === 0 && extraChips}
           {tags.map(t => (
             <TouchableOpacity
               key={`t-${t.id}`}
@@ -131,7 +145,7 @@ export default function FilterBar({
           ))}
         </ScrollView>
       )}
-      {projects.length === 0 && tags.length === 0 && <View style={styles.row}>{subChip}</View>}
+      {projects.length === 0 && tags.length === 0 && <View style={styles.row}>{extraChips}</View>}
     </View>
   );
 }

@@ -37,14 +37,14 @@ it('createEntry persists parent_id and reads it back', async () => {
   const entry = await createEntry({day_id: 1, entry_type: 'note', parent_id: 4});
   const insert = mockExecute.mock.calls.find(([sql]) => String(sql).includes('INSERT INTO entries'));
   expect(insert?.[0]).toContain('parent_id');
-  expect(insert?.[1][insert[1].length - 1]).toBe(4);
+  expect(insert?.[1][19]).toBe(4);
   expect(entry.parent_id).toBe(4);
 });
 
 it('createEntry defaults parent_id to null', async () => {
   await createEntry({day_id: 1, entry_type: 'note'});
   const insert = mockExecute.mock.calls.find(([sql]) => String(sql).includes('INSERT INTO entries'));
-  expect(insert?.[1][insert[1].length - 1]).toBeNull();
+  expect(insert?.[1][19]).toBeNull();
 });
 
 it('getSubnotes queries by parent, oldest first', async () => {

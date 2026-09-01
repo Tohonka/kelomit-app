@@ -42,6 +42,7 @@ function rowToEntry(row: RawRow, tags: Tag[], project: Project | null, media: En
     location_label: (row.location_label as string | null) ?? null,
     is_todo: Boolean(row.is_todo),
     is_overtime: Boolean(row.is_overtime),
+    is_small_task: Boolean(row.is_small_task),
     scheduled_date: (row.scheduled_date as string | null) ?? null,
     completed_at: (row.completed_at as string | null) ?? null,
     reminder_at: (row.reminder_at as string | null) ?? null,
@@ -297,6 +298,7 @@ export interface CreateEntryParams {
   location_label?: string | null;
   is_todo?: boolean;
   is_overtime?: boolean;
+  is_small_task?: boolean;
   scheduled_date?: string | null;
   completed_at?: string | null;
   reminder_at?: string | null;
@@ -326,8 +328,8 @@ export async function createEntry(params: CreateEntryParams): Promise<Entry> {
        day_id, entry_type, activity_type, project_id, title, body,
        file_path, thumbnail_path, duration_sec, time_from, time_to,
        latitude, longitude, location_label, is_todo, is_overtime,
-       scheduled_date, completed_at, reminder_at, parent_id
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       scheduled_date, completed_at, reminder_at, parent_id, is_small_task
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      RETURNING *;`,
     [
       params.day_id,
@@ -354,6 +356,7 @@ export async function createEntry(params: CreateEntryParams): Promise<Entry> {
       params.completed_at ?? null,
       params.reminder_at ?? null,
       params.parent_id ?? null,
+      params.is_small_task ? 1 : 0,
     ],
   );
 
@@ -407,6 +410,11 @@ export async function updateEntry(
       sets.push(`${f} = ?`);
       vals.push(fields[f] ?? null);
     }
+  }
+
+  if ('is_small_task' in fields) {
+    sets.push('is_small_task = ?');
+    vals.push(fields.is_small_task ? 1 : 0);
   }
 
   if ('is_overtime' in fields) {

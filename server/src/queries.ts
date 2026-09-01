@@ -200,6 +200,7 @@ function loadEntries(
     }): Entry => ({
       ...entry,
       is_overtime: Boolean(entry.is_overtime),
+      is_small_task: Boolean(entry.is_small_task),
       tags: tags.get(entry.id) ?? [],
       project:
         entry.project_id != null && project_type != null

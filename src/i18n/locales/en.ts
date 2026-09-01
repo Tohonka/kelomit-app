@@ -633,6 +633,13 @@ const en = {
     photoSaved: 'Photo saved',
     savedToTimer: 'Saved under the running timer',
   },
+  smallTask: {
+    duringWorkday: 'During workday',
+    positionHint: 'Position in list (optional)',
+    outsideHoursNotice: 'Small tasks are meant for things done during the workday. Saved anyway.',
+    groupTitle: 'Tasks',
+    badge: 'Small task',
+  },
 };
 
 export default en;

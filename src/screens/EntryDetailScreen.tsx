@@ -106,6 +106,17 @@ const makeStyles = (c: Colors) =>
       gap: spacing.sm,
     },
     infoRow: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'},
+    smallTaskBadge: {
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 2,
+      borderRadius: radius.pill,
+      backgroundColor: c.bgMuted,
+    },
+    smallTaskBadgeText: {
+      color: c.textSecondary,
+      fontSize: typography.sizes.xs,
+      fontWeight: typography.weights.bold,
+    },
     infoLabel: {
       fontSize: typography.sizes.sm,
       color: c.textMuted,
@@ -361,6 +372,11 @@ export default function EntryDetailScreen({navigation, route}: Props) {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.metaRow}>
           <ActivityBadge type={entry.activity_type} />
+          {entry.is_small_task ? (
+            <View style={styles.smallTaskBadge}>
+              <Text style={styles.smallTaskBadgeText}>{translate('smallTask.badge')}</Text>
+            </View>
+          ) : null}
           {entry.project ? <ProjectChip project={entry.project} /> : null}
           <TouchableOpacity style={styles.editBtn} onPress={handleEdit}>
             <Text style={styles.editBtnText}>{translate('common.edit')}</Text>
@@ -420,13 +436,13 @@ export default function EntryDetailScreen({navigation, route}: Props) {
               {formatDate(localDateOf(entry.created_at))} {formatTime(entry.created_at)}
             </Text>
           </View>
-          {entry.time_from ? (
+          {entry.time_from && !entry.is_small_task ? (
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>{translate('common.from')}</Text>
               <Text style={styles.infoValue}>{formatTime(entry.time_from)}</Text>
             </View>
           ) : null}
-          {entry.time_to ? (
+          {entry.time_to && !entry.is_small_task ? (
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>{translate('common.to')}</Text>
               <Text style={styles.infoValue}>{formatTime(entry.time_to)}</Text>

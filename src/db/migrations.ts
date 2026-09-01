@@ -440,4 +440,12 @@ export const migrations: Migration[] = [
       'CREATE INDEX IF NOT EXISTS idx_entries_parent ON entries(parent_id)',
     ],
   },
+  {
+    version: 27,
+    up: [
+      // Small jobs (plan 2026-09-01 Task 4): duration notes marked "during the workday".
+      // time_from/time_to still stored (list position + hours math); UI hides them.
+      'ALTER TABLE entries ADD COLUMN is_small_task INTEGER NOT NULL DEFAULT 0 CHECK(is_small_task IN (0,1))',
+    ],
+  },
 ];
