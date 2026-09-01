@@ -7,8 +7,10 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
+  ToastAndroid,
 } from 'react-native';
 import {useSettingsStore} from '../store/settingsStore';
+import {useSessionStore} from '../store/sessionStore';
 import {useTheme, typography, spacing, radius} from '../theme';
 import type {Colors} from '../theme';
 import Button from '../components/ui/Button';
@@ -21,6 +23,13 @@ import {autoTitleVoiceNote} from '../services/autoTitle';
 import type {RootStackScreenProps} from '../navigation/navigationTypes';
 
 type Props = RootStackScreenProps<'QuickAddModal'>;
+
+/** Voice/photo captured while a timer runs save silently as its subnotes:
+ *  placeholder title, no transcription, no confirm step. */
+function timerRunning(): boolean {
+  const a = useSessionStore.getState().active;
+  return a != null && !a.paused_at;
+}
 
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
@@ -120,9 +129,18 @@ export default function QuickAddModal({navigation, route}: Props) {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      const saved = await saveQuickNote({dayId, title, durationMinutes, media});
+      const silent = (entryType === 'voice' || entryType === 'photo') && timerRunning();
+      const placeholder = entryType === 'voice' ? 'subnotes.voiceSaved' : 'subnotes.photoSaved';
+      const saved = await saveQuickNote({
+        dayId,
+        title: title.trim() || (silent ? t(placeholder) : ''),
+        durationMinutes,
+        media,
+      });
       const {widget_voice_mode, widget_voice_auto_title} = useSettingsStore.getState();
-      if (
+      if (silent) {
+        ToastAndroid.show(t('subnotes.savedToTimer'), ToastAndroid.SHORT);
+      } else if (
         autoCapture &&
         entryType === 'voice' &&
         // Full-auto always titles; in confirm mode it stays opt-in.
@@ -150,15 +168,18 @@ export default function QuickAddModal({navigation, route}: Props) {
   // by the time a recording finishes, load() has long since resolved.
   // Discarding the recording adds no media, so nothing fires and the user can
   // just back out. The ref makes this one-shot even if `media` changes again.
+  // Timer running: voice AND photo captures (widget or in-app) save silently.
   const autoSaved = useRef(false);
   useEffect(() => {
-    if (
-      autoCapture &&
-      entryType === 'voice' &&
-      !autoSaved.current &&
-      media.some(m => m.media_type === 'voice') &&
-      useSettingsStore.getState().widget_voice_mode === 'auto'
-    ) {
+    if (autoSaved.current) { return; }
+    const hasVoice = media.some(m => m.media_type === 'voice');
+    const hasPhoto = media.some(m => m.media_type === 'photo');
+    const widgetAuto =
+      autoCapture && entryType === 'voice' && hasVoice &&
+      useSettingsStore.getState().widget_voice_mode === 'auto';
+    const timerSilent =
+      timerRunning() && (entryType === 'voice' ? hasVoice : entryType === 'photo' && hasPhoto);
+    if (widgetAuto || timerSilent) {
       autoSaved.current = true;
       handleSave();
     }

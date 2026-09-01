@@ -4,7 +4,8 @@ import {
   clearActiveSession,
 } from '../db/activeSession';
 import {getOrCreateDay} from '../db/days';
-import {createEntry, updateEntry} from '../db/entries';
+import {createEntry, getEntry, updateEntry} from '../db/entries';
+import {getTimerParentId, clearTimerParent} from './timerSubnotes';
 import {getOrCreateTag} from '../db/tags';
 import {getAllProjects} from '../db/projects';
 import {localDateOf, formatTime} from '../utils/dateUtils';
@@ -50,6 +51,7 @@ export async function startSession(input: StartSessionInput): Promise<ActiveSess
     // on any widget's Start switches to that widget's task.
     widget_id: null,
   };
+  await clearTimerParent(); // never inherit a stale lazy parent row
   await writeActiveSession(session);
   return session;
 }
@@ -77,13 +79,29 @@ async function logSegment(
     tagIds.push(tag.id);
   }
   const gps = withLocation ? getLastKnownPosition() : null;
-  const entry = await createEntry(
-    sessionToEntryParams({
-      session, dayId: day.id, endedAt, tagIds,
-      latitude: gps?.latitude ?? null,
-      longitude: gps?.longitude ?? null,
-    }),
-  );
+  const params = sessionToEntryParams({
+    session, dayId: day.id, endedAt, tagIds,
+    latitude: gps?.latitude ?? null,
+    longitude: gps?.longitude ?? null,
+  });
+  // Subnotes captured during this segment created its note early (time_to
+  // NULL): finalize that row instead of inserting a second one. Any lazy row
+  // from another segment is left as-is (a 0-length note the user can edit).
+  // ponytail: no reconciliation of stale rows; startSession clears the KV.
+  const parentId = await getTimerParentId();
+  const parent = parentId != null ? await getEntry(parentId) : null;
+  let entry: Entry;
+  if (parent && parent.time_to == null && parent.time_from === session.started_at) {
+    await updateEntry(parent.id, {
+      time_to: params.time_to,
+      latitude: params.latitude,
+      longitude: params.longitude,
+    });
+    entry = {...parent, time_to: params.time_to ?? null};
+  } else {
+    entry = await createEntry(params);
+  }
+  if (parentId != null) { await clearTimerParent(); }
   if (!session.title || !session.title.trim()) {
     let projectName: string | null = null;
     if (session.project_id != null) {
@@ -127,9 +145,22 @@ export async function stopSession(): Promise<StopResult> {
   return result;
 }
 
-/** Discard the active session without logging anything. */
-export async function cancelSession(): Promise<void> {
+/**
+ * Discard the active session. If notes were captured during the running
+ * segment (a lazy parent row exists) the segment is logged like a stop instead
+ * of orphaning the documented work.
+ */
+export async function cancelSession(): Promise<StopResult> {
+  const session = await readActiveSession();
+  const parentId = await getTimerParentId();
+  if (session && !session.paused_at && parentId != null) {
+    const result = await logSegment(session, new Date(), true);
+    await clearActiveSession();
+    return result;
+  }
+  await clearTimerParent();
   await clearActiveSession();
+  return {entry: null, dayId: null};
 }
 
 /** Close the running segment into a note; keep the session alive, paused. */

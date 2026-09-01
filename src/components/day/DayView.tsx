@@ -8,6 +8,8 @@ import {useFocusEffect} from '@react-navigation/native';
 import {useDayStore} from '../../store/dayStore';
 import {useEntryStore} from '../../store/entryStore';
 import {useSettingsStore} from '../../store/settingsStore';
+import {useSessionStore} from '../../store/sessionStore';
+import {useTimerParent} from '../../services/timerSubnotes';
 import {useTheme, typography, spacing} from '../../theme';
 import type {Colors} from '../../theme';
 import {getDateFnsLocale} from '../../i18n';
@@ -107,8 +109,17 @@ export default function DayView({
   const subnotesDefault = useSettingsStore(s => s.subnotes_expanded);
   const [showSubnotes, setShowSubnotes] = useState(subnotesDefault);
 
+  const sessionActive = useSessionStore(s => s.active != null);
+  const timerParentId = useTimerParent(s => s.parentId);
+
   const day = daysCache[date];
-  const allEntries = useMemo(() => (day ? (entriesByDay[day.id] ?? []) : []), [day, entriesByDay]);
+  const allEntries = useMemo(() => {
+    const list = day ? (entriesByDay[day.id] ?? []) : [];
+    // The running timer's note + its subnotes stay off the list until it stops.
+    return sessionActive && timerParentId != null
+      ? list.filter(e => e.id !== timerParentId && e.parent_id !== timerParentId)
+      : list;
+  }, [day, entriesByDay, sessionActive, timerParentId]);
 
   useEffect(() => { loadDay(date); }, [date, loadDay]);
   useEffect(() => { if (day) { loadEntriesForDay(day.id); } }, [day, loadEntriesForDay]);

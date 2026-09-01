@@ -629,6 +629,9 @@ const en = {
     untitled: 'Untitled note',
     showAll: 'Show subnotes',
     collapse: 'Hide subnotes',
+    voiceSaved: 'Voice note saved',
+    photoSaved: 'Photo saved',
+    savedToTimer: 'Saved under the running timer',
   },
 };
 

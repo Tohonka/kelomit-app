@@ -11,6 +11,7 @@ import {
   type StopResult,
 } from '../services/sessionService';
 import {useEntryStore} from './entryStore';
+import {getTimerParentId} from '../services/timerSubnotes';
 import type {ActiveSession} from '../types';
 
 interface SessionState {
@@ -33,6 +34,7 @@ export const useSessionStore = create<SessionState>(set => ({
 
   load: async () => {
     const active = await getActiveSession();
+    await getTimerParentId().catch(() => {});
     set({active, loaded: true});
   },
 
@@ -44,6 +46,7 @@ export const useSessionStore = create<SessionState>(set => ({
       // Draining is best-effort; never block startup over it.
     }
     const active = await getActiveSession();
+    await getTimerParentId().catch(() => {});
     set({active, loaded: true});
     const reload = useEntryStore.getState().loadEntriesForDay;
     for (const id of dayIds) {
@@ -75,7 +78,10 @@ export const useSessionStore = create<SessionState>(set => ({
   },
 
   cancel: async () => {
-    await cancelSession();
+    const result = await cancelSession();
     set({active: null});
+    if (result.dayId != null) {
+      await useEntryStore.getState().loadEntriesForDay(result.dayId);
+    }
   },
 }));

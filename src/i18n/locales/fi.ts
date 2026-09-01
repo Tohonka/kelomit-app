@@ -631,6 +631,9 @@ const fi: typeof en = {
     untitled: 'Nimetön merkintä',
     showAll: 'Näytä alimerkinnät',
     collapse: 'Piilota alimerkinnät',
+    voiceSaved: 'Äänimuistiinpano tallennettu',
+    photoSaved: 'Kuva tallennettu',
+    savedToTimer: 'Tallennettu käynnissä olevan ajastimen alle',
   },
 };
 
