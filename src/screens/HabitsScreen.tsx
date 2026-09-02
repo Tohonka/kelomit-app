@@ -5,9 +5,10 @@ import {useFocusEffect} from '@react-navigation/native';
 import {format} from 'date-fns';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import {useShellPadding} from '../navigation/shellMetrics';
-import {useHabitStore} from '../store/habitStore';
+import {useHabitStore, streakOf} from '../store/habitStore';
 import {archiveCategory, archiveHabit, deleteCategory, deleteHabit} from '../db/habits';
 import {monthDate, shiftMonth} from '../utils/habitMonth';
+import {todayDate} from '../utils/dateUtils';
 import {getDateFnsLocale} from '../i18n';
 import {useTheme, typography, spacing, radius} from '../theme';
 import type {Colors} from '../theme';
@@ -63,6 +64,7 @@ const makeStyles = (c: Colors) =>
     },
     catTitle: {fontSize: typography.sizes.md, fontWeight: typography.weights.bold, color: c.textPrimary},
     catSub: {fontSize: typography.sizes.xs, color: c.textMuted, marginTop: 2},
+    streak: {fontSize: typography.sizes.sm, color: c.accent, fontWeight: typography.weights.semibold, marginTop: 2},
     habit: {marginTop: spacing.lg},
     habitHead: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xs},
     habitTitle: {flex: 1, fontSize: typography.sizes.base, fontWeight: typography.weights.semibold, color: c.textPrimary},
@@ -77,6 +79,7 @@ const makeStyles = (c: Colors) =>
     },
     addHabitText: {color: c.primary, fontWeight: typography.weights.semibold, fontSize: typography.sizes.sm},
     empty: {padding: spacing.xxl, alignItems: 'center', gap: spacing.md},
+    flex1: {flex: 1},
     emptyText: {fontSize: typography.sizes.base, color: c.textMuted, textAlign: 'center'},
   });
 
@@ -87,17 +90,29 @@ export default function HabitsScreen({navigation}: TabScreenProps<'Habits'>) {
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const shellPad = useShellPadding();
-  const {categories, habits, month, load, setMonth} = useHabitStore();
+  const store = useHabitStore();
+  const {categories, habits, month, auto, load, setMonth} = store;
+  const today = todayDate();
   const [target, setTarget] = useState<Target | null>(null);
 
   useFocusEffect(useCallback(() => { load().catch(() => {}); }, [load]));
 
   const monthLabel = format(monthDate(month), 'LLLL yyyy', {locale: getDateFnsLocale(i18n.resolvedLanguage === 'fi' ? 'fi' : 'en')});
 
+  // Goal habits show today's progress ("38 / 45 min"); the visible month doesn't matter here.
   const goalText = (h: Habit) => {
-    if (h.goal_kind === 'minutes') { return t('habits.minutesPerDay', {n: h.goal_value}); }
-    if (h.goal_kind === 'count') { return t('habits.timesPerDay', {n: h.goal_value}); }
+    const p = auto.get(h.id)?.get(today);
+    if (h.goal_kind === 'minutes') {
+      return t('habits.progressMin', {done: Math.floor((p?.seconds ?? 0) / 60), goal: h.goal_value});
+    }
+    if (h.goal_kind === 'count') { return t('habits.progressCount', {done: p?.count ?? 0, goal: h.goal_value}); }
     return null;
+  };
+
+  const streakText = (cat: HabitCategory) => {
+    const n = streakOf(store, cat.id);
+    if (cat.goal_streak_days) { return t('habits.streak', {n, goal: cat.goal_streak_days}); }
+    return n > 0 ? t('habits.streakNoGoal', {n}) : null;
   };
 
   const confirmDelete = (tg: Target) => {
@@ -178,9 +193,10 @@ export default function HabitsScreen({navigation}: TabScreenProps<'Habits'>) {
                 <View style={styles.catIcon}>
                   <Icon name={cat.icon} size={22} color={colors.primary} />
                 </View>
-                <View style={{flex: 1}}>
+                <View style={styles.flex1}>
                   <Text style={styles.catTitle}>{cat.title}</Text>
                   {!!cat.description && <Text style={styles.catSub}>{cat.description}</Text>}
+                  {streakText(cat) && <Text style={styles.streak}>{streakText(cat)}</Text>}
                 </View>
                 <Icon name="dots-horizontal" size={20} color={colors.textMuted} />
               </TouchableOpacity>
