@@ -448,4 +448,57 @@ export const migrations: Migration[] = [
       'ALTER TABLE entries ADD COLUMN is_small_task INTEGER NOT NULL DEFAULT 0 CHECK(is_small_task IN (0,1))',
     ],
   },
+  {
+    version: 28,
+    up: [
+      // Habit tracking (plan 2026-09-01 Task 2). Auto-match state is derived, not stored;
+      // only manual dot toggles persist (habit_day_overrides). Triggers are tag-like
+      // metadata for future widget use — storage now, note-UI later.
+      `CREATE TABLE IF NOT EXISTS habit_categories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        description TEXT,
+        icon TEXT NOT NULL DEFAULT 'star-outline',
+        goal_streak_days INTEGER,
+        archived INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )`,
+      `CREATE TABLE IF NOT EXISTS habits (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        category_id INTEGER NOT NULL REFERENCES habit_categories(id) ON DELETE CASCADE,
+        title TEXT NOT NULL,
+        description TEXT,
+        icon TEXT NOT NULL DEFAULT 'circle-outline',
+        goal_kind TEXT CHECK(goal_kind IN ('minutes','count')),
+        goal_value INTEGER,
+        archived INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )`,
+      `CREATE TABLE IF NOT EXISTS triggers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )`,
+      `CREATE TABLE IF NOT EXISTS entry_triggers (
+        entry_id INTEGER NOT NULL REFERENCES entries(id) ON DELETE CASCADE,
+        trigger_id INTEGER NOT NULL REFERENCES triggers(id) ON DELETE CASCADE,
+        PRIMARY KEY (entry_id, trigger_id)
+      )`,
+      `CREATE TABLE IF NOT EXISTS habit_matchers (
+        habit_id INTEGER NOT NULL REFERENCES habits(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL CHECK(kind IN ('project','tag','trigger')),
+        ref_id INTEGER NOT NULL,
+        PRIMARY KEY (habit_id, kind, ref_id)
+      )`,
+      `CREATE TABLE IF NOT EXISTS habit_day_overrides (
+        habit_id INTEGER NOT NULL REFERENCES habits(id) ON DELETE CASCADE,
+        date TEXT NOT NULL,
+        done INTEGER NOT NULL CHECK(done IN (0,1)),
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (habit_id, date)
+      )`,
+    ],
+  },
 ];

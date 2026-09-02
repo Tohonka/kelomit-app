@@ -75,6 +75,45 @@ export interface Entry {
   media?: EntryMedia[];
 }
 
+/** Habit tracking (schema v28). Auto-done state is derived from entries; only
+ *  manual overrides are stored. */
+export interface HabitCategory {
+  id: number;
+  title: string;
+  description: string | null;
+  icon: string;
+  goal_streak_days: number | null;
+  archived: boolean;
+  created_at: string;
+  updated_at: string;
+}
+export type HabitGoalKind = 'minutes' | 'count';
+export interface Habit {
+  id: number;
+  category_id: number;
+  title: string;
+  description: string | null;
+  icon: string;
+  /** Null = "just do it at least once that day". */
+  goal_kind: HabitGoalKind | null;
+  goal_value: number | null;
+  archived: boolean;
+  created_at: string;
+  updated_at: string;
+}
+export type HabitMatcherKind = 'project' | 'tag' | 'trigger';
+export interface HabitMatcher {
+  habit_id: number;
+  kind: HabitMatcherKind;
+  ref_id: number;
+}
+/** Tag-like metadata for future widget use — stored, no note-UI yet. */
+export interface Trigger {
+  id: number;
+  name: string;
+  created_at: string;
+}
+
 export interface LeaveRange {
   id: number;
   type: LeaveType;

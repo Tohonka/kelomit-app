@@ -23,6 +23,7 @@ import WidgetSettings from '../screens/settings/WidgetSettings';
 import WidgetEdit from '../screens/settings/WidgetEdit';
 import TranscriptionSettings from '../screens/settings/TranscriptionSettings';
 import DiagnosticsSettings from '../screens/settings/DiagnosticsSettings';
+import HabitEditModal from '../screens/HabitEditModal';
 import {useTheme} from '../theme';
 import type {RootStackParamList} from './navigationTypes';
 
@@ -67,6 +68,19 @@ export default function RootNavigator() {
         component={AddEntryModal}
         options={({route}) => ({
           title: route.params.entryId ? t('navigation.editEntry') : t('navigation.addEntry'),
+          presentation: 'modal',
+          headerStyle: {backgroundColor: colors.bgCard},
+        })}
+      />
+      <Stack.Screen
+        name="HabitEditModal"
+        component={HabitEditModal}
+        options={({route}) => ({
+          title: t(
+            route.params.mode === 'category'
+              ? (route.params.categoryId ? 'habits.editCategory' : 'habits.newCategory')
+              : (route.params.habitId ? 'habits.editHabit' : 'habits.newHabit'),
+          ),
           presentation: 'modal',
           headerStyle: {backgroundColor: colors.bgCard},
         })}
