@@ -36,6 +36,7 @@ export type RootStackParamList = {
   WidgetEdit: {appWidgetId: number};
   TranscriptionSettings: undefined;
   DiagnosticsSettings: undefined;
+  HabitEditModal: {mode: 'category' | 'habit'; categoryId?: number; habitId?: number};
 };
 
 export type TabParamList = {
@@ -43,6 +44,7 @@ export type TabParamList = {
   Map: undefined;
   Data: undefined;
   Gallery: undefined;
+  Habits: undefined;
   Calendar: undefined;
   Settings: undefined;
 };

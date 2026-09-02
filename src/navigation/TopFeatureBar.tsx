@@ -16,6 +16,7 @@ const FEATURES: {route: string; labelKey: string; icon: string}[] = [
   // Search lives in the root stack; navigate() bubbles up to it. It's never an
   // active tab, so it just never highlights — fine until it moves to the day header.
   {route: 'SearchScreen', labelKey: 'navigation.search', icon: 'magnify'},
+  {route: 'Habits', labelKey: 'habits.title', icon: 'checkbox-marked-circle-outline'},
 ];
 
 const CIRCLE = 52;
