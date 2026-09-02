@@ -52,10 +52,13 @@ export function groupEntries(all: Entry[], mode: DayListMode): EntryGroup[] {
   const ids = new Set(all.map(e => e.id));
   const children = new Map<number, Entry[]>();
   const entries: Entry[] = [];
+  const tasks: Entry[] = [];
   for (const e of all) {
     if (e.parent_id != null && ids.has(e.parent_id)) {
       const list = children.get(e.parent_id);
       if (list) { list.push(e); } else { children.set(e.parent_id, [e]); }
+    } else if (e.is_small_task) {
+      tasks.push(e);
     } else {
       entries.push(e);
     }
@@ -63,6 +66,24 @@ export function groupEntries(all: Entry[], mode: DayListMode): EntryGroup[] {
   const wrap = (list: Entry[]): EntryGroupItem[] =>
     list.map(entry => ({entry, subnotes: (children.get(entry.id) ?? []).sort(byTimeAsc)}));
 
+  const groups = groupNotes(entries, mode, wrap);
+  // Small tasks (schema v27) always trail in their own group, in every mode.
+  // Its title is a marker — the caller translates key 'tasks'.
+  if (tasks.length > 0) {
+    groups.push({
+      key: 'tasks',
+      title: 'tasks',
+      items: wrap(tasks.sort(mode === 'time_asc' ? byTimeAsc : byTimeDesc)),
+    });
+  }
+  return groups;
+}
+
+function groupNotes(
+  entries: Entry[],
+  mode: DayListMode,
+  wrap: (list: Entry[]) => EntryGroupItem[],
+): EntryGroup[] {
   if (mode === 'time_asc') {
     return [{key: 'all', title: null, items: wrap([...entries].sort(byTimeAsc))}];
   }

@@ -61,6 +61,9 @@ export interface Entry {
   location_label: string | null;
   is_todo: boolean;
   is_overtime: boolean;
+  /** Small job done "during the workday" (schema v27): duration note whose
+   *  from/to are kept for placement + hours math but hidden in the UI. */
+  is_small_task: boolean;
   scheduled_date: string | null;
   completed_at: string | null;
   reminder_at: string | null;

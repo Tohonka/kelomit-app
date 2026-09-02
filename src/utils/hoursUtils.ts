@@ -114,6 +114,18 @@ function subtract(iv: Interval, m: Interval[]): Interval[] {
   return out;
 }
 
+/** Does [from, to] touch any of the day's legs? No legs set → true (nothing
+ *  to warn about). An open leg (started, not ended) extends to +∞. Used for
+ *  the small-task soft notice. */
+export function spanIntersectsDayLegs(day: Day, from: string, to: string): boolean {
+  const legs: Interval[] = [];
+  for (const [s, e] of [[day.started_at, day.ended_at], [day.started_at_2, day.ended_at_2]]) {
+    if (s) { legs.push([epoch(s), e ? epoch(e) : Infinity]); }
+  }
+  if (legs.length === 0) { return true; }
+  return intersect([epoch(from), epoch(to)], merge(legs)).length > 0;
+}
+
 /** Placeable [from, to] interval for an entry, or null if it can't be located
  *  on the timeline (duration-only entries, missing timestamps, or unconfirmed
  *  to-dos). Duration-only entries deliberately can't be placed — see the

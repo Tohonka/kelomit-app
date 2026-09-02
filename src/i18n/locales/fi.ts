@@ -635,6 +635,13 @@ const fi: typeof en = {
     photoSaved: 'Kuva tallennettu',
     savedToTimer: 'Tallennettu käynnissä olevan ajastimen alle',
   },
+  smallTask: {
+    duringWorkday: 'Työpäivän aikana',
+    positionHint: 'Sijainti listassa (valinnainen)',
+    outsideHoursNotice: 'Pienet tehtävät on tarkoitettu työpäivän aikana tehdyille asioille. Tallennettiin silti.',
+    groupTitle: 'Tehtävät',
+    badge: 'Pieni tehtävä',
+  },
 };
 
 export default fi;

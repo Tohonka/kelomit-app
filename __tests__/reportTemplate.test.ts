@@ -37,6 +37,7 @@ const entry = (o: Partial<Entry>): Entry => ({
   location_label: null,
   is_todo: false,
   is_overtime: false,
+  is_small_task: false,
   scheduled_date: null,
   completed_at: null,
   reminder_at: null,

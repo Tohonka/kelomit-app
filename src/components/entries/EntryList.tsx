@@ -178,9 +178,10 @@ function CardRow({
     entry.duration_sec ??
     (entry.time_from && entry.time_to ? Math.max(0, durationBetween(entry.time_from, entry.time_to)) : null);
   const time = entry.time_from ? formatTime(entry.time_from) : formatTime(entry.created_at);
+  // Small tasks hide their placement time; ~duration says "roughly this long".
   const meta = [
-    time,
-    durSec && durSec > 0 ? durationClock(durSec) : null,
+    entry.is_small_task ? null : time,
+    durSec && durSec > 0 ? (entry.is_small_task ? '~' : '') + durationClock(durSec) : null,
     t(`activity.${entry.activity_type}`),
     entry.project?.name,
   ]
@@ -239,6 +240,7 @@ export default function EntryList({entries, onPressEntry, onAddSubnote, showSubn
   // 'type' titles are ActivityTypes; 'project' null = no-project bucket.
   // Time modes carry a single null-title group → no header.
   const headerFor = (g: EntryGroup): string | null => {
+    if (g.key === 'tasks') { return t('smallTask.groupTitle'); }
     if (g.title === null) {
       return mode === 'project' ? t('entries.noProject') : null;
     }

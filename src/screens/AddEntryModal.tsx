@@ -31,7 +31,8 @@ import {deleteMediaFile, ensureMediaDir} from '../utils/mediaUtils';
 import {getLastKnownPosition} from '../services/gpsService';
 import {scheduleTodoReminder, requestNotificationPermission} from '../services/notificationService';
 import {getEntry, addEntryMedia, deleteEntryMedia} from '../db/entries';
-import {getOrCreateDay} from '../db/days';
+import {getOrCreateDay, getDayByDate} from '../db/days';
+import {spanIntersectsDayLegs} from '../utils/hoursUtils';
 import {formatDate, todayDate} from '../utils/dateUtils';
 import type {RootStackScreenProps} from '../navigation/navigationTypes';
 import type {ActivityType, Entry, Tag} from '../types';
@@ -295,6 +296,7 @@ export default function AddEntryModal({navigation, route}: Props) {
   const [durationMinutes, setDurationMinutes] = useState('');
   // Optional explicit start for duration entries; null → default to "now" on save.
   const [durationStart, setDurationStart] = useState<string | null>(null);
+  const [isSmallTask, setIsSmallTask] = useState(false);
   const [timeFrom, setTimeFrom] = useState<string | null>(prefill?.timeFrom ?? null);
   const [timeTo, setTimeTo] = useState<string | null>(prefill?.timeTo ?? null);
   const defaultsApplied = useRef(false);
@@ -412,6 +414,7 @@ export default function AddEntryModal({navigation, route}: Props) {
         setTimeMode('duration');
         setDurationMinutes(String(Math.round(e.duration_sec / 60)));
         setDurationStart(e.time_from);
+        setIsSmallTask(e.is_small_task);
       } else if (e.time_from != null) {
         setTimeMode('range');
         setTimeFrom(e.time_from);
@@ -468,6 +471,7 @@ export default function AddEntryModal({navigation, route}: Props) {
       // Every entry gets a real from→to so the hours model can place it.
       // Duration entries: start = user-picked start, else "now" on the entry's
       // day (ponytail: today→now; a back-dated note picks its start manually).
+      const smallTask = isSmallTask && durationSec != null;
       let finalFrom: string | null = null;
       let finalTo: string | null = null;
       if (timeMode === 'range') {
@@ -502,6 +506,7 @@ export default function AddEntryModal({navigation, route}: Props) {
           {
             activity_type: activityType,
             is_overtime: isOvertime,
+            is_small_task: smallTask,
             title: title.trim() || null,
             body: body.trim() || null,
             project_id: selectedProjectId,
@@ -531,6 +536,7 @@ export default function AddEntryModal({navigation, route}: Props) {
           entry_type: 'note',
           activity_type: activityType,
           is_overtime: isOvertime,
+          is_small_task: smallTask,
           title: title.trim() || null,
           body: body.trim() || null,
           project_id: parent ? parent.project_id : selectedProjectId,
@@ -554,6 +560,13 @@ export default function AddEntryModal({navigation, route}: Props) {
       await cleanupRemovedFiles();
       // Reload so the day reflects the freshly attached/removed media.
       await loadEntriesForDay(refreshDayId);
+      // Soft limit: a small task outside the day's legs just gets a notice.
+      if (smallTask && finalFrom && finalTo) {
+        const d = await getDayByDate(entryDate);
+        if (d && !spanIntersectsDayLegs(d, finalFrom, finalTo)) {
+          Alert.alert(translate('smallTask.duringWorkday'), translate('smallTask.outsideHoursNotice'));
+        }
+      }
       Vibration.vibrate(40);
       navigation.goBack();
     } catch (e) {
@@ -759,7 +772,7 @@ export default function AddEntryModal({navigation, route}: Props) {
           <TouchableOpacity
             key={mode}
             style={[styles.timeModeBtn, timeMode === mode && styles.timeModeBtnActive]}
-            onPress={() => setTimeMode(mode)}>
+            onPress={() => { setTimeMode(mode); if (mode !== 'duration') { setIsSmallTask(false); } }}>
             <Text style={[styles.timeModeBtnText, timeMode === mode && styles.timeModeBtnTextActive]}>
               {mode === 'none'
                 ? translate('entries.noTimeTracking')
@@ -786,8 +799,23 @@ export default function AddEntryModal({navigation, route}: Props) {
             />
             <Text style={styles.durationUnit}>{translate('entries.minuteUnit')}</Text>
           </View>
+          <TouchableOpacity
+            style={styles.todoRow}
+            onPress={() => setIsSmallTask(value => !value)}
+            accessibilityRole="checkbox"
+            accessibilityState={{checked: isSmallTask}}
+            accessibilityLabel={translate('smallTask.duringWorkday')}>
+            <Text style={styles.todoLabel}>{translate('smallTask.duringWorkday')}</Text>
+            <View style={[styles.todoToggle, isSmallTask && styles.todoToggleOn]}>
+              <Text style={[styles.todoToggleText, isSmallTask && styles.todoToggleTextOn]}>
+                {isSmallTask ? translate('common.on') : translate('common.off')}
+              </Text>
+            </View>
+          </TouchableOpacity>
           <View style={styles.durationStartBlock}>
-            <Text style={styles.rangeLabel}>{translate('entries.startOptional')}</Text>
+            <Text style={styles.rangeLabel}>
+              {translate(isSmallTask ? 'smallTask.positionHint' : 'entries.startOptional')}
+            </Text>
             <TimePicker value={durationStart} baseDate={entryDate} onChange={setDurationStart} />
           </View>
         </>
