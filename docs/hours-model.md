@@ -107,3 +107,20 @@ after-hours work. Rare; set an explicit earlier start if it bites.
 - Day 09:00–17:00 (8h), + "1h personal" 12:00–13:00 → **7h**.
 - Day 09:00–17:00 (8h), + work note 18:00–19:00 → **9h** (after hours).
 - No day start/end, + "2h work" duration → **2h**.
+
+## Small-task notice (soft "outside the workday" warning)
+
+`spanIntersectsDayLegs(day, from, to, usualEndIso)` decides whether a small task
+touches the day's legs. Rules:
+
+- No legs on the day → no notice.
+- Open leg (started, no end) → extends to +∞.
+- A leg's end is trusted as-is **only when `ended_at_source === 'manual'`**. A
+  geofence `'auto'` end (or a legacy unsourced one) is a guess — the user may
+  still be working — so the leg extends to `max(ended_at, usual end + 2 h)`,
+  or `ended_at + 2 h` when the day has no usual end (day off / unset).
+  `DAY_END_GRACE_SEC` in `hoursUtils.ts`. Usual hours come from the Work
+  details setting (`usualHoursForDate`), not from history.
+- Leg 2 has no source column and is only ever set by hand → trusted.
+
+This is display-only: it never changes any hours calculation above.

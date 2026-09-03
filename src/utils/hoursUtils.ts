@@ -114,13 +114,33 @@ function subtract(iv: Interval, m: Interval[]): Interval[] {
   return out;
 }
 
+/** A non-manual day end (geofence 'auto', or legacy unsourced) is a guess, so a
+ *  small task may still land inside the leg until this long after the usual end. */
+export const DAY_END_GRACE_SEC = 2 * 3600;
+
 /** Does [from, to] touch any of the day's legs? No legs set → true (nothing
- *  to warn about). An open leg (started, not ended) extends to +∞. Used for
- *  the small-task soft notice. */
-export function spanIntersectsDayLegs(day: Day, from: string, to: string): boolean {
+ *  to warn about). An open leg (started, not ended) extends to +∞. A leg whose
+ *  end was not set by hand extends to max(end, usualEndIso + grace) — or
+ *  end + grace when the day has no usual end. Leg 2 is only ever set by hand →
+ *  trusted. `usualEndIso` is the usual end already placed on this date (the
+ *  caller resolves it via usualHoursForDate + hhmmToIsoOn; this module stays
+ *  i18n-free for the server build). Used for the small-task soft notice. */
+export function spanIntersectsDayLegs(
+  day: Day, from: string, to: string, usualEndIso: string | null = null,
+): boolean {
   const legs: Interval[] = [];
-  for (const [s, e] of [[day.started_at, day.ended_at], [day.started_at_2, day.ended_at_2]]) {
-    if (s) { legs.push([epoch(s), e ? epoch(e) : Infinity]); }
+  if (day.started_at) {
+    let end = Infinity;
+    if (day.ended_at) {
+      end = epoch(day.ended_at);
+      if (day.ended_at_source !== 'manual') {
+        end = Math.max(end, epoch(usualEndIso ?? day.ended_at) + DAY_END_GRACE_SEC);
+      }
+    }
+    legs.push([epoch(day.started_at), end]);
+  }
+  if (day.started_at_2) {
+    legs.push([epoch(day.started_at_2), day.ended_at_2 ? epoch(day.ended_at_2) : Infinity]);
   }
   if (legs.length === 0) { return true; }
   return intersect([epoch(from), epoch(to)], merge(legs)).length > 0;

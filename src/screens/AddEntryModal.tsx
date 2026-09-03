@@ -33,7 +33,8 @@ import {scheduleTodoReminder, requestNotificationPermission} from '../services/n
 import {getEntry, addEntryMedia, deleteEntryMedia} from '../db/entries';
 import {getOrCreateDay, getDayByDate} from '../db/days';
 import {spanIntersectsDayLegs} from '../utils/hoursUtils';
-import {formatDate, todayDate} from '../utils/dateUtils';
+import {formatDate, todayDate, hhmmToIsoOn} from '../utils/dateUtils';
+import {usualHoursForDate} from '../utils/usualHours';
 import type {RootStackScreenProps} from '../navigation/navigationTypes';
 import type {ActivityType, Entry, Tag} from '../types';
 
@@ -563,7 +564,10 @@ export default function AddEntryModal({navigation, route}: Props) {
       // Soft limit: a small task outside the day's legs just gets a notice.
       if (smallTask && finalFrom && finalTo) {
         const d = await getDayByDate(entryDate);
-        if (d && !spanIntersectsDayLegs(d, finalFrom, finalTo)) {
+        const s = useSettingsStore.getState();
+        const {end} = usualHoursForDate(entryDate, s.usual_start, s.usual_end, s.weekday_hours);
+        const usualEndIso = end ? hhmmToIsoOn(entryDate, end) : null;
+        if (d && !spanIntersectsDayLegs(d, finalFrom, finalTo, usualEndIso)) {
           Alert.alert(translate('smallTask.duringWorkday'), translate('smallTask.outsideHoursNotice'));
         }
       }

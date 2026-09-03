@@ -132,7 +132,11 @@ export async function applyDayEndResponse(
   proposedEnd: string,
   confirmed: boolean,
 ): Promise<void> {
-  await updateDay(dayId, {ended_at: confirmed ? proposedEnd : null});
+  // 'auto' = geofence-derived time (same meaning as the native path in
+  // nativeEventSync); only 'manual' ends are trusted as final by hoursUtils.
+  await updateDay(dayId, confirmed
+    ? {ended_at: proposedEnd, ended_at_source: 'auto'}
+    : {ended_at: null, ended_at_source: null});
   await respondDayEndConfirmation(confirmationId, confirmed);
   notifyChange();
 }
