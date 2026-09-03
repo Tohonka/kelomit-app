@@ -16,6 +16,8 @@ import Animated, {
   withSpring,
   Easing,
 } from 'react-native-reanimated';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import Bounceable from '../ui/Bounceable';
 import {useSessionStore} from '../../store/sessionStore';
 import {useSettingsStore} from '../../store/settingsStore';
 import {useProjectStore} from '../../store/projectStore';
@@ -74,25 +76,25 @@ const makeStyles = (c: Colors) =>
       marginBottom: spacing.md,
     },
     cardRunningInner: {marginHorizontal: 0, marginBottom: 0},
-    headerRow: {
-      flexDirection: 'row',
+    // Idle: one row — play · "activity · project" · options cog.
+    row: {flexDirection: 'row', alignItems: 'center', gap: spacing.md},
+    playBtn: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: c.primary,
       alignItems: 'center',
-      justifyContent: 'space-between',
+      justifyContent: 'center',
     },
     title: {
       fontSize: typography.sizes.base,
       fontWeight: typography.weights.semibold,
       color: c.textPrimary,
     },
-    optionsToggle: {
-      fontSize: typography.sizes.sm,
-      color: c.primary,
-      fontWeight: typography.weights.medium,
-    },
     target: {
+      flex: 1,
       fontSize: typography.sizes.sm,
       color: c.textMuted,
-      marginTop: 2,
     },
     options: {marginTop: spacing.md, gap: spacing.sm},
     sectionLabel: {
@@ -129,22 +131,9 @@ const makeStyles = (c: Colors) =>
       color: c.textPrimary,
       minHeight: 48,
     },
-    startBtn: {
-      marginTop: spacing.md,
-      minHeight: 52,
-      borderRadius: radius.md,
-      backgroundColor: c.primary,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    startBtnText: {
-      fontSize: typography.sizes.base,
-      fontWeight: typography.weights.semibold,
-      color: c.white,
-    },
     // Running state
     clock: {
-      fontSize: 72,
+      fontSize: 56,
       fontWeight: typography.weights.black,
       color: c.primary,
       fontVariant: ['tabular-nums'],
@@ -325,7 +314,10 @@ export default function QuickTimerCard() {
       <View style={styles.glowWrap}>
         <Animated.View style={[styles.glow, glowStyle]} pointerEvents="none" />
         <Animated.View style={[styles.card, styles.cardRunningSolid, styles.cardRunningInner, cardScaleStyle]}>
-          <Text style={[styles.title, styles.titleInverted]}>{t(active.paused_at ? 'timer.paused' : 'timer.tracking')}</Text>
+          {/* The glow already says "tracking"; only the paused state needs words. */}
+          {active.paused_at && (
+            <Text style={[styles.title, styles.titleInverted]}>{t('timer.paused')}</Text>
+          )}
           <Text style={[styles.clock, styles.clockInverted]}>{formatClock(seconds)}</Text>
           <Text style={[styles.runningTarget, styles.runningTargetInverted]}>
             {active.title
@@ -378,15 +370,18 @@ export default function QuickTimerCard() {
   // ── Idle ─────────────────────────────────────────────────────────────────
   return (
     <View style={styles.card}>
-      <View style={styles.headerRow}>
-        <Text style={styles.title}>{t('timer.title')}</Text>
-        <TouchableOpacity onPress={() => setExpanded(v => !v)}>
-          <Text style={styles.optionsToggle}>
-            {expanded ? t('common.close') : t('timer.options')}
-          </Text>
+      <View style={styles.row}>
+        <Bounceable onPress={handleStart} disabled={busy} style={styles.playBtn}>
+          <Icon name="play" size={26} color={colors.white} />
+        </Bounceable>
+        <Text style={styles.target} numberOfLines={1}>{targetSummary(projectId, activityType)}</Text>
+        <TouchableOpacity
+          onPress={() => setExpanded(v => !v)}
+          hitSlop={8}
+          accessibilityLabel={expanded ? t('common.close') : t('timer.options')}>
+          <Icon name={expanded ? 'close' : 'cog-outline'} size={22} color={colors.textSecondary} />
         </TouchableOpacity>
       </View>
-      <Text style={styles.target}>{targetSummary(projectId, activityType)}</Text>
 
       {expanded && (
         <View style={styles.options}>
@@ -427,10 +422,6 @@ export default function QuickTimerCard() {
           />
         </View>
       )}
-
-      <TouchableOpacity style={styles.startBtn} onPress={handleStart} disabled={busy}>
-        <Text style={styles.startBtnText}>{t('timer.start')}</Text>
-      </TouchableOpacity>
     </View>
   );
 }
