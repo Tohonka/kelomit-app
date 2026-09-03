@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
+  ToastAndroid,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -68,6 +69,9 @@ const makeLocalStyles = (c: Colors) =>
       borderRadius: radius.md,
       paddingVertical: spacing.md,
       alignItems: 'center',
+      justifyContent: 'center',
+      flexDirection: 'row',
+      gap: spacing.sm,
     },
     exportBtnText: {
       color: c.white,
@@ -211,10 +215,13 @@ export default function DataSettings(_props: Props) {
   const handleExport = async () => {
     setExporting(true);
     try {
-      await exportToCsv(
+      const result = await exportToCsv(
         format(exportFrom, 'yyyy-MM-dd'),
         format(exportTo, 'yyyy-MM-dd'),
       );
+      if (result === 'done') {
+        ToastAndroid.show(t('settings.exportDone'), ToastAndroid.SHORT);
+      }
     } catch (e) {
       Alert.alert(t('settings.exportFailed'), String(e));
     } finally {
@@ -252,6 +259,7 @@ export default function DataSettings(_props: Props) {
               </TouchableOpacity>
             </View>
             <TouchableOpacity style={local.exportBtn} onPress={handleExport} disabled={exporting}>
+              {exporting && <ActivityIndicator size="small" color={colors.white} />}
               <Text style={local.exportBtnText}>
                 {exporting ? t('settings.exporting') : t('settings.shareCsv')}
               </Text>
@@ -292,7 +300,9 @@ export default function DataSettings(_props: Props) {
             <Text style={styles.rowLabel}>{t('settings.backup')}</Text>
             <Text style={styles.rowSubLabel}>{t('settings.backupSubtitle')}</Text>
           </View>
-          <Text style={styles.rowCaret}>{backupBusy ? '…' : '›'}</Text>
+          {backupBusy
+            ? <ActivityIndicator size="small" color={colors.primary} />
+            : <Text style={styles.rowCaret}>›</Text>}
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.row} onPress={handleRestore} disabled={backupBusy}>
@@ -344,7 +354,9 @@ export default function DataSettings(_props: Props) {
           <Text style={styles.rowLabel}>
             {syncBusy ? t('settings.syncing') : t('settings.syncNow')}
           </Text>
-          <Text style={styles.rowCaret}>{syncBusy ? '…' : '›'}</Text>
+          {syncBusy
+            ? <ActivityIndicator size="small" color={colors.primary} />
+            : <Text style={styles.rowCaret}>›</Text>}
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>

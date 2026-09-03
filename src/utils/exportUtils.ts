@@ -35,10 +35,11 @@ const HEADERS = [
   'location_label',
 ];
 
+/** Resolves 'cancelled' when the user dismisses the save dialog (not an error). */
 export async function exportToCsv(
   startDate: string,
   endDate: string,
-): Promise<void> {
+): Promise<'done' | 'cancelled'> {
   const db = getDB();
 
   const result = await db.execute(
@@ -130,9 +131,10 @@ export async function exportToCsv(
       fileName: filename,
       copy: true,
     });
+    return 'done';
   } catch (e) {
     if (isErrorWithCode(e) && e.code === errorCodes.OPERATION_CANCELED) {
-      return; // user dismissed the save dialog — not an error
+      return 'cancelled'; // user dismissed the save dialog — not an error
     }
     throw e;
   }

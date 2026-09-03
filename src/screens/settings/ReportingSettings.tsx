@@ -1,6 +1,7 @@
 import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {
+  ActivityIndicator,
   Alert,
   Platform,
   ScrollView,
@@ -137,6 +138,8 @@ const makeLocalStyles = (c: Colors) =>
       backgroundColor: c.primary,
       alignItems: 'center',
       justifyContent: 'center',
+      flexDirection: 'row',
+      gap: spacing.sm,
     },
     exportButtonDisabled: {
       opacity: 0.45,
@@ -410,6 +413,7 @@ export default function ReportingSettings() {
           accessibilityLabel={t(
             busy ? 'reporting.exporting' : 'reporting.export',
           )}>
+          {busy && <ActivityIndicator size="small" color={colors.white} />}
           <Text style={local.exportButtonText}>
             {busy ? t('reporting.exporting') : t('reporting.export')}
           </Text>

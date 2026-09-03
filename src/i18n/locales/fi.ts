@@ -244,6 +244,7 @@ const fi: typeof en = {
     exporting: 'Viedään…',
     shareCsv: 'Jaa CSV',
     exportFailed: 'Vienti epäonnistui',
+    exportDone: 'CSV tallennettu',
     exportNoEntries: 'Valitulta aikaväliltä ei löytynyt merkintöjä.',
     exportDialogTitle: 'Vie data',
     exportShareMessage: 'Kelomit-vienti {{startDate}} → {{endDate}} ({{count}} merkintää)',

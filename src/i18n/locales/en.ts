@@ -242,6 +242,7 @@ const en = {
     exporting: 'Exporting…',
     shareCsv: 'Share CSV',
     exportFailed: 'Export failed',
+    exportDone: 'CSV saved',
     exportNoEntries: 'No entries found in the selected date range.',
     exportDialogTitle: 'Export data',
     exportShareMessage: 'Kelomit export {{startDate}} → {{endDate}} ({{count}} entries)',

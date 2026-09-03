@@ -16,6 +16,7 @@ const DOT = 18;
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
     grid: {flexDirection: 'row', flexWrap: 'wrap'},
+    cellPressed: {opacity: 0.6},
     cell: {width: `${100 / 7}%`, alignItems: 'center', paddingVertical: 3},
     dot: {
       width: DOT,
@@ -57,7 +58,7 @@ export default function HabitMatrix({habitId, month}: Props) {
         return (
           <Pressable
             key={date}
-            style={styles.cell}
+            style={({pressed}) => [styles.cell, pressed && styles.cellPressed]}
             disabled={future}
             onPress={() => toggleDay(habitId, date)}
             onLongPress={() => clearOverride(habitId, date)}

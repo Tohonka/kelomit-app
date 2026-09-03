@@ -8,7 +8,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
-  Vibration,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -35,6 +34,7 @@ import {getOrCreateDay, getDayByDate} from '../db/days';
 import {spanIntersectsDayLegs} from '../utils/hoursUtils';
 import {formatDate, todayDate, hhmmToIsoOn} from '../utils/dateUtils';
 import {usualHoursForDate} from '../utils/usualHours';
+import {haptic, HAPTIC_SAVE} from '../utils/haptics';
 import type {RootStackScreenProps} from '../navigation/navigationTypes';
 import type {ActivityType, Entry, Tag} from '../types';
 
@@ -571,7 +571,7 @@ export default function AddEntryModal({navigation, route}: Props) {
           Alert.alert(translate('smallTask.duringWorkday'), translate('smallTask.outsideHoursNotice'));
         }
       }
-      Vibration.vibrate(40);
+      haptic(HAPTIC_SAVE);
       navigation.goBack();
     } catch (e) {
       Alert.alert(translate('common.error'), String(e));
