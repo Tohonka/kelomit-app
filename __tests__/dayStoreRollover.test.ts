@@ -65,21 +65,19 @@ it('replaces yesterday after midnight and returns the current day', async () => 
   expect(useDayStore.getState().today?.id).toBe(23);
 });
 
-it('explicit refresh bypasses the day cache and rereads SQLite', async () => {
-  useDayStore.setState({
-    daysCache: {'2026-07-23': day(23, '2026-07-23')},
+it('loadDay rereads SQLite even when the day is cached (native events write behind the store)', async () => {
+  useDayStore.setState({daysCache: {'2026-07-22': day(22, '2026-07-22')}});
+  mockGetOrCreateDay.mockResolvedValue({
+    ...day(22, '2026-07-22', '2026-07-22T06:00:00.000Z'),
+    ended_at: '2026-07-22T13:04:10.000Z',
+    ended_at_source: 'auto',
   });
-  mockGetDayByDate.mockResolvedValue(
-    day(23, '2026-07-23', '2026-07-23T06:00:00.000Z'),
-  );
 
-  const fresh = await useDayStore.getState().loadDay(
-    '2026-07-23',
-    {refresh: true},
-  );
+  const fresh = await useDayStore.getState().loadDay('2026-07-22');
 
-  expect(mockGetDayByDate).toHaveBeenCalledWith('2026-07-23');
-  expect(fresh.started_at).toBe('2026-07-23T06:00:00.000Z');
+  expect(mockGetOrCreateDay).toHaveBeenCalledWith('2026-07-22');
+  expect(fresh.ended_at).toBe('2026-07-22T13:04:10.000Z');
+  expect(useDayStore.getState().daysCache['2026-07-22'].ended_at).toBe('2026-07-22T13:04:10.000Z');
 });
 
 it('rejects loadToday failures instead of returning an unusable day', async () => {

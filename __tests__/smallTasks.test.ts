@@ -82,7 +82,8 @@ describe('spanIntersectsDayLegs', () => {
     expect(spanIntersectsDayLegs(day({}), at(23), at(23.5))).toBe(true);
   });
   it('inside leg 1 / leg 2 → true, fully outside → false', () => {
-    const d = day({started_at: at(8), ended_at: at(12), started_at_2: at(13), ended_at_2: at(16)});
+    // manual end → trusted as-is (an unsourced/auto end would get the +2h grace)
+    const d = day({started_at: at(8), ended_at: at(12), ended_at_source: 'manual', started_at_2: at(13), ended_at_2: at(16)});
     expect(spanIntersectsDayLegs(d, at(9), at(9.5))).toBe(true);
     expect(spanIntersectsDayLegs(d, at(14), at(14.5))).toBe(true);
     expect(spanIntersectsDayLegs(d, at(12.2), at(12.8))).toBe(false);
@@ -92,6 +93,28 @@ describe('spanIntersectsDayLegs', () => {
     const d = day({started_at: at(8)});
     expect(spanIntersectsDayLegs(d, at(23), at(23.5))).toBe(true);
     expect(spanIntersectsDayLegs(d, at(6), at(6.5))).toBe(false);
+  });
+
+  const usualEnd16 = at(16); // ISO already placed on the day, like the caller passes
+
+  it('auto end is a guess: leg stays open until usual end + 2h', () => {
+    const d = day({started_at: at(8), ended_at: at(11), ended_at_source: 'auto'});
+    expect(spanIntersectsDayLegs(d, at(12), at(12.5), usualEnd16)).toBe(true);   // still at work
+    expect(spanIntersectsDayLegs(d, at(17.5), at(18), usualEnd16)).toBe(true);   // added after leaving
+    expect(spanIntersectsDayLegs(d, at(19), at(19.5), usualEnd16)).toBe(false);  // clearly evening
+  });
+  it('manual end is trusted as-is', () => {
+    const d = day({started_at: at(8), ended_at: at(16), ended_at_source: 'manual'});
+    expect(spanIntersectsDayLegs(d, at(16.5), at(17), usualEnd16)).toBe(false);
+  });
+  it('auto end with no usual end → end + 2h', () => {
+    const d = day({started_at: at(8), ended_at: at(16), ended_at_source: 'auto'});
+    expect(spanIntersectsDayLegs(d, at(17.5), at(18), null)).toBe(true);
+    expect(spanIntersectsDayLegs(d, at(18.5), at(19), null)).toBe(false);
+  });
+  it('unsourced end (legacy rows) is treated like auto', () => {
+    const d = day({started_at: at(8), ended_at: at(16)});
+    expect(spanIntersectsDayLegs(d, at(17), at(17.5), usualEnd16)).toBe(true);
   });
 });
 

@@ -37,7 +37,7 @@ interface DayState {
   isLoading: boolean;
   error: string | null;
   loadToday: () => Promise<Day>;
-  loadDay: (date: string, options?: {refresh?: boolean}) => Promise<Day>;
+  loadDay: (date: string) => Promise<Day>;
   updateDayTimes: (date: string, fields: DayTimeFields) => Promise<void>;
 }
 
@@ -65,18 +65,11 @@ export const useDayStore = create<DayState>((set, get) => ({
     }
   },
 
-  loadDay: async (date: string, options?: {refresh?: boolean}) => {
-    if (!options?.refresh) {
-      const cached = get().daysCache[date];
-      if (cached) {
-        set({selectedDay: cached});
-        return cached;
-      }
-    }
-    let day = options?.refresh ? await getDayByDate(date) : null;
-    if (!day) {
-      day = await getOrCreateDay(date);
-    }
+  loadDay: async (date: string) => {
+    // Always hit SQLite: the native geofence flow (nativeEventSync) writes `days`
+    // behind the store's back, so a cached row can be a whole workday stale.
+    // daysCache[date] keeps rendering synchronously until this resolves.
+    const day = await getOrCreateDay(date);
     set(state => ({
       selectedDay: day,
       today: state.today?.date === date ? day : state.today,
