@@ -5,7 +5,6 @@ import type {EntryType} from '../types';
 
 export type RootStackParamList = {
   MainTabs: NavigatorScreenParams<TabParamList> | undefined;
-  DayScreen: {date: string};
   DayMap: {dayId: number; date: string};
   DayMapFull: {dayId: number; date: string};
   EntryDetailScreen: {entryId: number; dayId: number};
@@ -40,7 +39,8 @@ export type RootStackParamList = {
 };
 
 export type TabParamList = {
-  Home: undefined;
+  /** Home shows any day; `date` asks it to jump to one (Calendar). */
+  Home: {date?: string} | undefined;
   Map: undefined;
   Data: undefined;
   Gallery: undefined;

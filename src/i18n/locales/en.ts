@@ -80,6 +80,8 @@ const en = {
     yesterday: 'Yesterday',
     weekShort: 'W',
     weekNumber: 'Week {{week}}',
+    previousDay: 'Previous day',
+    nextDay: 'Next day',
   },
   navigation: {
     addEntry: 'Add Entry',

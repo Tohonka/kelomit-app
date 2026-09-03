@@ -1,7 +1,8 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import {View, Text, StyleSheet, ScrollView} from 'react-native';
-import {format} from 'date-fns';
+import {View, Text, StyleSheet, ScrollView, TouchableOpacity} from 'react-native';
+import {format, parseISO} from 'date-fns';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import {GestureDetector, Gesture} from 'react-native-gesture-handler';
 import Animated, {FadeIn} from 'react-native-reanimated';
 import {useFocusEffect} from '@react-navigation/native';
@@ -26,7 +27,7 @@ import {useShellPadding} from '../../navigation/shellMetrics';
 import {useKeyboardHeight} from '../../hooks/useKeyboardHeight';
 import {getUpcomingTodos} from '../../db/entries';
 import {getLeaveRangesInRange} from '../../db/leaveRanges';
-import {formatDate, nextDayDates, shiftDate} from '../../utils/dateUtils';
+import {formatDate, nextDayDates, shiftDate, todayDate} from '../../utils/dateUtils';
 import {calcDayWorkSecs, calcHourBreakdown} from '../../utils/hoursUtils';
 import {
   ensureDetectionSeed,
@@ -38,11 +39,11 @@ import LeaveBadges from '../entries/LeaveBadges';
 
 interface Props {
   date: string;
-  variant: 'today' | 'detail';
   onRequestDate: (date: string) => void;
   onOpenEntry: (entry: Entry) => void;
   onAddSubnote?: (entry: Entry) => void;
   onOpenLeave?: (range: LeaveRange) => void;
+  onOpenMap: () => void;
   onDayLoaded?: (day: Day | null) => void;
 }
 
@@ -50,7 +51,10 @@ const makeStyles = (c: Colors) =>
   StyleSheet.create({
     flex: {flex: 1, backgroundColor: c.bg},
     header: {paddingHorizontal: spacing.lg, paddingBottom: spacing.md},
-    headerRow: {flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between'},
+    headerRow: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'},
+    titleWrap: {flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginLeft: -spacing.sm},
+    headerRight: {flexDirection: 'row', alignItems: 'center', gap: spacing.md},
+    hidden: {opacity: 0},
     headerDate: {fontSize: typography.sizes.xxl, fontWeight: typography.weights.black, color: c.textPrimary},
     headerSub: {fontSize: typography.sizes.sm, color: c.textMuted, marginTop: 2},
     comingUp: {marginTop: spacing.lg},
@@ -82,17 +86,19 @@ const makeStyles = (c: Colors) =>
 
 export default function DayView({
   date,
-  variant,
   onRequestDate,
   onOpenEntry,
   onAddSubnote,
   onOpenLeave,
+  onOpenMap,
   onDayLoaded,
 }: Props) {
   const {t, i18n} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const isToday = variant === 'today';
+  const isToday = date === todayDate();
+  const canGoForward = date < todayDate(); // ISO dates compare lexically
+  const dateLocale = getDateFnsLocale(i18n.resolvedLanguage === 'fi' ? 'fi' : 'en');
   const shellPad = useShellPadding();
   const kbHeight = useKeyboardHeight();
   const scrollRef = useRef<ScrollView>(null);
@@ -122,7 +128,9 @@ export default function DayView({
       : list;
   }, [day, entriesByDay, sessionActive, timerParentId]);
 
-  useEffect(() => { loadDay(date); }, [date, loadDay]);
+  // Refresh on focus (covers mount + returning from a note). loadDay always
+  // rereads SQLite, so native day-ends written while away show up here.
+  useFocusEffect(useCallback(() => { loadDay(date); }, [date, loadDay]));
   useEffect(() => { if (day) { loadEntriesForDay(day.id); } }, [day, loadEntriesForDay]);
   useEffect(() => { onDayLoaded?.(day ?? null); }, [day, onDayLoaded]);
   useFocusEffect(
@@ -150,8 +158,6 @@ export default function DayView({
     getUpcomingTodos(nextDayDates()).then(setUpcoming).catch(() => {});
   }, []);
 
-  // Home owns today's current-date/SQLite refresh. This view only refreshes the
-  // upcoming list on focus.
   useFocusEffect(
     useCallback(() => {
       if (isToday) { loadUpcoming(); }
@@ -228,9 +234,9 @@ export default function DayView({
         .failOffsetY([-18, 18])
         .onEnd(e => {
           if (e.translationX >= 50) { onRequestDate(shiftDate(date, -1)); }
-          else if (e.translationX <= -50 && !isToday) { onRequestDate(shiftDate(date, 1)); }
+          else if (e.translationX <= -50 && canGoForward) { onRequestDate(shiftDate(date, 1)); }
         }),
-    [date, isToday, onRequestDate],
+    [date, canGoForward, onRequestDate],
   );
 
   const upcomingGroups = useMemo(() => {
@@ -255,26 +261,42 @@ export default function DayView({
           ref={scrollRef}
           style={styles.flex}
           contentContainerStyle={[
-            isToday
-              ? {paddingTop: shellPad.paddingTop, paddingBottom: shellPad.paddingBottom}
-              : {paddingTop: spacing.md, paddingBottom: shellPad.paddingBottom},
+            {paddingTop: shellPad.paddingTop, paddingBottom: shellPad.paddingBottom},
             noteEditing && kbHeight > 0 && {paddingBottom: kbHeight + spacing.lg},
           ]}
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled">
-          {isToday && (
-            <View style={styles.header}>
-              <View style={styles.headerRow}>
+          <View style={styles.header}>
+            <View style={styles.headerRow}>
+              {/* ‹ date › — the visible hint that days are navigable; swipe does the same. */}
+              <View style={styles.titleWrap}>
+                <TouchableOpacity
+                  onPress={() => onRequestDate(shiftDate(date, -1))}
+                  hitSlop={8}
+                  accessibilityLabel={t('dates.previousDay')}>
+                  <Icon name="chevron-left" size={28} color={colors.textSecondary} />
+                </TouchableOpacity>
                 <Text style={styles.headerDate}>{formatDate(date)}</Text>
-                <DayHoursReadout workSecs={totalSecs} personalSecs={personalSecs} showPersonal={showPersonalHours} />
+                <TouchableOpacity
+                  onPress={() => onRequestDate(shiftDate(date, 1))}
+                  disabled={!canGoForward}
+                  style={!canGoForward && styles.hidden}
+                  hitSlop={8}
+                  accessibilityLabel={t('dates.nextDay')}>
+                  <Icon name="chevron-right" size={28} color={colors.textSecondary} />
+                </TouchableOpacity>
               </View>
-              <Text style={styles.headerSub}>
-                {format(new Date(), 'EEEE, MMMM d, yyyy', {
-                  locale: getDateFnsLocale(i18n.resolvedLanguage === 'fi' ? 'fi' : 'en'),
-                })}
-              </Text>
+              <View style={styles.headerRight}>
+                <DayHoursReadout workSecs={totalSecs} personalSecs={personalSecs} showPersonal={showPersonalHours} />
+                <TouchableOpacity onPress={onOpenMap} hitSlop={8} accessibilityLabel={t('dayMap.title')}>
+                  <Icon name="map-outline" size={22} color={colors.textMuted} />
+                </TouchableOpacity>
+              </View>
             </View>
-          )}
+            <Text style={styles.headerSub}>
+              {format(parseISO(date), 'EEEE, MMMM d, yyyy', {locale: dateLocale})}
+            </Text>
+          </View>
           {hasFilterable && (
             <FilterBar
               projects={dayProjects}

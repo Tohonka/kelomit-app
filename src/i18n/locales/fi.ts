@@ -82,6 +82,8 @@ const fi: typeof en = {
     yesterday: 'Eilen',
     weekShort: 'V',
     weekNumber: 'Viikko {{week}}',
+    previousDay: 'Edellinen päivä',
+    nextDay: 'Seuraava päivä',
   },
   navigation: {
     addEntry: 'Lisää merkintä',
