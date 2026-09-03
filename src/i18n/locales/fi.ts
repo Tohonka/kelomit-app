@@ -82,6 +82,8 @@ const fi: typeof en = {
     yesterday: 'Eilen',
     weekShort: 'V',
     weekNumber: 'Viikko {{week}}',
+    previousDay: 'Edellinen päivä',
+    nextDay: 'Seuraava päivä',
   },
   navigation: {
     addEntry: 'Lisää merkintä',
@@ -157,6 +159,10 @@ const fi: typeof en = {
     fileMissing: 'Tiedostoa ei ole enää saatavilla.',
     zoomHint: 'Nipistä zoomataksesi · kaksoisnapauta nollataksesi',
     notesHere: 'Muistiinpanot täällä',
+  },
+  day: {
+    detailsTitle: 'Päivän tiedot',
+    projectSplit: 'Projekteittain',
   },
   dayEnd: {
     channelName: 'Työpäivän loppu',

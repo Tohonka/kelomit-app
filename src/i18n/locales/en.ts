@@ -80,6 +80,8 @@ const en = {
     yesterday: 'Yesterday',
     weekShort: 'W',
     weekNumber: 'Week {{week}}',
+    previousDay: 'Previous day',
+    nextDay: 'Next day',
   },
   navigation: {
     addEntry: 'Add Entry',
@@ -155,6 +157,10 @@ const en = {
     fileMissing: 'This file is no longer available.',
     zoomHint: 'Pinch to zoom · double-tap to reset',
     notesHere: 'Notes here',
+  },
+  day: {
+    detailsTitle: 'Day details',
+    projectSplit: 'By project',
   },
   dayEnd: {
     channelName: 'Workday end',

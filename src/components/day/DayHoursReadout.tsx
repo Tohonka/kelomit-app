@@ -3,6 +3,7 @@ import {View, Text, StyleSheet, type ViewStyle} from 'react-native';
 import {useTheme, typography} from '../../theme';
 import type {Colors} from '../../theme';
 import CountUp from '../ui/CountUp';
+import Bounceable from '../ui/Bounceable';
 import {formatHours} from '../../utils/hoursUtils';
 
 interface Props {
@@ -14,6 +15,8 @@ interface Props {
   showPersonal: boolean;
   /** Extra container style (e.g. nav-header right margin). */
   style?: ViewStyle;
+  /** Tap target (opens the day-details sheet). */
+  onPress?: () => void;
 }
 
 const makeStyles = (c: Colors) =>
@@ -39,26 +42,26 @@ const makeStyles = (c: Colors) =>
     },
   });
 
-/** Top-right hours readout shared by Home and Day. One big work number, or —
- *  when the personal line is enabled — work over personal in a column. */
-export default function DayHoursReadout({workSecs, personalSecs, showPersonal, style}: Props) {
+/** Top-right hours readout of the day header. One big work number, or — when
+ *  the personal line is enabled — work over personal in a column. */
+export default function DayHoursReadout({workSecs, personalSecs, showPersonal, style, onPress}: Props) {
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
-  if (!showPersonal) {
-    if (workSecs <= 0) { return null; }
-    return (
-      <View style={[styles.container, style]}>
-        <CountUp value={workSecs} style={styles.single} format={formatHours} />
-      </View>
-    );
-  }
+  if (workSecs <= 0 && (!showPersonal || personalSecs <= 0)) { return null; }
 
-  if (workSecs <= 0 && personalSecs <= 0) { return null; }
-  return (
-    <View style={[styles.container, style]}>
+  const body = showPersonal ? (
+    <>
       <CountUp value={workSecs} style={styles.primary} format={formatHours} />
       <Text style={styles.secondary}>{formatHours(personalSecs)}</Text>
-    </View>
+    </>
+  ) : (
+    <CountUp value={workSecs} style={styles.single} format={formatHours} />
+  );
+
+  return onPress ? (
+    <Bounceable onPress={onPress} style={[styles.container, style]} hitSlop={8}>{body}</Bounceable>
+  ) : (
+    <View style={[styles.container, style]}>{body}</View>
   );
 }

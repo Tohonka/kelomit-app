@@ -18,8 +18,7 @@ interface Props {
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
     card: {
-      marginHorizontal: spacing.md,
-      marginTop: spacing.md,
+      marginHorizontal: spacing.lg,
       backgroundColor: c.bgCard,
       borderRadius: radius.lg,
       borderLeftWidth: 4,
@@ -46,8 +45,7 @@ const makeStyles = (c: Colors) =>
     actions: {flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.lg, marginTop: spacing.xs},
     actionText: {fontSize: typography.sizes.sm, fontWeight: typography.weights.semibold},
     addBtn: {
-      marginHorizontal: spacing.md,
-      marginTop: spacing.md,
+      marginHorizontal: spacing.lg,
       paddingVertical: spacing.sm,
       alignItems: 'center',
     },

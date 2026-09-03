@@ -8,6 +8,8 @@ import {formatHours} from '../../utils/hoursUtils';
 
 interface Props {
   data: HourBreakdownData;
+  /** Bar + dot·value legend only (no labels) — the one-line row on the day card. */
+  compact?: boolean;
 }
 
 const makeStyles = (c: Colors) =>
@@ -49,17 +51,18 @@ function LegendItem({color, label, value}: {color: string; label: string; value:
   return (
     <View style={styles.legendItem}>
       <View style={[styles.dot, {backgroundColor: color}]} />
-      <Text style={styles.legendLabel}>{label}</Text>
+      {label ? <Text style={styles.legendLabel}>{label}</Text> : null}
       <Text style={styles.legendValue}>{value}</Text>
     </View>
   );
 }
 
-export default function HourBreakdown({data}: Props) {
+export default function HourBreakdown({data, compact}: Props) {
   const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const total = data.totalTrackedSeconds;
+  const label = (key: string) => (compact ? '' : t(key));
 
   if (total === 0) {
     return (
@@ -82,19 +85,19 @@ export default function HourBreakdown({data}: Props) {
       </View>
       <View style={styles.legend}>
         {data.workSeconds > 0 && (
-          <LegendItem color={colors.badgeWork} label={t('activity.work')} value={formatHours(data.workSeconds)} />
+          <LegendItem color={colors.badgeWork} label={label('activity.work')} value={formatHours(data.workSeconds)} />
         )}
         {data.personalWorkSeconds > 0 && (
           <LegendItem
             color={colors.badgePersonalWork}
-            label={t('activity.personal_work')}
+            label={label('activity.personal_work')}
             value={formatHours(data.personalWorkSeconds)}
           />
         )}
         {data.personalSeconds > 0 && (
           <LegendItem
             color={colors.badgePersonal}
-            label={t('activity.personal')}
+            label={label('activity.personal')}
             value={formatHours(data.personalSeconds)}
           />
         )}

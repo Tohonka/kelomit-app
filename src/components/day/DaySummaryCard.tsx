@@ -1,12 +1,14 @@
 import React, {useEffect, useMemo, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {View, Text, TouchableOpacity, StyleSheet} from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import {useTheme, typography, spacing} from '../../theme';
 import type {Colors} from '../../theme';
 import Card from '../ui/Card';
+import Bounceable from '../ui/Bounceable';
 import TimePicker from '../ui/TimePicker';
 import HourBreakdown from './HourBreakdown';
-import {calcHourBreakdown, calcDayWorkBreakdown, segmentWorkSecs, formatHours} from '../../utils/hoursUtils';
+import {calcHourBreakdown, segmentWorkSecs, formatHours} from '../../utils/hoursUtils';
 import type {Entry, Day} from '../../types';
 
 interface Props {
@@ -15,11 +17,13 @@ interface Props {
   onUpdateTimes: (fields: Partial<Pick<Day,
     'started_at' | 'ended_at' | 'started_at_2' | 'ended_at_2'
   >>) => void;
+  /** Tap on the hours row → DayDetailsSheet (worked total, legend, project split). */
+  onOpenDetails: () => void;
 }
 
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
-    card: {marginHorizontal: spacing.lg, marginBottom: spacing.md, gap: spacing.md},
+    card: {marginHorizontal: spacing.lg, gap: spacing.md},
     legRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -72,29 +76,11 @@ const makeStyles = (c: Colors) =>
       height: 1,
       backgroundColor: c.border,
     },
-    workedRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-    },
-    workedLabel: {
-      fontSize: typography.sizes.sm,
-      fontWeight: typography.weights.semibold,
-      color: c.textSecondary,
-    },
-    workedValue: {
-      fontSize: typography.sizes.md,
-      fontWeight: typography.weights.bold,
-      color: c.badgeWork,
-    },
-    adjLine: {
-      fontSize: typography.sizes.xs,
-      color: c.textMuted,
-      marginTop: -spacing.xs,
-    },
+    hoursRow: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
+    hoursBar: {flex: 1},
   });
 
-export default function DaySummaryCard({day, entries, onUpdateTimes}: Props) {
+export default function DaySummaryCard({day, entries, onUpdateTimes, onOpenDetails}: Props) {
   const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -109,15 +95,6 @@ export default function DaySummaryCard({day, entries, onUpdateTimes}: Props) {
   }, [day.id, day.started_at_2, day.ended_at_2]);
 
   const breakdown = calcHourBreakdown(entries);
-  const dayWork = calcDayWorkBreakdown(day, entries);
-  const adjustments: string[] = [];
-  if (dayWork.addedWorkSeconds > 0) {
-    adjustments.push(`+${formatHours(dayWork.addedWorkSeconds)} ${t('time.adjAfterHours')}`);
-  }
-  if (dayWork.deductedPersonalSeconds > 0) {
-    adjustments.push(`−${formatHours(dayWork.deductedPersonalSeconds)} ${t('time.adjPersonal')}`);
-  }
-  const showWorkedTotal = dayWork.hasDayLegs && adjustments.length > 0;
 
   const seg1Secs = segmentWorkSecs(day.started_at, day.ended_at);
   const seg2Secs = segmentWorkSecs(day.started_at_2, day.ended_at_2);
@@ -190,21 +167,17 @@ export default function DaySummaryCard({day, entries, onUpdateTimes}: Props) {
         </View>
       )}
 
-      {showWorkedTotal && (
-        <>
-          <View style={styles.separator} />
-          <View style={styles.workedRow}>
-            <Text style={styles.workedLabel}>{t('time.worked')}</Text>
-            <Text style={styles.workedValue}>{formatHours(dayWork.workSeconds)}</Text>
-          </View>
-          <Text style={styles.adjLine}>{adjustments.join('  ·  ')}</Text>
-        </>
-      )}
-
+      {/* One compact hours row; everything else (worked total, adjustments,
+          labelled legend, project split) lives in DayDetailsSheet. */}
       {breakdown.totalTrackedSeconds > 0 && (
         <>
           <View style={styles.separator} />
-          <HourBreakdown data={breakdown} />
+          <Bounceable onPress={onOpenDetails} style={styles.hoursRow}>
+            <View style={styles.hoursBar}>
+              <HourBreakdown data={breakdown} compact />
+            </View>
+            <Icon name="chevron-right" size={20} color={colors.textMuted} />
+          </Bounceable>
         </>
       )}
     </Card>

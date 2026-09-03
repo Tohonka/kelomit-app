@@ -48,7 +48,7 @@ src/
     settingsStore  sessionStore  locationStore
 
   screens/
-    HomeScreen  CalendarScreen  DayScreen  DayMapScreen  MapTab
+    HomeScreen  CalendarScreen  DayMapScreen  MapTab
     GalleryScreen  SearchScreen  InsightsScreen  TagsScreen  ProjectsScreen
     AddEntryModal  QuickAddModal  SettingsScreen
     settings/          # One screen per settings section (11 of them)

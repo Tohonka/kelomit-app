@@ -1,8 +1,9 @@
 import React, {useMemo} from 'react';
 import {useTranslation} from 'react-i18next';
-import {Modal, Text, TouchableOpacity, StyleSheet, Pressable} from 'react-native';
+import {Text, TouchableOpacity, StyleSheet} from 'react-native';
 import {useTheme, typography, spacing, radius} from '../../theme';
 import type {Colors} from '../../theme';
+import Sheet from './Sheet';
 
 export interface SheetAction {
   label: string;
@@ -19,22 +20,6 @@ interface Props {
 
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
-    backdrop: {flex: 1, backgroundColor: '#00000088', justifyContent: 'flex-end'},
-    sheet: {
-      backgroundColor: c.bgCard,
-      borderTopLeftRadius: radius.lg,
-      borderTopRightRadius: radius.lg,
-      paddingBottom: spacing.xl,
-      paddingTop: spacing.sm,
-    },
-    title: {
-      fontSize: typography.sizes.sm,
-      fontWeight: typography.weights.semibold,
-      color: c.textMuted,
-      textAlign: 'center',
-      paddingVertical: spacing.md,
-      paddingHorizontal: spacing.lg,
-    },
     action: {
       paddingVertical: spacing.md,
       paddingHorizontal: spacing.lg,
@@ -64,23 +49,18 @@ export default function ActionSheet({visible, title, actions, onClose}: Props) {
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={() => {}}>
-          {title ? <Text style={styles.title}>{title}</Text> : null}
-          {actions.map((a, i) => (
-            <TouchableOpacity
-              key={i}
-              style={styles.action}
-              onPress={() => { onClose(); a.onPress(); }}>
-              <Text style={[styles.actionText, a.destructive && styles.destructive]}>{a.label}</Text>
-            </TouchableOpacity>
-          ))}
-          <TouchableOpacity style={styles.cancel} onPress={onClose}>
-            <Text style={styles.cancelText}>{t('common.cancel')}</Text>
-          </TouchableOpacity>
-        </Pressable>
-      </Pressable>
-    </Modal>
+    <Sheet visible={visible} title={title} onClose={onClose}>
+      {actions.map((a, i) => (
+        <TouchableOpacity
+          key={i}
+          style={styles.action}
+          onPress={() => { onClose(); a.onPress(); }}>
+          <Text style={[styles.actionText, a.destructive && styles.destructive]}>{a.label}</Text>
+        </TouchableOpacity>
+      ))}
+      <TouchableOpacity style={styles.cancel} onPress={onClose}>
+        <Text style={styles.cancelText}>{t('common.cancel')}</Text>
+      </TouchableOpacity>
+    </Sheet>
   );
 }

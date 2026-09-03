@@ -23,6 +23,8 @@ interface Props {
   onAddSubnote?: (entry: Entry) => void;
   /** Render subnotes nested under their parent (else a ▸ N badge). */
   showSubnotes?: boolean;
+  /** Card rows only: expand/collapse chip next to the sort pill (per-visit override). */
+  subnotesToggle?: {expanded: boolean; onToggle: () => void};
   inline?: boolean;
   /** Redesign look: compact rows inside a rounded card (Today / Day). */
   card?: boolean;
@@ -64,7 +66,6 @@ const makeStyles = (c: Colors) =>
       justifyContent: 'space-between',
       alignItems: 'center',
       paddingHorizontal: spacing.lg,
-      paddingTop: spacing.sm,
       paddingBottom: spacing.xs,
     },
     eyebrow: {
@@ -74,6 +75,7 @@ const makeStyles = (c: Colors) =>
       textTransform: 'uppercase',
       letterSpacing: 0.6,
     },
+    sortControls: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
     sortPill: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -228,7 +230,7 @@ function CardRow({
   );
 }
 
-export default function EntryList({entries, onPressEntry, onAddSubnote, showSubnotes, inline, card}: Props) {
+export default function EntryList({entries, onPressEntry, onAddSubnote, showSubnotes, subnotesToggle, inline, card}: Props) {
   const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -258,9 +260,20 @@ export default function EntryList({entries, onPressEntry, onAddSubnote, showSubn
   const sortPill = (
     <View style={card ? styles.sortRowCard : styles.sortRow}>
       {card && <Text style={styles.eyebrow}>{t('entries.listTitle')}</Text>}
-      <TouchableOpacity style={styles.sortPill} onPress={() => setMode(nextDayListMode(mode))}>
-        <Text style={styles.sortPillText}>⇅ {t(SORT_LABEL[mode])}</Text>
-      </TouchableOpacity>
+      <View style={styles.sortControls}>
+        {card && subnotesToggle && (
+          <TouchableOpacity style={styles.sortPill} onPress={subnotesToggle.onToggle} hitSlop={6}>
+            <Icon
+              name={subnotesToggle.expanded ? 'chevron-double-up' : 'chevron-double-down'}
+              size={16}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity style={styles.sortPill} onPress={() => setMode(nextDayListMode(mode))}>
+          <Text style={styles.sortPillText}>⇅ {t(SORT_LABEL[mode])}</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 
