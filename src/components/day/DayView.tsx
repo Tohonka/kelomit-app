@@ -20,7 +20,6 @@ import DaySplitBar from './DaySplitBar';
 import SpecialNoteCard from './SpecialNoteCard';
 import DayEndConfirmBanner from './DayEndConfirmBanner';
 import QuickTimerCard from './QuickTimerCard';
-import FilterBar from './FilterBar';
 import EntryList from '../entries/EntryList';
 import EntryListItem from '../entries/EntryListItem';
 import {useShellPadding} from '../../navigation/shellMetrics';
@@ -34,7 +33,7 @@ import {
   getCurrentGeofenceDetection,
   type GeofenceDetection,
 } from '../../services/gpsService';
-import type {Day, Entry, LeaveRange, Project, Tag} from '../../types';
+import type {Day, Entry, LeaveRange} from '../../types';
 import LeaveBadges from '../entries/LeaveBadges';
 
 interface Props {
@@ -105,9 +104,6 @@ export default function DayView({
   const [noteEditing, setNoteEditing] = useState(false);
   const [upcoming, setUpcoming] = useState<Entry[]>([]);
   const [detected, setDetected] = useState<GeofenceDetection>('unknown');
-  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
-  const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
-  const [onlySmallTasks, setOnlySmallTasks] = useState(false);
   const [leaveRanges, setLeaveRanges] = useState<LeaveRange[]>([]);
 
   const {loadDay, daysCache, updateDayTimes} = useDayStore();
@@ -141,8 +137,6 @@ export default function DayView({
     }, [date]),
   );
 
-  // Reset filters when the viewed date changes (detail swipe).
-  useEffect(() => { setSelectedProjectId(null); setSelectedTagIds([]); setOnlySmallTasks(false); }, [date]);
   // Subnote expansion: per-visit override of the Interface default.
   useEffect(() => { setShowSubnotes(subnotesDefault); }, [date, subnotesDefault]);
 
@@ -187,41 +181,6 @@ export default function DayView({
       : d === 'other' ? t('location.placeOther')
       : t('location.placeUnknown');
 
-  // Filter chips list only the projects/tags used in this day's notes.
-  const dayProjects = useMemo(() => {
-    const seen = new Map<number, Project>();
-    for (const e of allEntries) { if (e.project) { seen.set(e.project.id, e.project); } }
-    return [...seen.values()];
-  }, [allEntries]);
-  const dayTags = useMemo(() => {
-    const seen = new Map<number, Tag>();
-    for (const e of allEntries) { for (const tag of e.tags ?? []) { seen.set(tag.id, tag); } }
-    return [...seen.values()];
-  }, [allEntries]);
-
-  const smallTaskIds = useMemo(
-    () => new Set(allEntries.filter(e => e.is_small_task).map(e => e.id)),
-    [allEntries],
-  );
-
-  const filteredEntries: Entry[] = allEntries.filter(e => {
-    // Tasks filter keeps the tasks and their subnotes.
-    if (onlySmallTasks && !e.is_small_task && !(e.parent_id != null && smallTaskIds.has(e.parent_id))) {
-      return false;
-    }
-    if (selectedProjectId != null && e.project?.id !== selectedProjectId) { return false; }
-    if (selectedTagIds.length > 0) {
-      const entryTagIds = (e.tags ?? []).map(x => x.id);
-      if (!selectedTagIds.every(id => entryTagIds.includes(id))) { return false; }
-    }
-    return true;
-  });
-
-  const toggleTag = useCallback((id: number) => {
-    setSelectedTagIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
-  }, []);
-  const clearFilters = useCallback(() => { setSelectedProjectId(null); setSelectedTagIds([]); setOnlySmallTasks(false); }, []);
-
   const totalSecs = day ? calcDayWorkSecs(day, allEntries) : 0;
   const personalSecs = day ? calcHourBreakdown(allEntries).personalSeconds : 0;
 
@@ -251,8 +210,6 @@ export default function DayView({
   }, [upcoming]);
 
   const hasSubnotes = allEntries.some(e => e.parent_id != null);
-  const hasSmallTasks = smallTaskIds.size > 0;
-  const hasFilterable = dayProjects.length > 0 || dayTags.length > 0 || hasSubnotes || hasSmallTasks;
 
   return (
     <GestureDetector gesture={swipe}>
@@ -297,19 +254,6 @@ export default function DayView({
               {format(parseISO(date), 'EEEE, MMMM d, yyyy', {locale: dateLocale})}
             </Text>
           </View>
-          {hasFilterable && (
-            <FilterBar
-              projects={dayProjects}
-              tags={dayTags}
-              selectedProjectId={selectedProjectId}
-              selectedTagIds={selectedTagIds}
-              onSelectProject={setSelectedProjectId}
-              onToggleTag={toggleTag}
-              onClear={clearFilters}
-              subnotesToggle={hasSubnotes ? {expanded: showSubnotes, onToggle: () => setShowSubnotes(v => !v)} : undefined}
-              smallTasksFilter={hasSmallTasks ? {active: onlySmallTasks, onToggle: () => setOnlySmallTasks(v => !v)} : undefined}
-            />
-          )}
           {isToday && <DayEndConfirmBanner />}
           {isToday && <QuickTimerCard />}
           {leaveRanges.length > 0 && (
@@ -324,8 +268,9 @@ export default function DayView({
           <EntryList
             inline
             card
-            entries={filteredEntries}
+            entries={allEntries}
             showSubnotes={showSubnotes}
+            subnotesToggle={hasSubnotes ? {expanded: showSubnotes, onToggle: () => setShowSubnotes(v => !v)} : undefined}
             onPressEntry={onOpenEntry}
             onAddSubnote={onAddSubnote}
           />
