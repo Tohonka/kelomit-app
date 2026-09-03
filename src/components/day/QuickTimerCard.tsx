@@ -53,7 +53,6 @@ const makeStyles = (c: Colors) =>
       borderRadius: radius.lg,
       padding: spacing.lg,
       marginHorizontal: spacing.lg,
-      marginBottom: spacing.md,
       borderWidth: 1,
       borderColor: c.border,
     },
@@ -73,9 +72,8 @@ const makeStyles = (c: Colors) =>
     glowWrap: {
       position: 'relative',
       marginHorizontal: spacing.lg,
-      marginBottom: spacing.md,
     },
-    cardRunningInner: {marginHorizontal: 0, marginBottom: 0},
+    cardRunningInner: {marginHorizontal: 0},
     // Idle: one row — play · "activity · project" · options cog.
     row: {flexDirection: 'row', alignItems: 'center', gap: spacing.md},
     playBtn: {

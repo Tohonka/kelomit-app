@@ -66,7 +66,6 @@ const makeStyles = (c: Colors) =>
       justifyContent: 'space-between',
       alignItems: 'center',
       paddingHorizontal: spacing.lg,
-      paddingTop: spacing.sm,
       paddingBottom: spacing.xs,
     },
     eyebrow: {

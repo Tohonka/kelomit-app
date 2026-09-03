@@ -23,7 +23,7 @@ interface Props {
 
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
-    card: {marginHorizontal: spacing.lg, marginBottom: spacing.md, gap: spacing.md},
+    card: {marginHorizontal: spacing.lg, gap: spacing.md},
     legRow: {
       flexDirection: 'row',
       alignItems: 'center',

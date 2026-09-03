@@ -49,14 +49,16 @@ interface Props {
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
     flex: {flex: 1, backgroundColor: c.bg},
-    header: {paddingHorizontal: spacing.lg, paddingBottom: spacing.md},
+    // Sections are spaced only by the ScrollView's `gap`; roots carry no vertical margin.
+    content: {gap: spacing.lg},
+    header: {paddingHorizontal: spacing.lg},
     headerRow: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'},
     titleWrap: {flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginLeft: -spacing.sm},
     headerRight: {flexDirection: 'row', alignItems: 'center', gap: spacing.md},
     hidden: {opacity: 0},
     headerDate: {fontSize: typography.sizes.xxl, fontWeight: typography.weights.black, color: c.textPrimary},
     headerSub: {fontSize: typography.sizes.sm, color: c.textMuted, marginTop: 2},
-    comingUp: {marginTop: spacing.lg},
+    comingUp: {},
     comingUpHeader: {
       fontSize: typography.sizes.xs,
       fontWeight: typography.weights.semibold,
@@ -79,7 +81,6 @@ const makeStyles = (c: Colors) =>
       fontSize: typography.sizes.xs,
       color: c.textMuted,
       paddingHorizontal: spacing.lg,
-      paddingTop: spacing.xl,
     },
   });
 
@@ -219,6 +220,7 @@ export default function DayView({
           ref={scrollRef}
           style={styles.flex}
           contentContainerStyle={[
+            styles.content,
             {paddingTop: shellPad.paddingTop, paddingBottom: shellPad.paddingBottom},
             noteEditing && kbHeight > 0 && {paddingBottom: kbHeight + spacing.lg},
           ]}
