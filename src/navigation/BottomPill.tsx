@@ -1,6 +1,7 @@
 import React, {useMemo} from 'react';
 import {useTranslation} from 'react-i18next';
-import {View, Text, TouchableOpacity, StyleSheet} from 'react-native';
+import {View, Text, StyleSheet} from 'react-native';
+import Bounceable from '../components/ui/Bounceable';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import {useTheme, typography, radius} from '../theme';
@@ -58,10 +59,10 @@ export default function BottomPill({active, onSelect, quickAddTarget}: Props) {
     const isActive = active === route;
     const color = isActive ? colors.primary : colors.textMuted;
     return (
-      <TouchableOpacity style={styles.tab} activeOpacity={0.7} onPress={() => onSelect(route)}>
+      <Bounceable style={styles.tab} haptic accessibilityLabel={t(labelKey)} onPress={() => onSelect(route)}>
         <Icon name={icon} size={20} color={color} />
         <Text style={[styles.label, {color}]}>{t(labelKey)}</Text>
-      </TouchableOpacity>
+      </Bounceable>
     );
   };
 

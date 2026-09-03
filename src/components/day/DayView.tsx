@@ -1,8 +1,9 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import {View, Text, StyleSheet, ScrollView, TouchableOpacity} from 'react-native';
+import {View, Text, StyleSheet, ScrollView} from 'react-native';
 import {format, parseISO} from 'date-fns';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import Bounceable from '../ui/Bounceable';
 import {GestureDetector, Gesture} from 'react-native-gesture-handler';
 import Animated, {FadeIn} from 'react-native-reanimated';
 import {useFocusEffect} from '@react-navigation/native';
@@ -230,21 +231,21 @@ export default function DayView({
             <View style={styles.headerRow}>
               {/* ‹ date › — the visible hint that days are navigable; swipe does the same. */}
               <View style={styles.titleWrap}>
-                <TouchableOpacity
+                <Bounceable
                   onPress={() => onRequestDate(shiftDate(date, -1))}
                   hitSlop={8}
                   accessibilityLabel={t('dates.previousDay')}>
                   <Icon name="chevron-left" size={28} color={colors.textSecondary} />
-                </TouchableOpacity>
+                </Bounceable>
                 <Text style={styles.headerDate}>{formatDate(date)}</Text>
-                <TouchableOpacity
+                <Bounceable
                   onPress={() => onRequestDate(shiftDate(date, 1))}
                   disabled={!canGoForward}
                   style={!canGoForward && styles.hidden}
                   hitSlop={8}
                   accessibilityLabel={t('dates.nextDay')}>
                   <Icon name="chevron-right" size={28} color={colors.textSecondary} />
-                </TouchableOpacity>
+                </Bounceable>
               </View>
               <View style={styles.headerRight}>
                 <DayHoursReadout
@@ -253,9 +254,9 @@ export default function DayView({
                   showPersonal={showPersonalHours}
                   onPress={() => setDetailsOpen(true)}
                 />
-                <TouchableOpacity onPress={onOpenMap} hitSlop={8} accessibilityLabel={t('dayMap.title')}>
+                <Bounceable onPress={onOpenMap} hitSlop={8} accessibilityLabel={t('dayMap.title')}>
                   <Icon name="map-outline" size={22} color={colors.textMuted} />
-                </TouchableOpacity>
+                </Bounceable>
               </View>
             </View>
             <Text style={styles.headerSub}>

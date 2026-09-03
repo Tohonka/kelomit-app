@@ -373,12 +373,12 @@ export default function QuickTimerCard() {
           <Icon name="play" size={26} color={colors.white} />
         </Bounceable>
         <Text style={styles.target} numberOfLines={1}>{targetSummary(projectId, activityType)}</Text>
-        <TouchableOpacity
+        <Bounceable
           onPress={() => setExpanded(v => !v)}
           hitSlop={8}
           accessibilityLabel={expanded ? t('common.close') : t('timer.options')}>
           <Icon name={expanded ? 'close' : 'cog-outline'} size={22} color={colors.textSecondary} />
-        </TouchableOpacity>
+        </Bounceable>
       </View>
 
       {expanded && (

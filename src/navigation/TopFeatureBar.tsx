@@ -1,6 +1,7 @@
 import React, {useMemo} from 'react';
 import {useTranslation} from 'react-i18next';
-import {View, Text, ScrollView, TouchableOpacity, StyleSheet} from 'react-native';
+import {View, Text, ScrollView, StyleSheet} from 'react-native';
+import Bounceable from '../components/ui/Bounceable';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import type {BottomTabBarProps} from '@react-navigation/bottom-tabs';
@@ -87,10 +88,11 @@ export default function TopFeatureBar({state, navigation}: BottomTabBarProps) {
         {FEATURES.map(f => {
           const isActive = active === f.route;
           return (
-            <TouchableOpacity
+            <Bounceable
               key={f.route}
               style={styles.item}
-              activeOpacity={0.7}
+              haptic
+              accessibilityLabel={t(f.labelKey)}
               onPress={() => navigation.navigate(f.route)}>
               <View>
                 {isActive && <View style={styles.halo} />}
@@ -105,7 +107,7 @@ export default function TopFeatureBar({state, navigation}: BottomTabBarProps) {
               <Text style={[styles.label, isActive && styles.labelActive]} numberOfLines={1}>
                 {t(f.labelKey)}
               </Text>
-            </TouchableOpacity>
+            </Bounceable>
           );
         })}
         <View style={styles.soonItem}>

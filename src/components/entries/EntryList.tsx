@@ -1,10 +1,11 @@
 import React, {useMemo} from 'react';
 import {useTranslation} from 'react-i18next';
-import {FlatList, Text, StyleSheet, TouchableOpacity, Pressable, View} from 'react-native';
+import {FlatList, Text, StyleSheet, Pressable, View} from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import type {Entry, ActivityType} from '../../types';
 import EntryListItem from './EntryListItem';
 import MediaThumbnail from '../media/MediaThumbnail';
+import Bounceable from '../ui/Bounceable';
 import {useTheme, typography, spacing, radius} from '../../theme';
 import type {Colors} from '../../theme';
 import {useSettingsStore} from '../../store/settingsStore';
@@ -124,6 +125,8 @@ const makeStyles = (c: Colors) =>
     },
     row: {flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: 14},
     rowDivider: {borderTopWidth: 1, borderTopColor: c.bgMuted},
+    rowPressed: {backgroundColor: c.bgMuted},
+    pressedDim: {opacity: 0.5},
     rowNested: {paddingLeft: spacing.lg + 20, paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth},
     swatch: {width: 34, height: 34, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center'},
     swatchGlyph: {fontSize: 16},
@@ -193,7 +196,9 @@ function CardRow({
   const tint = colors[ACTIVITY_TINT[entry.activity_type]];
 
   return (
-    <Pressable style={[styles.row, !first && styles.rowDivider, nested && styles.rowNested]} onPress={onPress}>
+    <Pressable
+      style={({pressed}) => [styles.row, !first && styles.rowDivider, nested && styles.rowNested, pressed && styles.rowPressed]}
+      onPress={onPress}>
       {photo ? (
         <MediaThumbnail entryType="photo" thumbnailPath={photo.thumbnail_path || photo.file_path} size={34} />
       ) : (
@@ -219,7 +224,7 @@ function CardRow({
       ) : null}
       {onAddSubnote && !nested && entry.parent_id == null ? (
         <Pressable
-          style={styles.addSub}
+          style={({pressed}) => [styles.addSub, pressed && styles.pressedDim]}
           hitSlop={8}
           onPress={onAddSubnote}
           accessibilityLabel={t('subnotes.add')}>
@@ -262,17 +267,17 @@ export default function EntryList({entries, onPressEntry, onAddSubnote, showSubn
       {card && <Text style={styles.eyebrow}>{t('entries.listTitle')}</Text>}
       <View style={styles.sortControls}>
         {card && subnotesToggle && (
-          <TouchableOpacity style={styles.sortPill} onPress={subnotesToggle.onToggle} hitSlop={6}>
+          <Bounceable style={styles.sortPill} onPress={subnotesToggle.onToggle} hitSlop={6}>
             <Icon
               name={subnotesToggle.expanded ? 'chevron-double-up' : 'chevron-double-down'}
               size={16}
               color={colors.textSecondary}
             />
-          </TouchableOpacity>
+          </Bounceable>
         )}
-        <TouchableOpacity style={styles.sortPill} onPress={() => setMode(nextDayListMode(mode))}>
+        <Bounceable style={styles.sortPill} onPress={() => setMode(nextDayListMode(mode))}>
           <Text style={styles.sortPillText}>⇅ {t(SORT_LABEL[mode])}</Text>
-        </TouchableOpacity>
+        </Bounceable>
       </View>
     </View>
   );
