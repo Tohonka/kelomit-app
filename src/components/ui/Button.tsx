@@ -10,6 +10,7 @@ import Animated from 'react-native-reanimated';
 import {useTheme, typography, spacing, radius} from '../../theme';
 import type {Colors} from '../../theme';
 import {usePressAnimation} from './usePressAnimation';
+import {haptic as vibrate, HAPTIC_TAP} from '../../utils/haptics';
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
 
@@ -20,6 +21,8 @@ interface Props {
   disabled?: boolean;
   loading?: boolean;
   style?: ViewStyle;
+  /** Light tick on press (default on — a labelled button is an action). */
+  haptic?: boolean;
 }
 
 const makeStyles = (c: Colors) =>
@@ -58,6 +61,7 @@ export default function Button({
   disabled,
   loading,
   style,
+  haptic = true,
 }: Props) {
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -68,7 +72,8 @@ export default function Button({
     <Animated.View style={animatedStyle}>
       <Pressable
         style={[styles.base, styles[variant], isOff && styles.disabled, style]}
-        onPress={onPress}
+        onPress={() => { if (haptic) { vibrate(HAPTIC_TAP); } onPress(); }}
+        accessibilityRole="button"
         onPressIn={onPressIn}
         onPressOut={onPressOut}
         disabled={isOff}>

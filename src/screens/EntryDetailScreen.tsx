@@ -8,8 +8,8 @@ import {
   Alert,
   TouchableOpacity,
   Image,
-  Vibration,
 } from 'react-native';
+import {haptic, HAPTIC_START, HAPTIC_CANCEL} from '../utils/haptics';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {GestureDetector, Gesture} from 'react-native-gesture-handler';
 import {getEntry, getSubnotes, deleteEntryMedia, updateEntry} from '../db/entries';
@@ -242,7 +242,7 @@ export default function EntryDetailScreen({navigation, route}: Props) {
     if (!entry) { return; }
     const markDone = entry.completed_at == null;
     if (markDone && !canComplete) { return; }
-    Vibration.vibrate(40);
+    haptic(HAPTIC_START);
     await setTodoDone(entry.id, dayId, markDone);
     const fresh = await getEntry(entry.id);
     if (fresh) {
@@ -285,7 +285,7 @@ export default function EntryDetailScreen({navigation, route}: Props) {
         text: translate('common.delete'),
         style: 'destructive',
         onPress: async () => {
-          Vibration.vibrate([0, 40, 60, 40]);
+          haptic(HAPTIC_CANCEL);
           cancelTodoReminder(entryId).catch(() => {});
           await removeEntry(entryId, dayId);
           // Delete every attachment's files plus any legacy inline file.
