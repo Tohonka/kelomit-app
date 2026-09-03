@@ -1,38 +1,20 @@
 import React, {useMemo} from 'react';
 import {useTranslation} from 'react-i18next';
 import {View, Text, StyleSheet} from 'react-native';
-import {useTheme, typography, spacing, radius} from '../../theme';
+import {useTheme, typography, spacing} from '../../theme';
 import type {Colors} from '../../theme';
 import {chartColorAt} from '../../utils/chartColors';
-import {formatHours} from '../../utils/hoursUtils';
+import {entryTrackedSeconds, formatHours} from '../../utils/hoursUtils';
 import type {Entry} from '../../types';
 
 interface Props {
   entries: Entry[];
 }
 
-function entrySeconds(e: Entry): number {
-  if (e.is_todo && !e.completed_at) { return 0; }
-  if (e.duration_sec != null) { return e.duration_sec; }
-  if (e.time_from && e.time_to) {
-    const s = (new Date(e.time_to).getTime() - new Date(e.time_from).getTime()) / 1000;
-    return s > 0 ? s : 0;
-  }
-  return 0;
-}
-
+/** Stacked per-project bar. Lives inside DayDetailsSheet (no card chrome of its own). */
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
-    card: {
-      marginHorizontal: spacing.lg,
-      marginBottom: spacing.md,
-      padding: spacing.md,
-      backgroundColor: c.bgCard,
-      borderRadius: radius.md,
-      borderWidth: 1,
-      borderColor: c.border,
-      gap: spacing.sm,
-    },
+    container: {gap: spacing.sm},
     bar: {flexDirection: 'row', height: 12, borderRadius: 6, overflow: 'hidden', backgroundColor: c.bgMuted},
     legend: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm},
     legendItem: {flexDirection: 'row', alignItems: 'center', gap: 4},
@@ -48,7 +30,9 @@ export default function DaySplitBar({entries}: Props) {
   const slices = useMemo(() => {
     const map = new Map<string, number>();
     for (const e of entries) {
-      const secs = entrySeconds(e);
+      // Same accounting as calcHourBreakdown: subnotes ride inside their parent.
+      if (e.parent_id != null) { continue; }
+      const secs = entryTrackedSeconds(e);
       if (secs <= 0) { continue; }
       const key = e.project?.name ?? t('insights.noProject');
       map.set(key, (map.get(key) ?? 0) + secs);
@@ -64,7 +48,7 @@ export default function DaySplitBar({entries}: Props) {
   }
 
   return (
-    <View style={styles.card}>
+    <View style={styles.container}>
       <View style={styles.bar}>
         {slices.map((s, i) => (
           <View key={s.label} style={{flex: s.seconds, backgroundColor: chartColorAt(i)}} />

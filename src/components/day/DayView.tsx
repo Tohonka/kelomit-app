@@ -16,7 +16,7 @@ import type {Colors} from '../../theme';
 import {getDateFnsLocale} from '../../i18n';
 import DayHoursReadout from './DayHoursReadout';
 import DaySummaryCard from './DaySummaryCard';
-import DaySplitBar from './DaySplitBar';
+import DayDetailsSheet from './DayDetailsSheet';
 import SpecialNoteCard from './SpecialNoteCard';
 import DayEndConfirmBanner from './DayEndConfirmBanner';
 import QuickTimerCard from './QuickTimerCard';
@@ -104,6 +104,7 @@ export default function DayView({
   const [noteEditing, setNoteEditing] = useState(false);
   const [upcoming, setUpcoming] = useState<Entry[]>([]);
   const [detected, setDetected] = useState<GeofenceDetection>('unknown');
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [leaveRanges, setLeaveRanges] = useState<LeaveRange[]>([]);
 
   const {loadDay, daysCache, updateDayTimes} = useDayStore();
@@ -244,7 +245,12 @@ export default function DayView({
                 </TouchableOpacity>
               </View>
               <View style={styles.headerRight}>
-                <DayHoursReadout workSecs={totalSecs} personalSecs={personalSecs} showPersonal={showPersonalHours} />
+                <DayHoursReadout
+                  workSecs={totalSecs}
+                  personalSecs={personalSecs}
+                  showPersonal={showPersonalHours}
+                  onPress={() => setDetailsOpen(true)}
+                />
                 <TouchableOpacity onPress={onOpenMap} hitSlop={8} accessibilityLabel={t('dayMap.title')}>
                   <Icon name="map-outline" size={22} color={colors.textMuted} />
                 </TouchableOpacity>
@@ -262,9 +268,13 @@ export default function DayView({
             </View>
           )}
           {day && (
-            <DaySummaryCard day={day} entries={allEntries} onUpdateTimes={fields => updateDayTimes(date, fields)} />
+            <DaySummaryCard
+              day={day}
+              entries={allEntries}
+              onUpdateTimes={fields => updateDayTimes(date, fields)}
+              onOpenDetails={() => setDetailsOpen(true)}
+            />
           )}
-          {day && <DaySplitBar entries={allEntries} />}
           <EntryList
             inline
             card
@@ -299,6 +309,14 @@ export default function DayView({
             />
           )}
         </ScrollView>
+        {day && (
+          <DayDetailsSheet
+            visible={detailsOpen}
+            onClose={() => setDetailsOpen(false)}
+            day={day}
+            entries={allEntries}
+          />
+        )}
       </Animated.View>
     </GestureDetector>
   );

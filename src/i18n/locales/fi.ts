@@ -160,6 +160,10 @@ const fi: typeof en = {
     zoomHint: 'Nipistä zoomataksesi · kaksoisnapauta nollataksesi',
     notesHere: 'Muistiinpanot täällä',
   },
+  day: {
+    detailsTitle: 'Päivän tiedot',
+    projectSplit: 'Projekteittain',
+  },
   dayEnd: {
     channelName: 'Työpäivän loppu',
     notificationTitle: 'Työpäivän loppu?',

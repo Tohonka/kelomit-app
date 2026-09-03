@@ -158,6 +158,10 @@ const en = {
     zoomHint: 'Pinch to zoom · double-tap to reset',
     notesHere: 'Notes here',
   },
+  day: {
+    detailsTitle: 'Day details',
+    projectSplit: 'By project',
+  },
   dayEnd: {
     channelName: 'Workday end',
     notificationTitle: 'End of workday?',
