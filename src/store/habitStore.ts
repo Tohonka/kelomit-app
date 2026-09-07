@@ -6,6 +6,7 @@ import {getEntriesForDays} from '../db/entries';
 import {monthKeyOf, monthRange} from '../utils/habitMonth';
 import {categoryStreak, habitDayProgress, type HabitDayProgress} from '../utils/habitMatch';
 import {shiftDate, todayDate} from '../utils/dateUtils';
+import {syncHabitWidgets} from '../services/habitWidgets';
 import type {Entry, Habit, HabitCategory, HabitMatcher} from '../types';
 
 // ponytail: streaks look back at most this far; a 120+ day streak just reads 120.
@@ -106,6 +107,8 @@ export const useHabitStore = create<HabitState>((set, get) => ({
   auto: new Map(),
 
   load: async () => {
+    // Fold in any widget taps first so the matrix shows them.
+    await syncHabitWidgets().catch(() => {});
     const [categories, habits] = await Promise.all([getCategories(), getHabits()]);
     const matchers = await getMatchersForHabits(habits.map(h => h.id));
     set({categories, habits, matchers, loaded: true});
@@ -140,6 +143,7 @@ export const useHabitStore = create<HabitState>((set, get) => ({
       overrides.set(habitId, inner);
       return {overrides};
     });
+    syncHabitWidgets().catch(() => {});
   },
 
   clearOverride: async (habitId, date) => {
@@ -151,5 +155,6 @@ export const useHabitStore = create<HabitState>((set, get) => ({
       overrides.set(habitId, inner);
       return {overrides};
     });
+    syncHabitWidgets().catch(() => {});
   },
 }));

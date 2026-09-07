@@ -94,6 +94,8 @@ export interface Habit {
   title: string;
   description: string | null;
   icon: string;
+  /** Hex colour for the widget square + dots; null = theme primary. */
+  color: string | null;
   /** Null = "just do it at least once that day". */
   goal_kind: HabitGoalKind | null;
   goal_value: number | null;

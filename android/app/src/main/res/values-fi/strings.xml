@@ -4,4 +4,6 @@
     <string name="day_end_question">Päättyikö työpäiväsi klo %1$s?</string>
     <string name="day_end_yes">Kyllä</string>
     <string name="day_end_no">Ei</string>
+    <string name="widget_habits_description">Merkitse päivän tavat</string>
+    <string name="widget_habits_empty">Valitse tavat: Kelomit › Asetukset › Widgetit</string>
 </resources>

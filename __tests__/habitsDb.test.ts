@@ -27,7 +27,8 @@ it('migration 28 creates the five habit tables with cascades', () => {
   expect(sql).toContain('REFERENCES habit_categories(id) ON DELETE CASCADE');
   expect(sql).toContain("CHECK(goal_kind IN ('minutes','count'))");
   expect(sql).toContain("CHECK(kind IN ('project','tag','trigger'))");
-  expect(migrations[migrations.length - 1].version).toBe(28);
+  expect(migrations.find(m => m.version === 29)?.up.join('\n')).toContain('ALTER TABLE habits ADD COLUMN color');
+  expect(migrations[migrations.length - 1].version).toBe(29);
 });
 
 describe('categories', () => {
@@ -63,9 +64,9 @@ describe('categories', () => {
 describe('habits', () => {
   it('creates with a null goal by default', async () => {
     mockExecute.mockResolvedValueOnce({rows: [{id: 5, category_id: 1, title: 'Spanish', icon: 'translate',
-      goal_kind: null, goal_value: null, archived: 0, created_at: '', updated_at: ''}]});
+      color: null, goal_kind: null, goal_value: null, archived: 0, created_at: '', updated_at: ''}]});
     const h = await createHabit({category_id: 1, title: 'Spanish', icon: 'translate'});
-    expect(lastCall()[1]).toEqual([1, 'Spanish', null, 'translate', null, null]);
+    expect(lastCall()[1]).toEqual([1, 'Spanish', null, 'translate', null, null, null]);
     expect(h.goal_kind).toBeNull();
   });
 

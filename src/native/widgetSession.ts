@@ -21,6 +21,9 @@ interface WidgetSessionNative {
   getWidgets(): Promise<string>;
   refreshWidgets(): Promise<void>;
   requestPinWidget(type: string): Promise<boolean>;
+  setHabitWidgetState(json: string): Promise<void>;
+  getPendingHabitToggles(): Promise<string>;
+  clearPendingHabitToggles(): Promise<void>;
 }
 
 const Native = NativeModules.WidgetSession as WidgetSessionNative | undefined;
@@ -46,11 +49,22 @@ export interface WidgetConfig {
   name?: string | null;
 }
 
-export interface WidgetInfo {
-  appWidgetId: number;
-  type: 'toggle' | 'full';
-  config: WidgetConfig | null;
+/** Habit widget mapping: which habits fill its slots (≤5, in order). */
+export interface HabitWidgetConfig {
+  habit_ids: number[];
+  show_name?: boolean;
 }
+
+/** One widget tap the app hasn't folded into habit_day_overrides yet. */
+export interface PendingHabitToggle {
+  habit_id: number;
+  date: string;
+  done: boolean;
+}
+
+export type WidgetInfo =
+  | {appWidgetId: number; type: 'toggle' | 'full'; config: WidgetConfig | null}
+  | {appWidgetId: number; type: 'habits'; config: HabitWidgetConfig | null};
 
 export async function nativeGetActiveSession(): Promise<ActiveSession | null> {
   if (!Native) {
@@ -107,7 +121,7 @@ export async function nativeGetWidgets(): Promise<WidgetInfo[]> {
 
 export async function nativeSetWidgetConfig(
   appWidgetId: number,
-  config: WidgetConfig,
+  config: WidgetConfig | HabitWidgetConfig,
 ): Promise<void> {
   await Native?.setWidgetConfig(appWidgetId, JSON.stringify(config));
 }
@@ -119,7 +133,30 @@ export async function nativeRefreshWidgets(): Promise<void> {
 /** Ask the launcher to place a new widget (Android pin flow). False = launcher
  *  doesn't support pinning; the caller points the user at the home-screen menu. */
 export async function nativeRequestPinWidget(
-  type: 'toggle' | 'full' | 'addnote' | 'tracking',
+  type: 'toggle' | 'full' | 'addnote' | 'tracking' | 'habits',
 ): Promise<boolean> {
   return (await Native?.requestPinWidget(type)) ?? false;
+}
+
+// ── Habit widget ─────────────────────────────────────────────────────────────
+
+/** Push today's habit states + display metadata; repaints every habit widget. */
+export async function nativeSetHabitWidgetState(json: string): Promise<void> {
+  await Native?.setHabitWidgetState(json);
+}
+
+export async function nativeGetPendingHabitToggles(): Promise<PendingHabitToggle[]> {
+  if (!Native) {
+    return [];
+  }
+  try {
+    const arr = JSON.parse(await Native.getPendingHabitToggles()) as PendingHabitToggle[];
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function nativeClearPendingHabitToggles(): Promise<void> {
+  await Native?.clearPendingHabitToggles();
 }

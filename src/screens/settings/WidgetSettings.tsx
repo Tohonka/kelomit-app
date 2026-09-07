@@ -23,6 +23,12 @@ import type {RootStackScreenProps} from '../../navigation/navigationTypes';
 
 type Props = RootStackScreenProps<'WidgetSettings'>;
 
+export const WIDGET_TYPE_LABEL: Record<WidgetInfo['type'], string> = {
+  toggle: 'widgets.typeToggle',
+  full: 'widgets.typeFull',
+  habits: 'widgets.typeHabits',
+};
+
 const VOICE_MODES: {mode: WidgetVoiceMode; labelKey: string}[] = [
   {mode: 'confirm', labelKey: 'widgets.voiceModeConfirm'},
   {mode: 'auto', labelKey: 'widgets.voiceModeAuto'},
@@ -192,7 +198,7 @@ export default function WidgetSettings({navigation}: Props) {
     return () => sub.remove();
   }, [available, refresh]);
 
-  const handleAddWidget = async (type: 'full' | 'toggle' | 'addnote' | 'tracking') => {
+  const handleAddWidget = async (type: 'full' | 'toggle' | 'addnote' | 'tracking' | 'habits') => {
     const ok = await nativeRequestPinWidget(type).catch(() => false);
     if (!ok) {
       Alert.alert(t('widgets.pinUnsupportedTitle'), t('widgets.pinUnsupported'));
@@ -261,6 +267,9 @@ export default function WidgetSettings({navigation}: Props) {
               <TouchableOpacity style={styles.addBtn} onPress={() => handleAddWidget('tracking')}>
                 <Text style={styles.addBtnText}>{t('widgets.addTracking')}</Text>
               </TouchableOpacity>
+              <TouchableOpacity style={styles.addBtn} onPress={() => handleAddWidget('habits')}>
+                <Text style={styles.addBtnText}>{t('widgets.addHabits')}</Text>
+              </TouchableOpacity>
             </View>
           </>
         )}
@@ -277,8 +286,8 @@ export default function WidgetSettings({navigation}: Props) {
           <Text style={styles.sectionLabel}>{t('widgets.placedSection')}</Text>
         )}
         {widgets.map(w => {
-          const typeLabel = t(w.type === 'toggle' ? 'widgets.typeToggle' : 'widgets.typeFull');
-          const name = w.config?.name?.trim();
+          const typeLabel = t(WIDGET_TYPE_LABEL[w.type]);
+          const name = w.type === 'habits' ? undefined : w.config?.name?.trim();
           return (
             <TouchableOpacity
               key={w.appWidgetId}

@@ -16,8 +16,11 @@ import ProjectPicker from '../../components/entries/ProjectPicker';
 import {
   nativeGetWidgets,
   nativeSetWidgetConfig,
+  type HabitWidgetConfig,
   type WidgetConfig,
 } from '../../native/widgetSession';
+import HabitWidgetEdit from './HabitWidgetEdit';
+import {WIDGET_TYPE_LABEL} from './WidgetSettings';
 import type {ActivityType} from '../../types';
 import type {RootStackScreenProps} from '../../navigation/navigationTypes';
 
@@ -112,19 +115,24 @@ export default function WidgetEdit({navigation, route}: Props) {
   const [cfg, setCfg] = useState<WidgetConfig>(defaultConfig());
   const [tagText, setTagText] = useState('');
   const [saved, setSaved] = useState(false);
+  // Habit widgets have their own form; null until the widget list is read.
+  const [habitCfg, setHabitCfg] = useState<HabitWidgetConfig | null | undefined>(undefined);
 
   useEffect(() => {
     if (!projectsLoaded) { loadProjects(); }
     nativeGetWidgets()
       .then(list => {
         const w = list.find(x => x.appWidgetId === appWidgetId);
+        if (w?.type === 'habits') {
+          setHabitCfg(w.config ?? {habit_ids: []});
+          navigation.setOptions({title: t(WIDGET_TYPE_LABEL.habits)});
+          return;
+        }
         const config = w?.config ?? defaultConfig();
         setCfg(config);
         setTagText((config.tags ?? []).join(', '));
         navigation.setOptions({
-          title:
-            config.name?.trim() ||
-            t(w?.type === 'toggle' ? 'widgets.typeToggle' : 'widgets.typeFull'),
+          title: config.name?.trim() || t(WIDGET_TYPE_LABEL[w?.type ?? 'full']),
         });
       })
       .catch(() => {});
@@ -134,6 +142,11 @@ export default function WidgetEdit({navigation, route}: Props) {
     (patch: Partial<WidgetConfig>) => setCfg(prev => ({...prev, ...patch})),
     [],
   );
+
+  if (habitCfg) {
+    return <HabitWidgetEdit appWidgetId={appWidgetId} initial={habitCfg} />;
+  }
+
 
   const handleSave = async () => {
     const tags = tagText

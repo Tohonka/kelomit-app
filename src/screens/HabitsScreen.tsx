@@ -209,11 +209,11 @@ export default function HabitsScreen({navigation}: TabScreenProps<'Habits'>) {
                     onLongPress={() => setTarget({kind: 'habit', item: h})}
                     delayLongPress={300}
                     activeOpacity={0.7}>
-                    <Icon name={h.icon} size={18} color={colors.textSecondary} />
+                    <Icon name={h.icon} size={18} color={h.color ?? colors.textSecondary} />
                     <Text style={styles.habitTitle}>{h.title}</Text>
                     {goalText(h) && <Text style={styles.habitGoal}>{goalText(h)}</Text>}
                   </TouchableOpacity>
-                  <HabitMatrix habitId={h.id} month={month} />
+                  <HabitMatrix habitId={h.id} month={month} color={h.color} />
                 </View>
               ))}
 

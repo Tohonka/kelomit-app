@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One resizable provider: HabitWidgetProvider derives the slot count from the
+     width (64dp per habit, max 5). updatePeriodMillis = 30 min so a widget left
+     untouched past midnight repaints with "nothing done yet" without an alarm. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="70dp"
+    android:minHeight="70dp"
+    android:targetCellWidth="1"
+    android:targetCellHeight="1"
+    android:maxResizeWidth="400dp"
+    android:resizeMode="horizontal"
+    android:minResizeWidth="70dp"
+    android:widgetCategory="home_screen"
+    android:description="@string/widget_habits_description"
+    android:previewLayout="@layout/widget_habits"
+    android:initialLayout="@layout/widget_habits"
+    android:updatePeriodMillis="1800000" />

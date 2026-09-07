@@ -11,7 +11,7 @@ const e = (o: Partial<Entry>): Entry =>
   }) as Entry;
 const tag = (id: number) => ({id, name: `t${id}`, created_at: ''});
 const habit = (o: Partial<Habit>): Habit => ({
-  id: 1, category_id: 1, title: 'h', description: null, icon: 'x', goal_kind: null, goal_value: null,
+  id: 1, category_id: 1, title: 'h', description: null, icon: 'x', color: null, goal_kind: null, goal_value: null,
   archived: false, created_at: '', updated_at: '', ...o,
 });
 const M = (kind: HabitMatcher['kind'], ref_id: number): HabitMatcher => ({habit_id: 1, kind, ref_id});

@@ -9,6 +9,8 @@ import type {Colors} from '../../theme';
 interface Props {
   habitId: number;
   month: string;
+  /** Habit colour; null = theme primary. */
+  color?: string | null;
 }
 
 const DOT = 18;
@@ -36,7 +38,7 @@ const makeStyles = (c: Colors) =>
     dayNumAuto: {color: c.primary},
   });
 
-export default function HabitMatrix({habitId, month}: Props) {
+export default function HabitMatrix({habitId, month, color}: Props) {
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const overrides = useHabitStore(s => s.overrides);
@@ -46,6 +48,7 @@ export default function HabitMatrix({habitId, month}: Props) {
   const cells = useMemo(() => monthGrid(month), [month]);
   const today = todayDate();
   const view = {overrides, auto};
+  const tint = color ?? colors.primary;
 
   return (
     <View style={styles.grid}>
@@ -66,11 +69,11 @@ export default function HabitMatrix({habitId, month}: Props) {
             <View
               style={[
                 styles.dot,
-                done && (autoStyle ? styles.dotAuto : styles.dotDone),
+                done && (autoStyle ? [styles.dotAuto, {borderColor: tint}] : [styles.dotDone, {backgroundColor: tint}]),
                 future && styles.dotFuture,
                 date === today && !done && styles.dotToday,
               ]}>
-              <Text style={[styles.dayNum, done && (autoStyle ? styles.dayNumAuto : styles.dayNumDone)]}>
+              <Text style={[styles.dayNum, done && (autoStyle ? [styles.dayNumAuto, {color: tint}] : styles.dayNumDone)]}>
                 {Number(date.slice(-2))}
               </Text>
             </View>

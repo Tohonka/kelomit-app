@@ -93,7 +93,28 @@ class WidgetSessionModule(reactContext: ReactApplicationContext) :
     }
     collect("toggle", SessionToggleWidgetProvider::class.java)
     collect("full", SessionWidgetProvider::class.java)
+    collect("habits", HabitWidgetProvider::class.java)
     promise.resolve(out.toString())
+  }
+
+  // ── Habit widget ────────────────────────────────────────────────────────────
+
+  @ReactMethod
+  fun setHabitWidgetState(json: String, promise: Promise) {
+    HabitWidgetStore.setState(context, json)
+    HabitWidgetProvider.updateAll(context)
+    promise.resolve(null)
+  }
+
+  @ReactMethod
+  fun getPendingHabitToggles(promise: Promise) {
+    promise.resolve(HabitWidgetStore.getPending(context))
+  }
+
+  @ReactMethod
+  fun clearPendingHabitToggles(promise: Promise) {
+    HabitWidgetStore.clearPending(context)
+    promise.resolve(null)
   }
 
   @ReactMethod
@@ -115,6 +136,7 @@ class WidgetSessionModule(reactContext: ReactApplicationContext) :
       "toggle" -> SessionToggleWidgetProvider::class.java
       "addnote" -> AddNoteWidgetProvider::class.java
       "tracking" -> TrackingPauseWidgetProvider::class.java
+      "habits" -> HabitWidgetProvider::class.java
       else -> SessionWidgetProvider::class.java
     }
     val ok = mgr != null &&

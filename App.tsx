@@ -24,6 +24,8 @@ import {
 } from './src/services/trackingOrchestrator';
 import {useSettingsStore} from './src/store/settingsStore';
 import {useSessionStore} from './src/store/sessionStore';
+import {useHabitStore} from './src/store/habitStore';
+import {syncHabitWidgets} from './src/services/habitWidgets';
 import {useTheme, lightColors, typography} from './src/theme';
 import RootNavigator from './src/navigation/RootNavigator';
 import {navigationRef} from './src/navigation/navigationRef';
@@ -33,6 +35,17 @@ import {handleDeepLink, flushPendingDeepLink} from './src/services/deepLinks';
 // compete with the first render / DB warm-up. Foreground-resume start stays
 // immediate (the app is already warm by then).
 const GPS_START_DELAY_MS = 3000;
+
+// Habit widget taps made while we were away → overrides; then push today's
+// state back out. Refresh the Habits screen if it's loaded and taps landed.
+function reconcileHabitWidgets() {
+  syncHabitWidgets()
+    .then(applied => {
+      const habits = useHabitStore.getState();
+      if (applied && habits.loaded) { return habits.refreshMonth(); }
+    })
+    .catch(() => {});
+}
 
 function AppContent() {
   const {colors, isDark} = useTheme();
@@ -56,6 +69,7 @@ function AppContent() {
         ensureNotificationChannel().catch(() => {});
         // Log any sessions a home-screen widget finished while we were closed.
         useSessionStore.getState().reconcile().catch(() => {});
+        reconcileHabitWidgets();
         // Drop raw trail points past the retention window (best-effort).
         pruneGpsTracksOlderThan().catch(() => {});
         pruneActivityEventsOlderThan().catch(() => {});
@@ -118,12 +132,15 @@ function AppContent() {
           .catch(resumeError => diag('track.resume.fail', String(resumeError)));
         // A widget may have started/stopped a session while we were backgrounded.
         useSessionStore.getState().reconcile().catch(() => {});
+        reconcileHabitWidgets();
         // Fire and forget — sync failures never surface here.
         maybeAutoSync().catch(() => {});
       } else if (
         appState.current === 'active' &&
         nextState.match(/inactive|background/)
       ) {
+        // Notes added this session may have auto-matched a habit: repaint the widget.
+        syncHabitWidgets().catch(() => {});
         const {gps_enabled, background_tracking} = useSettingsStore.getState();
         // With background tracking on, keep the watch alive (the foreground
         // service is already running). Otherwise stop tracking as before.

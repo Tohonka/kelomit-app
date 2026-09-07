@@ -4,10 +4,10 @@ import {View, Text, TextInput, ScrollView, TouchableOpacity, StyleSheet} from 'r
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import {useHabitStore} from '../store/habitStore';
 import {createCategory, createHabit, setMatchers, updateCategory, updateHabit} from '../db/habits';
-import {getAllTriggers, getOrCreateTrigger} from '../db/triggers';
+import {getAllTriggers} from '../db/triggers';
 import {useProjectStore} from '../store/projectStore';
 import {useTagStore} from '../store/tagStore';
-import {HABIT_ICONS} from '../components/habits/habitIcons';
+import {HABIT_COLORS, HABIT_ICONS} from '../components/habits/habitIcons';
 import Button from '../components/ui/Button';
 import {useTheme, typography, spacing, radius} from '../theme';
 import type {Colors} from '../theme';
@@ -49,6 +49,20 @@ const makeStyles = (c: Colors) =>
       justifyContent: 'center',
     },
     iconChipActive: {borderColor: c.primary, backgroundColor: c.primary + '22'},
+    swatch: {width: 32, height: 32, borderRadius: 16, borderWidth: 3, borderColor: 'transparent'},
+    swatchActive: {borderColor: c.textPrimary},
+    suggestions: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm},
+    suggestion: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: spacing.md,
+      paddingVertical: 7,
+      borderRadius: radius.md,
+      backgroundColor: c.bgCard,
+      borderWidth: 1.5,
+      borderColor: c.border,
+    },
     segRow: {flexDirection: 'row', gap: spacing.sm},
     seg: {
       flex: 1,
@@ -66,24 +80,18 @@ const makeStyles = (c: Colors) =>
     numInput: {width: 96, textAlign: 'center'},
     numSuffix: {fontSize: typography.sizes.base, color: c.textSecondary},
     hint: {fontSize: typography.sizes.sm, color: c.textMuted, marginBottom: spacing.sm},
-    subLabel: {fontSize: typography.sizes.sm, fontWeight: typography.weights.semibold, color: c.textSecondary, marginTop: spacing.md, marginBottom: spacing.xs},
     chipsRow: {flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm},
-    chip: {
-      paddingHorizontal: spacing.md,
-      paddingVertical: 7,
-      borderRadius: radius.md,
-      backgroundColor: c.bgCard,
-      borderWidth: 1.5,
-      borderColor: c.border,
-    },
     chipActive: {borderColor: c.primary, backgroundColor: c.primary + '15'},
     chipText: {fontSize: typography.sizes.sm, color: c.textSecondary, fontWeight: typography.weights.medium},
     chipTextActive: {color: c.primary, fontWeight: typography.weights.semibold},
-    triggerRow: {flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm},
+    keywordRow: {flexDirection: 'row', gap: spacing.sm},
     flex1: {flex: 1},
   });
 
 const key = (kind: HabitMatcherKind, id: number) => `${kind}:${id}`;
+
+interface Keyword { kind: HabitMatcherKind; id: number; name: string }
+const KIND_ICON: Record<HabitMatcherKind, string> = {project: 'folder-outline', tag: 'pound', trigger: 'flash-outline'};
 
 export default function HabitEditModal({route, navigation}: RootStackScreenProps<'HabitEditModal'>) {
   const {mode, categoryId, habitId} = route.params;
@@ -95,8 +103,9 @@ export default function HabitEditModal({route, navigation}: RootStackScreenProps
   const loadProjects = useProjectStore(s => s.load);
   const tags = useTagStore(s => s.tags);
   const loadTags = useTagStore(s => s.load);
+  const getOrCreateTag = useTagStore(s => s.getOrCreate);
   const [triggers, setTriggers] = useState<Trigger[]>([]);
-  const [newTrigger, setNewTrigger] = useState('');
+  const [keyword, setKeyword] = useState('');
   const [selected, setSelected] = useState<Set<string>>(
     () => new Set((habitId ? allMatchers.get(habitId) ?? [] : []).map(m => key(m.kind, m.ref_id))),
   );
@@ -107,21 +116,37 @@ export default function HabitEditModal({route, navigation}: RootStackScreenProps
     getAllTriggers().then(setTriggers);
   }, [mode, loadProjects, loadTags]);
 
-  const toggleSel = (kind: HabitMatcherKind, id: number) =>
-    setSelected(prev => {
-      const next = new Set(prev);
-      const k = key(kind, id);
-      if (next.has(k)) { next.delete(k); } else { next.add(k); }
-      return next;
-    });
+  // One flat keyword list over projects / tags / triggers — picked note-screen
+  // style (type → suggestions → chips) instead of scrolling every chip.
+  const options: Keyword[] = useMemo(
+    () => [
+      ...projects.map(p => ({kind: 'project' as const, id: p.id, name: p.name})),
+      ...tags.map(tg => ({kind: 'tag' as const, id: tg.id, name: tg.name})),
+      ...triggers.map(tr => ({kind: 'trigger' as const, id: tr.id, name: tr.name})),
+    ],
+    [projects, tags, triggers],
+  );
+  const chosen = options.filter(o => selected.has(key(o.kind, o.id)));
+  const q = keyword.trim().toLowerCase();
+  const suggestions = q
+    ? options.filter(o => o.name.toLowerCase().startsWith(q) && !selected.has(key(o.kind, o.id))).slice(0, 8)
+    : [];
 
-  const addTrigger = async () => {
-    const n = newTrigger.trim();
-    if (!n) { return; }
-    const tr = await getOrCreateTrigger(n);
-    setTriggers(prev => (prev.some(x => x.id === tr.id) ? prev : [...prev, tr].sort((a, b) => a.name.localeCompare(b.name))));
-    setSelected(prev => new Set(prev).add(key('trigger', tr.id)));
-    setNewTrigger('');
+  const select = (kind: HabitMatcherKind, id: number) => {
+    setSelected(prev => new Set(prev).add(key(kind, id)));
+    setKeyword('');
+  };
+  const unselect = (k: string) =>
+    setSelected(prev => { const next = new Set(prev); next.delete(k); return next; });
+
+  // Enter/Add: an exact existing keyword is selected; anything else becomes a
+  // tag (not a trigger — a trigger can't be put on a note, so it would never match).
+  const addKeyword = async () => {
+    if (!q) { return; }
+    const exact = options.find(o => o.name.toLowerCase() === q && !selected.has(key(o.kind, o.id)));
+    if (exact) { select(exact.kind, exact.id); return; }
+    const tag = await getOrCreateTag(keyword.trim());
+    select('tag', tag.id);
   };
   const existing = mode === 'category'
     ? categories.find(c => c.id === categoryId)
@@ -132,6 +157,7 @@ export default function HabitEditModal({route, navigation}: RootStackScreenProps
   const [title, setTitle] = useState(existing?.title ?? '');
   const [description, setDescription] = useState(existing?.description ?? '');
   const [icon, setIcon] = useState(existing?.icon ?? (mode === 'category' ? 'star-outline' : 'circle-outline'));
+  const [color, setColor] = useState<string | null>(existingHabit?.color ?? null);
   const [streak, setStreak] = useState(existingCat?.goal_streak_days?.toString() ?? '');
   const [goalKind, setGoalKind] = useState<HabitGoalKind | null>(existingHabit?.goal_kind ?? null);
   const [goalValue, setGoalValue] = useState(existingHabit?.goal_value?.toString() ?? '');
@@ -148,7 +174,7 @@ export default function HabitEditModal({route, navigation}: RootStackScreenProps
       const fields = {...base, goal_streak_days: n > 0 ? n : null};
       if (existingCat) { await updateCategory(existingCat.id, fields); } else { await createCategory(fields); }
     } else {
-      const fields = {...base, goal_kind: goalKind, goal_value: goalKind ? parsedGoal : null};
+      const fields = {...base, color, goal_kind: goalKind, goal_value: goalKind ? parsedGoal : null};
       const id = existingHabit
         ? (await updateHabit(existingHabit.id, fields), existingHabit.id)
         : (await createHabit({...fields, category_id: categoryId!})).id;
@@ -209,6 +235,22 @@ export default function HabitEditModal({route, navigation}: RootStackScreenProps
         </View>
       </View>
 
+      {mode === 'habit' && (
+        <View>
+          <Text style={styles.label}>{t('habits.color')}</Text>
+          <View style={styles.iconGrid}>
+            {HABIT_COLORS.map(hex => (
+              <TouchableOpacity
+                key={hex}
+                accessibilityLabel={hex}
+                style={[styles.swatch, {backgroundColor: hex}, color === hex && styles.swatchActive]}
+                onPress={() => setColor(color === hex ? null : hex)}
+              />
+            ))}
+          </View>
+        </View>
+      )}
+
       {mode === 'category' ? (
         <View>
           <Text style={styles.label}>{t('habits.streakGoal')}</Text>
@@ -264,55 +306,46 @@ export default function HabitEditModal({route, navigation}: RootStackScreenProps
         <View>
           <Text style={styles.label}>{t('habits.matchers')}</Text>
           <Text style={styles.hint}>{t('habits.matchHint')}</Text>
-          <Text style={styles.subLabel}>{t('common.projects')}</Text>
-          <View style={styles.chipsRow}>
-            {projects.map(p => {
-              const on = selected.has(key('project', p.id));
-              return (
-                <TouchableOpacity key={p.id} style={[styles.chip, on && styles.chipActive]} onPress={() => toggleSel('project', p.id)}>
-                  <Text style={[styles.chipText, on && styles.chipTextActive]}>{p.name}</Text>
-                </TouchableOpacity>
-              );
-            })}
-            {projects.length === 0 && <Text style={styles.hint}>{t('common.none')}</Text>}
-          </View>
-          <Text style={styles.subLabel}>{t('common.tags')}</Text>
-          <View style={styles.chipsRow}>
-            {tags.map(tg => {
-              const on = selected.has(key('tag', tg.id));
-              return (
-                <TouchableOpacity key={tg.id} style={[styles.chip, on && styles.chipActive]} onPress={() => toggleSel('tag', tg.id)}>
-                  <Text style={[styles.chipText, on && styles.chipTextActive]}>#{tg.name}</Text>
-                </TouchableOpacity>
-              );
-            })}
-            {tags.length === 0 && <Text style={styles.hint}>{t('common.none')}</Text>}
-          </View>
-          <Text style={styles.subLabel}>{t('habits.triggers')}</Text>
-          <View style={styles.chipsRow}>
-            {triggers.map(tr => {
-              const on = selected.has(key('trigger', tr.id));
-              return (
-                <TouchableOpacity key={tr.id} style={[styles.chip, on && styles.chipActive]} onPress={() => toggleSel('trigger', tr.id)}>
-                  <Text style={[styles.chipText, on && styles.chipTextActive]}>{tr.name}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-          <View style={styles.triggerRow}>
+          <View style={styles.keywordRow}>
             <TextInput
               style={[styles.input, styles.flex1]}
-              value={newTrigger}
-              onChangeText={setNewTrigger}
-              placeholder={t('habits.newTrigger')}
+              value={keyword}
+              onChangeText={setKeyword}
+              placeholder={t('habits.keywordPlaceholder')}
               placeholderTextColor={colors.textMuted}
               autoCapitalize="none"
+              autoCorrect={false}
               maxLength={40}
-              onSubmitEditing={addTrigger}
+              onSubmitEditing={addKeyword}
+              blurOnSubmit={false}
               returnKeyType="done"
             />
-            <Button label={t('common.add')} variant="secondary" onPress={addTrigger} disabled={!newTrigger.trim()} />
+            {q.length > 0 && <Button label={t('common.add')} variant="secondary" onPress={addKeyword} />}
           </View>
+          {suggestions.length > 0 && (
+            <View style={styles.suggestions}>
+              {suggestions.map(o => (
+                <TouchableOpacity key={key(o.kind, o.id)} style={styles.suggestion} onPress={() => select(o.kind, o.id)}>
+                  <Icon name={KIND_ICON[o.kind]} size={14} color={colors.textMuted} />
+                  <Text style={styles.chipText}>{o.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+          {chosen.length > 0 && (
+            <View style={[styles.chipsRow, {marginTop: spacing.md}]}>
+              {chosen.map(o => (
+                <TouchableOpacity
+                  key={key(o.kind, o.id)}
+                  style={[styles.suggestion, styles.chipActive]}
+                  onPress={() => unselect(key(o.kind, o.id))}>
+                  <Icon name={KIND_ICON[o.kind]} size={14} color={colors.primary} />
+                  <Text style={styles.chipTextActive}>{o.name}</Text>
+                  <Icon name="close" size={14} color={colors.primary} />
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </View>
       )}
 

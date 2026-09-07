@@ -26,6 +26,9 @@
     <string name="widget_pause_1h">1 h</string>
     <string name="widget_pause_4h">4 h</string>
     <string name="widget_pause_inf">∞</string>
+    <!-- Habit widget (2026-09-07) -->
+    <string name="widget_habits_description">Tick today\'s habits</string>
+    <string name="widget_habits_empty">Pick habits in Kelomit › Settings › Widgets</string>
     <string name="timer_notification_channel">Timer</string>
     <string name="timer_notification_paused">Paused · %1$s</string>
     <!-- Background-location foreground service -->

@@ -42,6 +42,7 @@ object WidgetCommon {
     for (id in mgr.getAppWidgetIds(ComponentName(context, SessionToggleWidgetProvider::class.java))) {
       mgr.updateAppWidget(id, buildToggle(context, id))
     }
+    HabitWidgetProvider.updateAll(context)
   }
 
   /** PendingIntent that fires [ACTION_TOGGLE] for a specific widget. */

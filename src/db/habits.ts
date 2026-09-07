@@ -23,6 +23,7 @@ function rowToHabit(row: RawRow): Habit {
     title: row.title as string,
     description: (row.description as string | null) ?? null,
     icon: row.icon as string,
+    color: (row.color as string | null) ?? null,
     goal_kind: (row.goal_kind as Habit['goal_kind']) ?? null,
     goal_value: (row.goal_value as number | null) ?? null,
     archived: Boolean(row.archived),
@@ -35,7 +36,7 @@ export type CategoryFields = Partial<
   Pick<HabitCategory, 'title' | 'description' | 'icon' | 'goal_streak_days'>
 >;
 export type HabitFields = Partial<
-  Pick<Habit, 'category_id' | 'title' | 'description' | 'icon' | 'goal_kind' | 'goal_value'>
+  Pick<Habit, 'category_id' | 'title' | 'description' | 'icon' | 'color' | 'goal_kind' | 'goal_value'>
 >;
 
 /** Builds `SET a = ?, b = ?` from the defined keys of `fields`. */
@@ -117,13 +118,14 @@ export async function createHabit(
 ): Promise<Habit> {
   const db = getDB();
   const result = await db.execute(
-    `INSERT INTO habits (category_id, title, description, icon, goal_kind, goal_value)
-     VALUES (?, ?, ?, ?, ?, ?) RETURNING *;`,
+    `INSERT INTO habits (category_id, title, description, icon, color, goal_kind, goal_value)
+     VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING *;`,
     [
       fields.category_id,
       fields.title.trim(),
       fields.description ?? null,
       fields.icon ?? 'circle-outline',
+      fields.color ?? null,
       fields.goal_kind ?? null,
       fields.goal_value ?? null,
     ],

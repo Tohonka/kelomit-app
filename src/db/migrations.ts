@@ -501,4 +501,12 @@ export const migrations: Migration[] = [
       )`,
     ],
   },
+  {
+    version: 29,
+    up: [
+      // Habit widget (plan 2026-09-07): per-habit colour shown above the widget's
+      // check square (and on the in-app dots). NULL = theme primary.
+      'ALTER TABLE habits ADD COLUMN color TEXT',
+    ],
+  },
 ];

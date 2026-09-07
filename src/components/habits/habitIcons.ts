@@ -7,3 +7,9 @@ export const HABIT_ICONS: string[] = [
   'guitar-acoustic', 'brain', 'broom', 'leaf', 'flower', 'heart-outline', 'cash',
   'briefcase-outline', 'phone', 'fire', 'weather-sunny', 'paw', 'hammer', 'camera-outline',
 ];
+
+// Habit colours: the widget draws the icon + check square in this hex, and the
+// in-app dots follow. Chosen to read on both the light and dark widget cards.
+export const HABIT_COLORS: string[] = [
+  '#FB40AD', '#EBA941', '#1ACFDF', '#5EB749', '#FF6B3D', '#8B7CFF', '#F2D34C', '#E05A7A',
+];
