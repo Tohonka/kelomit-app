@@ -115,3 +115,13 @@ export function nextDayDates(from: Date = new Date()): string[] {
     return format(d, 'yyyy-MM-dd');
   });
 }
+
+/**
+ * A range whose end is at or before its start means "ends tomorrow"
+ * (23:00 → 02:00). Returns the end pushed +24h in that case, else unchanged.
+ */
+export function resolveRangeEnd(fromIso: string, toIso: string): string {
+  const from = new Date(fromIso).getTime();
+  const to = new Date(toIso).getTime();
+  return to <= from ? new Date(to + 24 * 3600 * 1000).toISOString() : toIso;
+}

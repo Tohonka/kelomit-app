@@ -32,7 +32,7 @@ import {scheduleTodoReminder, requestNotificationPermission} from '../services/n
 import {getEntry, addEntryMedia, deleteEntryMedia} from '../db/entries';
 import {getOrCreateDay, getDayByDate} from '../db/days';
 import {spanIntersectsDayLegs} from '../utils/hoursUtils';
-import {formatDate, todayDate, hhmmToIsoOn} from '../utils/dateUtils';
+import {formatDate, todayDate, hhmmToIsoOn, resolveRangeEnd} from '../utils/dateUtils';
 import {usualHoursForDate} from '../utils/usualHours';
 import {haptic, HAPTIC_SAVE} from '../utils/haptics';
 import type {RootStackScreenProps} from '../navigation/navigationTypes';
@@ -477,7 +477,7 @@ export default function AddEntryModal({navigation, route}: Props) {
       let finalTo: string | null = null;
       if (timeMode === 'range') {
         finalFrom = timeFrom;
-        finalTo = timeTo;
+        finalTo = timeFrom && timeTo ? resolveRangeEnd(timeFrom, timeTo) : timeTo;
       } else if (durationSec) {
         const now = new Date();
         finalFrom =
@@ -833,7 +833,10 @@ export default function AddEntryModal({navigation, route}: Props) {
           </View>
           <Text style={styles.rangeSep}>→</Text>
           <View style={styles.rangeBlock}>
-            <Text style={styles.rangeLabel}>{translate('common.to')}</Text>
+            <Text style={styles.rangeLabel}>
+              {translate('common.to')}
+              {timeFrom && timeTo && resolveRangeEnd(timeFrom, timeTo) !== timeTo ? ' +1' : ''}
+            </Text>
             <TimePicker value={timeTo} baseDate={entryDate} onChange={setTimeTo} />
           </View>
         </View>

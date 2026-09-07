@@ -63,3 +63,17 @@ describe('durationBetween', () => {
     ).toBe(45);
   });
 });
+
+describe('resolveRangeEnd', () => {
+  const {resolveRangeEnd} = require('../src/utils/dateUtils');
+  const from = new Date(2026, 8, 9, 23, 0).toISOString();
+  it('pushes an end at or before the start to the next day', () => {
+    const to = new Date(2026, 8, 9, 2, 0).toISOString();
+    expect(resolveRangeEnd(from, to)).toBe(new Date(2026, 8, 10, 2, 0).toISOString());
+    expect(resolveRangeEnd(from, from)).toBe(new Date(2026, 8, 10, 23, 0).toISOString());
+  });
+  it('leaves a normal range alone', () => {
+    const to = new Date(2026, 8, 9, 23, 30).toISOString();
+    expect(resolveRangeEnd(from, to)).toBe(to);
+  });
+});

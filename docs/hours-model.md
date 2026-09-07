@@ -96,9 +96,11 @@ deliberately when it matters.
 
 ## Edge: a duration note that crosses midnight
 
-A duration note started near midnight ends on the next calendar day, so its
-"to" sits past 24:00 — outside that day's legs, counted as a few minutes of
-after-hours work. Rare; set an explicit earlier start if it bites.
+A note that crosses midnight (a duration started late, or a range whose "to"
+is at or before "from" — the picker treats that as "ends tomorrow" and shows
+"+1") stays one row on the day it started. Its "to" sits past 24:00, outside
+that day's legs, and the whole span counts on the start day as after-hours
+work. Nothing is split or mirrored; the next day's list does not show it.
 
 ## Quick worked examples
 
