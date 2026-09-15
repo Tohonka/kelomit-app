@@ -1,0 +1,70 @@
+const mockExecute = jest.fn();
+
+jest.mock('../src/db/database', () => ({
+  getDB: () => ({execute: mockExecute}),
+}));
+
+import {migrations} from '../src/db/migrations';
+import {
+  createFoodEntry, updateFoodEntry, deleteFoodEntry, getFoodEntriesForDay, getFoodEntry,
+  getRecentFoodEntries,
+} from '../src/db/food';
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockExecute.mockResolvedValue({rows: [], rowsAffected: 1});
+});
+
+const lastCall = () => mockExecute.mock.calls[mockExecute.mock.calls.length - 1];
+
+const row = {
+  id: 7, day_id: 3, eaten_at: '2026-09-15T08:30:00.000Z', name: 'Ruisleipä', kcal: 180,
+  product_id: null, quantity: null, unit: null, note: null, file_path: null, thumbnail_path: null,
+  latitude: null, longitude: null, location_label: null, created_at: 'c', updated_at: 'u',
+};
+
+it('migration 30 creates food_products + food_entries and is the latest', () => {
+  const sql = migrations.find(m => m.version === 30)?.up.join('\n') ?? '';
+  expect(sql).toContain('CREATE TABLE IF NOT EXISTS food_products');
+  expect(sql).toContain('CREATE TABLE IF NOT EXISTS food_entries');
+  expect(sql).toContain('REFERENCES days(id) ON DELETE CASCADE');
+  expect(sql).toContain('REFERENCES food_products(id) ON DELETE SET NULL');
+  expect(sql).toContain("CHECK(source IN ('user','off','fineli'))");
+  expect(sql).toContain("CHECK(unit IN ('g','ml','serving','piece'))");
+  expect(sql).toContain('idx_food_entries_day');
+  expect(migrations[migrations.length - 1].version).toBe(30);
+});
+
+it('creates with defaults and maps the row', async () => {
+  mockExecute.mockResolvedValueOnce({rows: [row]});
+  const e = await createFoodEntry({day_id: 3, eaten_at: row.eaten_at, name: ' Ruisleipä ', kcal: 180});
+  expect(lastCall()[0]).toContain('INSERT INTO food_entries');
+  expect(lastCall()[1]).toEqual([3, row.eaten_at, 'Ruisleipä', 180, null, null, null, null, null, null, null, null, null]);
+  expect(e).toMatchObject({id: 7, name: 'Ruisleipä', kcal: 180, product_id: null});
+});
+
+it('updates only given fields and bumps updated_at; empty patch is a no-op', async () => {
+  await updateFoodEntry(7, {name: 'X', kcal: null});
+  expect(lastCall()[0]).toContain("SET name = ?, kcal = ?, updated_at = datetime('now') WHERE id = ?");
+  expect(lastCall()[1]).toEqual(['X', null, 7]);
+  mockExecute.mockClear();
+  await updateFoodEntry(7, {});
+  expect(mockExecute).not.toHaveBeenCalled();
+});
+
+it('reads a day ordered by eaten_at, a single entry, and recents since a timestamp', async () => {
+  await getFoodEntriesForDay(3);
+  expect(lastCall()[0]).toContain('WHERE day_id = ? ORDER BY eaten_at ASC');
+  expect(lastCall()[1]).toEqual([3]);
+  mockExecute.mockResolvedValueOnce({rows: []});
+  expect(await getFoodEntry(99)).toBeNull();
+  await getRecentFoodEntries('2026-07-17T00:00:00.000Z');
+  expect(lastCall()[0]).toContain('WHERE eaten_at >= ? ORDER BY eaten_at DESC');
+  expect(lastCall()[1]).toEqual(['2026-07-17T00:00:00.000Z']);
+});
+
+it('deletes by id', async () => {
+  await deleteFoodEntry(7);
+  expect(lastCall()[0]).toContain('DELETE FROM food_entries WHERE id = ?');
+  expect(lastCall()[1]).toEqual([7]);
+});

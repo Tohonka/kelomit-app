@@ -509,4 +509,52 @@ export const migrations: Migration[] = [
       'ALTER TABLE habits ADD COLUMN color TEXT',
     ],
   },
+  {
+    version: 30,
+    up: [
+      // Food log (plan 2026-09-14 F1). Own tables, not a 5th entry_type: entries is
+      // work-coupled (immutable entry_type CHECK, activity_type default, tally, hours math).
+      // food_products is created now so the FK exists; F1 writes no product rows —
+      // barcode (F2) and Fineli (F3) do. Provenance column keeps OFF rows separable (ODbL).
+      `CREATE TABLE IF NOT EXISTS food_products (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        barcode TEXT UNIQUE,
+        name TEXT NOT NULL,
+        brand TEXT,
+        kcal_per_100 REAL,
+        kcal_per_serving REAL,
+        protein_per_100 REAL,
+        carbs_per_100 REAL,
+        fat_per_100 REAL,
+        serving_g REAL,
+        serving_label TEXT,
+        source TEXT NOT NULL CHECK(source IN ('user','off','fineli')),
+        source_ref TEXT,
+        image_url TEXT,
+        archived INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )`,
+      `CREATE TABLE IF NOT EXISTS food_entries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        day_id INTEGER NOT NULL REFERENCES days(id) ON DELETE CASCADE,
+        eaten_at TEXT NOT NULL,
+        name TEXT NOT NULL,
+        kcal INTEGER,
+        product_id INTEGER REFERENCES food_products(id) ON DELETE SET NULL,
+        quantity REAL,
+        unit TEXT CHECK(unit IN ('g','ml','serving','piece')),
+        note TEXT,
+        file_path TEXT,
+        thumbnail_path TEXT,
+        latitude REAL,
+        longitude REAL,
+        location_label TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )`,
+      'CREATE INDEX IF NOT EXISTS idx_food_entries_day ON food_entries(day_id)',
+      'CREATE INDEX IF NOT EXISTS idx_food_entries_eaten ON food_entries(eaten_at)',
+    ],
+  },
 ];
