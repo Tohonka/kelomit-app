@@ -107,7 +107,12 @@ export default function QuickAddButton({target}: {target?: {date: string; dayId:
       setResolving(false);
     }
   }, [navigation, target, loadToday, resolving]);
-  const actions = useMemo(() => buildQuickAddActions(go), [go]);
+  // Food needs no day resolution: the editor resolves its own day from eaten_at.
+  const goFood = React.useCallback(() => {
+    setOpen(false);
+    navigation.navigate('FoodEntryModal', {date: target?.date});
+  }, [navigation, target]);
+  const actions = useMemo(() => buildQuickAddActions(go, goFood), [go, goFood]);
 
   return (
     <>
