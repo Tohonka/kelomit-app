@@ -1,7 +1,16 @@
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import type {BottomTabScreenProps} from '@react-navigation/bottom-tabs';
 import type {CompositeScreenProps, NavigatorScreenParams} from '@react-navigation/native';
-import type {EntryType} from '../types';
+import type {EntryType, FoodUnit} from '../types';
+
+/** What "duplicate & tweak" / a recents chip carries into the food editor. */
+export interface FoodPrefill {
+  name: string;
+  kcal: number | null;
+  product_id: number | null;
+  quantity: number | null;
+  unit: FoodUnit | null;
+}
 
 export type RootStackParamList = {
   MainTabs: NavigatorScreenParams<TabParamList> | undefined;
@@ -19,6 +28,9 @@ export type RootStackParamList = {
     parentId?: number;
   };
   QuickAddModal: {date?: string; dayId: number; entryType: EntryType; autoCapture?: boolean};
+  /** Food log editor: `entryId` edits, `prefill` seeds a new entry, `date`
+   *  picks the day for a new entry (default today). */
+  FoodEntryModal: {date?: string; entryId?: number; prefill?: FoodPrefill} | undefined;
   ProjectsScreen: undefined;
   TagsScreen: undefined;
   TagsProjectsSettings: undefined;
@@ -45,6 +57,7 @@ export type TabParamList = {
   Data: undefined;
   Gallery: undefined;
   Habits: undefined;
+  Food: undefined;
   Calendar: undefined;
   Settings: undefined;
 };
