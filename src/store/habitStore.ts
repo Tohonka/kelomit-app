@@ -4,7 +4,9 @@ import {getTriggerIdsForEntries} from '../db/triggers';
 import {getDaysInRange} from '../db/days';
 import {getEntriesForDays} from '../db/entries';
 import {monthKeyOf, monthRange} from '../utils/habitMonth';
-import {categoryStreak, habitDayProgress, type HabitDayProgress} from '../utils/habitMatch';
+import {categoryStreak, habitDayProgress, type DayContext, type HabitDayProgress} from '../utils/habitMatch';
+import {getHealthDailyRange} from '../db/health';
+import {getFoodKcalByDay, type FoodDayTotals} from '../db/food';
 import {shiftDate, todayDate} from '../utils/dateUtils';
 import {syncHabitWidgets} from '../services/habitWidgets';
 import type {Entry, Habit, HabitCategory, HabitMatcher} from '../types';
@@ -79,18 +81,28 @@ async function deriveAuto(
   const auto = new Map<number, Map<string, HabitDayAuto>>();
   const active = habits.filter(h => (matchers.get(h.id)?.length ?? 0) > 0);
   if (active.length === 0) { return auto; }
-  const days = await getDaysInRange(from, to);
+  const [days, healthRows, foodByDay] = await Promise.all([
+    getDaysInRange(from, to),
+    getHealthDailyRange(from, to).catch(() => []),
+    getFoodKcalByDay(from, to).catch((): Record<string, FoodDayTotals> => ({})),
+  ]);
   const entries = await getEntriesForDays(days.map(d => d.id));
   const triggerIds = await getTriggerIdsForEntries(entries.map(e => e.id));
   const byDay = new Map<number, Entry[]>();
   for (const e of entries) {
     byDay.set(e.day_id, [...(byDay.get(e.day_id) ?? []), e]);
   }
+  const healthByDate = new Map(healthRows.map(r => [r.date, r]));
+  // Health data exists on dates without a Kelomit day row — evaluate those too.
+  const dayByDate = new Map(days.map(d => [d.date, d]));
+  const dates = new Set<string>([...dayByDate.keys(), ...healthByDate.keys(), ...Object.keys(foodByDay)]);
   for (const h of active) {
     const inner = new Map<string, HabitDayAuto>();
-    for (const day of days) {
-      const p = habitDayProgress(h, matchers.get(h.id)!, byDay.get(day.id) ?? [], triggerIds);
-      if (p.count > 0) { inner.set(day.date, p); }
+    for (const date of dates) {
+      const day = dayByDate.get(date);
+      const ctx: DayContext = {health: healthByDate.get(date) ?? null, food: foodByDay[date] ?? null};
+      const p = habitDayProgress(h, matchers.get(h.id)!, day ? byDay.get(day.id) ?? [] : [], triggerIds, ctx);
+      if (p.count > 0) { inner.set(date, p); }
     }
     auto.set(h.id, inner);
   }

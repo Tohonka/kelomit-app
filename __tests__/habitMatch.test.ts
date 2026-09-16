@@ -14,7 +14,7 @@ const habit = (o: Partial<Habit>): Habit => ({
   id: 1, category_id: 1, title: 'h', description: null, icon: 'x', color: null, goal_kind: null, goal_value: null,
   archived: false, created_at: '', updated_at: '', ...o,
 });
-const M = (kind: HabitMatcher['kind'], ref_id: number): HabitMatcher => ({habit_id: 1, kind, ref_id});
+const M = (kind: HabitMatcher['kind'], ref_id: number, threshold: number | null = null): HabitMatcher => ({habit_id: 1, kind, ref_id, threshold});
 const noTriggers = new Map<number, number[]>();
 
 describe('entryMatchesHabit', () => {
@@ -75,5 +75,33 @@ describe('categoryStreak', () => {
   });
   it('empty map ⇒ 0', () => {
     expect(categoryStreak(new Map(), '2026-09-02')).toBe(0);
+  });
+});
+
+describe('day-level (life) matchers', () => {
+  const none: Entry[] = [];
+  it('steps / sleep / food entries reach a threshold; food kcal stays under one', () => {
+    expect(habitAutoDone(habit({}), [M('steps', 0, 8000)], none, noTriggers, {health: {steps: 8432, sleep_minutes: null}})).toBe(true);
+    expect(habitAutoDone(habit({}), [M('steps', 0, 8000)], none, noTriggers, {health: {steps: 7999, sleep_minutes: null}})).toBe(false);
+    expect(habitAutoDone(habit({}), [M('steps', 0, 8000)], none, noTriggers, {})).toBe(false);
+    expect(habitAutoDone(habit({}), [M('sleep_minutes', 0, 420)], none, noTriggers, {health: {steps: null, sleep_minutes: 450}})).toBe(true);
+    expect(habitAutoDone(habit({}), [M('food_entries', 0, null)], none, noTriggers, {food: {kcal: 0, entries: 1}})).toBe(true);
+    expect(habitAutoDone(habit({}), [M('food_entries', 0, 3)], none, noTriggers, {food: {kcal: 900, entries: 2}})).toBe(false);
+    expect(habitAutoDone(habit({}), [M('food_kcal', 0, 2200)], none, noTriggers, {food: {kcal: 1900, entries: 3}})).toBe(true);
+    expect(habitAutoDone(habit({}), [M('food_kcal', 0, 2200)], none, noTriggers, {food: {kcal: 2500, entries: 3}})).toBe(false);
+    // A day with nothing logged never satisfies "kcal ≤".
+    expect(habitAutoDone(habit({}), [M('food_kcal', 0, 2200)], none, noTriggers, {food: {kcal: 0, entries: 0}})).toBe(false);
+    expect(habitAutoDone(habit({}), [M('food_kcal', 0, null)], none, noTriggers, {food: {kcal: 100, entries: 1}})).toBe(false);
+  });
+  it('ORs with entry matchers and counts as one hit for count goals', () => {
+    const ctx = {health: {steps: 9000, sleep_minutes: null}};
+    expect(habitAutoDone(habit({}), [M('project', 5), M('steps', 0, 8000)], none, noTriggers, ctx)).toBe(true);
+    expect(habitDayProgress(habit({goal_kind: 'count', goal_value: 2}), [M('project', 5), M('steps', 0, 8000)], [e({project_id: 5})], noTriggers, ctx).done).toBe(true);
+    expect(habitDayProgress(habit({goal_kind: 'count', goal_value: 2}), [M('steps', 0, 8000)], none, noTriggers, ctx).done).toBe(false);
+    // Minutes goals only add up note time.
+    expect(habitDayProgress(habit({goal_kind: 'minutes', goal_value: 30}), [M('steps', 0, 8000)], none, noTriggers, ctx).done).toBe(false);
+  });
+  it('day-level kinds never match a single entry', () => {
+    expect(entryMatchesHabit(e({project_id: 5}), [M('steps', 0, 1)], noTriggers)).toBe(false);
   });
 });

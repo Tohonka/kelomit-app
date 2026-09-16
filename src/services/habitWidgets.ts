@@ -3,6 +3,8 @@ import {getTriggerIdsForEntries} from '../db/triggers';
 import {getDaysInRange} from '../db/days';
 import {getEntriesForDays} from '../db/entries';
 import {habitDayProgress} from '../utils/habitMatch';
+import {getHealthDaily} from '../db/health';
+import {getFoodKcalByDay, type FoodDayTotals} from '../db/food';
 import {todayDate} from '../utils/dateUtils';
 import {
   isWidgetBridgeAvailable,
@@ -60,10 +62,15 @@ async function todayDone(habits: Habit[], today: string): Promise<Map<number, bo
     getDaysInRange(today, today),
   ]);
   const entries = days.length ? await getEntriesForDays([days[0].id]) : [];
-  const triggerIds = await getTriggerIdsForEntries(entries.map(e => e.id));
+  const [triggerIds, health, foodByDay] = await Promise.all([
+    getTriggerIdsForEntries(entries.map(e => e.id)),
+    getHealthDaily(today).catch(() => null),
+    getFoodKcalByDay(today, today).catch((): Record<string, FoodDayTotals> => ({})),
+  ]);
+  const ctx = {health, food: foodByDay[today] ?? null};
   const done = new Map<number, boolean>();
   for (const h of habits) {
-    const auto = habitDayProgress(h, matchers.get(h.id) ?? [], entries, triggerIds).done;
+    const auto = habitDayProgress(h, matchers.get(h.id) ?? [], entries, triggerIds, ctx).done;
     done.set(h.id, overrides.get(h.id)?.get(today) ?? auto);
   }
   return done;
