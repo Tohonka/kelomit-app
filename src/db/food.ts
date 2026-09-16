@@ -198,3 +198,29 @@ export async function upsertProduct(fields: ProductFields): Promise<FoodProduct>
   );
   return rowToProduct(result.rows![0] as RawRow);
 }
+
+/** Own products by name/brand, prefix matches first. */
+export async function searchProducts(query: string, limit = 5): Promise<FoodProduct[]> {
+  const q = query.trim();
+  if (!q) { return []; }
+  const db = getDB();
+  const result = await db.execute(
+    `SELECT * FROM food_products
+     WHERE archived = 0 AND (name LIKE ? OR brand LIKE ?)
+     ORDER BY CASE WHEN name LIKE ? THEN 0 ELSE 1 END, name ASC
+     LIMIT ?;`,
+    [`%${q}%`, `%${q}%`, `${q}%`, limit],
+  );
+  return (result.rows ?? []).map(r => rowToProduct(r as RawRow));
+}
+
+/** The product already created from an external source row (e.g. Fineli id). */
+export async function getProductBySourceRef(source: FoodSource, ref: string): Promise<FoodProduct | null> {
+  const db = getDB();
+  const result = await db.execute(
+    'SELECT * FROM food_products WHERE source = ? AND source_ref = ? AND archived = 0;',
+    [source, ref],
+  );
+  if (!result.rows || result.rows.length === 0) { return null; }
+  return rowToProduct(result.rows[0] as RawRow);
+}

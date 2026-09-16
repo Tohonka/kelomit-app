@@ -1,4 +1,4 @@
-import {rankRecents, scaleKcal, kcalFor, defaultPortion} from '../src/utils/foodMath';
+import {rankRecents, scaleKcal, kcalFor, defaultPortion, fineliToProduct} from '../src/utils/foodMath';
 import type {FoodEntry} from '../src/types';
 
 const at = (id: number, name: string, localHHMM: string, daysAgo = 0, kcal: number | null = 100): FoodEntry => {
@@ -62,5 +62,16 @@ describe('kcalFor / defaultPortion', () => {
     expect(defaultPortion(oltermanni)).toEqual({quantity: 1, unit: 'serving'});
     expect(defaultPortion(userFood)).toEqual({quantity: 1, unit: 'serving'});
     expect(defaultPortion({kcal_per_100: 50, kcal_per_serving: null, serving_g: null})).toEqual({quantity: 100, unit: 'g'});
+  });
+});
+
+describe('fineliToProduct', () => {
+  const food = {id: 1009, name_fi: 'Ruisleipä', name_en: 'Rye bread', name_sv: null, kcal_per_100: 239.5, protein_per_100: 7.3, carbs_per_100: 43.7, fat_per_100: 1.4};
+  const labels = {KPL_M: ['keskikokoinen (kpl)', 'medium-sized piece'] as [string, string]};
+
+  it('uses the first household unit as the serving and names in the UI language', () => {
+    const p = fineliToProduct(food, [{code: 'KPL_M', grams: 35}, {code: 'PORTM', grams: 35}], labels, 'en');
+    expect(p).toMatchObject({name: 'Rye bread', source: 'fineli', source_ref: '1009', kcal_per_100: 239.5, serving_g: 35, serving_label: 'medium-sized piece', kcal_per_serving: 84, barcode: null});
+    expect(fineliToProduct(food, [], labels, 'fi')).toMatchObject({name: 'Ruisleipä', serving_g: null, serving_label: null, kcal_per_serving: null});
   });
 });

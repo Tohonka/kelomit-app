@@ -581,4 +581,30 @@ export const migrations: Migration[] = [
       )`,
     ],
   },
+  {
+    version: 32,
+    up: [
+      // Bundled Fineli food composition data (THL, CC BY 4.0; plan 2026-09-14 F3).
+      // Reference data seeded from src/assets/fineli.json on first run and whenever
+      // the bundled release changes (settings.fineli_version) — not user state, so
+      // no created_at/updated_at. Units are household measures with a gram mass.
+      `CREATE TABLE IF NOT EXISTS fineli_foods (
+        id INTEGER PRIMARY KEY,
+        name_fi TEXT NOT NULL,
+        name_en TEXT,
+        name_sv TEXT,
+        kcal_per_100 REAL NOT NULL,
+        protein_per_100 REAL,
+        carbs_per_100 REAL,
+        fat_per_100 REAL
+      )`,
+      `CREATE TABLE IF NOT EXISTS fineli_units (
+        food_id INTEGER NOT NULL REFERENCES fineli_foods(id) ON DELETE CASCADE,
+        code TEXT NOT NULL,
+        grams REAL NOT NULL,
+        PRIMARY KEY (food_id, code)
+      )`,
+      'CREATE INDEX IF NOT EXISTS idx_fineli_foods_name_fi ON fineli_foods(name_fi)',
+    ],
+  },
 ];
