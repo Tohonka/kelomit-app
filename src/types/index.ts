@@ -103,11 +103,23 @@ export interface Habit {
   created_at: string;
   updated_at: string;
 }
-export type HabitMatcherKind = 'project' | 'tag' | 'trigger';
+/** Entry kinds match a day's notes; the day-level kinds (schema v33) match the
+ *  day's Health Connect totals or food log against `threshold`. */
+export type HabitMatcherKind =
+  | 'project'
+  | 'tag'
+  | 'trigger'
+  | 'steps'
+  | 'sleep_minutes'
+  | 'food_entries'
+  | 'food_kcal';
 export interface HabitMatcher {
   habit_id: number;
   kind: HabitMatcherKind;
+  /** Entry kinds: the project/tag/trigger id. Day-level kinds: 0. */
   ref_id: number;
+  /** Day-level kinds: the number to reach (≥), or for food_kcal to stay under (≤). */
+  threshold: number | null;
 }
 /** Tag-like metadata for future widget use — stored, no note-UI yet. */
 export interface Trigger {

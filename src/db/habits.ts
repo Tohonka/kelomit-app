@@ -161,7 +161,7 @@ export async function deleteHabit(id: number): Promise<void> {
 export async function getMatchers(habitId: number): Promise<HabitMatcher[]> {
   const db = getDB();
   const result = await db.execute(
-    'SELECT habit_id, kind, ref_id FROM habit_matchers WHERE habit_id = ?;',
+    'SELECT habit_id, kind, ref_id, threshold FROM habit_matchers WHERE habit_id = ?;',
     [habitId],
   );
   return (result.rows ?? []).map(r => {
@@ -170,6 +170,7 @@ export async function getMatchers(habitId: number): Promise<HabitMatcher[]> {
       habit_id: row.habit_id as number,
       kind: row.kind as HabitMatcher['kind'],
       ref_id: row.ref_id as number,
+      threshold: (row.threshold as number | null) ?? null,
     };
   });
 }
@@ -183,13 +184,18 @@ export async function getMatchersForHabits(
   const db = getDB();
   const placeholders = habitIds.map(() => '?').join(',');
   const result = await db.execute(
-    `SELECT habit_id, kind, ref_id FROM habit_matchers WHERE habit_id IN (${placeholders});`,
+    `SELECT habit_id, kind, ref_id, threshold FROM habit_matchers WHERE habit_id IN (${placeholders});`,
     habitIds,
   );
   for (const r of (result.rows ?? []) as RawRow[]) {
     const hid = r.habit_id as number;
     const list = map.get(hid) ?? [];
-    list.push({habit_id: hid, kind: r.kind as HabitMatcher['kind'], ref_id: r.ref_id as number});
+    list.push({
+      habit_id: hid,
+      kind: r.kind as HabitMatcher['kind'],
+      ref_id: r.ref_id as number,
+      threshold: (r.threshold as number | null) ?? null,
+    });
     map.set(hid, list);
   }
   return map;
@@ -204,8 +210,8 @@ export async function setMatchers(
   await db.execute('DELETE FROM habit_matchers WHERE habit_id = ?;', [habitId]);
   for (const m of matchers) {
     await db.execute(
-      'INSERT OR IGNORE INTO habit_matchers (habit_id, kind, ref_id) VALUES (?, ?, ?);',
-      [habitId, m.kind, m.ref_id],
+      'INSERT OR IGNORE INTO habit_matchers (habit_id, kind, ref_id, threshold) VALUES (?, ?, ?, ?);',
+      [habitId, m.kind, m.ref_id, m.threshold ?? null],
     );
   }
 }

@@ -28,7 +28,7 @@ it('migration 28 creates the five habit tables with cascades', () => {
   expect(sql).toContain("CHECK(goal_kind IN ('minutes','count'))");
   expect(sql).toContain("CHECK(kind IN ('project','tag','trigger'))");
   expect(migrations.find(m => m.version === 29)?.up.join('\n')).toContain('ALTER TABLE habits ADD COLUMN color');
-  expect(migrations[migrations.length - 1].version).toBe(32);
+  expect(migrations[migrations.length - 1].version).toBe(33);
 });
 
 describe('categories', () => {
@@ -81,21 +81,21 @@ describe('habits', () => {
 
 describe('matchers', () => {
   it('replaces wholesale', async () => {
-    await setMatchers(5, [{kind: 'tag', ref_id: 2}, {kind: 'project', ref_id: 9}]);
+    await setMatchers(5, [{kind: 'tag', ref_id: 2, threshold: null}, {kind: 'steps', ref_id: 0, threshold: 8000}]);
     const sqls = mockExecute.mock.calls.map(c => c[0] as string);
     expect(sqls[0]).toContain('DELETE FROM habit_matchers WHERE habit_id = ?');
     expect(sqls).toHaveLength(3);
-    expect(mockExecute.mock.calls[2][1]).toEqual([5, 'project', 9]);
+    expect(mockExecute.mock.calls[2][1]).toEqual([5, 'steps', 0, 8000]);
   });
 
   it('reads and groups', async () => {
     mockExecute.mockResolvedValueOnce({rows: [{habit_id: 5, kind: 'tag', ref_id: 2}]});
-    expect(await getMatchers(5)).toEqual([{habit_id: 5, kind: 'tag', ref_id: 2}]);
+    expect(await getMatchers(5)).toEqual([{habit_id: 5, kind: 'tag', ref_id: 2, threshold: null}]);
     mockExecute.mockResolvedValueOnce({rows: [
       {habit_id: 5, kind: 'tag', ref_id: 2}, {habit_id: 6, kind: 'trigger', ref_id: 1}, {habit_id: 5, kind: 'project', ref_id: 3}]});
     const m = await getMatchersForHabits([5, 6]);
     expect(m.get(5)).toHaveLength(2);
-    expect(m.get(6)).toEqual([{habit_id: 6, kind: 'trigger', ref_id: 1}]);
+    expect(m.get(6)).toEqual([{habit_id: 6, kind: 'trigger', ref_id: 1, threshold: null}]);
     expect(await getMatchersForHabits([])).toEqual(new Map());
   });
 });
@@ -134,4 +134,13 @@ describe('triggers', () => {
     expect(m.get(2)).toEqual([3]);
     expect((await getTriggerIdsForEntries([])).size).toBe(0);
   });
+});
+
+it('migration 33 rebuilds habit_matchers with the day-level kinds and a threshold', () => {
+  const sql = migrations.find(m => m.version === 33)?.up.join('\n') ?? '';
+  expect(sql).toContain("CHECK(kind IN ('project','tag','trigger','steps','sleep_minutes','food_entries','food_kcal'))");
+  expect(sql).toContain('ref_id INTEGER NOT NULL DEFAULT 0');
+  expect(sql).toContain('threshold REAL');
+  expect(sql).toContain('INSERT INTO habit_matchers_new (habit_id, kind, ref_id) SELECT habit_id, kind, ref_id FROM habit_matchers');
+  expect(sql).toContain('ALTER TABLE habit_matchers_new RENAME TO habit_matchers');
 });

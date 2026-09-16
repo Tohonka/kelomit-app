@@ -607,4 +607,23 @@ export const migrations: Migration[] = [
       'CREATE INDEX IF NOT EXISTS idx_fineli_foods_name_fi ON fineli_foods(name_fi)',
     ],
   },
+  {
+    version: 33,
+    up: [
+      // Habits ↔ life (plan 2026-09-14 H2): day-level matcher kinds with a
+      // threshold ("steps ≥ 8000", "sleep ≥ 420 min", "food entries ≥ 1",
+      // "food kcal ≤ 2200"). SQLite can't ALTER a CHECK, so the tiny table is
+      // rebuilt; ref_id defaults to 0 for the day-level kinds.
+      `CREATE TABLE habit_matchers_new (
+        habit_id INTEGER NOT NULL REFERENCES habits(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL CHECK(kind IN ('project','tag','trigger','steps','sleep_minutes','food_entries','food_kcal')),
+        ref_id INTEGER NOT NULL DEFAULT 0,
+        threshold REAL,
+        PRIMARY KEY (habit_id, kind, ref_id)
+      )`,
+      'INSERT INTO habit_matchers_new (habit_id, kind, ref_id) SELECT habit_id, kind, ref_id FROM habit_matchers',
+      'DROP TABLE habit_matchers',
+      'ALTER TABLE habit_matchers_new RENAME TO habit_matchers',
+    ],
+  },
 ];
