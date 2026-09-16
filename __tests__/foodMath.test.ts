@@ -1,4 +1,4 @@
-import {rankRecents, scaleKcal} from '../src/utils/foodMath';
+import {rankRecents, scaleKcal, kcalFor, defaultPortion} from '../src/utils/foodMath';
 import type {FoodEntry} from '../src/types';
 
 const at = (id: number, name: string, localHHMM: string, daysAgo = 0, kcal: number | null = 100): FoodEntry => {
@@ -40,5 +40,27 @@ describe('scaleKcal', () => {
   it('rounds and passes null through', () => {
     expect(scaleKcal(333, 0.5)).toBe(167);
     expect(scaleKcal(null, 2)).toBeNull();
+  });
+});
+
+describe('kcalFor / defaultPortion', () => {
+  const oltermanni = {kcal_per_100: 272, kcal_per_serving: 27.2, serving_g: 10};
+  const bread = {kcal_per_100: 240, kcal_per_serving: null, serving_g: 30};
+  const userFood = {kcal_per_100: null, kcal_per_serving: 350, serving_g: null};
+  const unknown = {kcal_per_100: null, kcal_per_serving: null, serving_g: null};
+
+  it('scales per 100 g and per serving, deriving a serving from grams when needed', () => {
+    expect(kcalFor(oltermanni, 30, 'g')).toBe(82);
+    expect(kcalFor(oltermanni, 2, 'serving')).toBe(54);
+    expect(kcalFor(bread, 2, 'serving')).toBe(144);
+    expect(kcalFor(userFood, 1, 'serving')).toBe(350);
+    expect(kcalFor(userFood, 100, 'g')).toBeNull();
+    expect(kcalFor(unknown, 1, 'serving')).toBeNull();
+  });
+
+  it('defaults to one serving when known, else 100 g', () => {
+    expect(defaultPortion(oltermanni)).toEqual({quantity: 1, unit: 'serving'});
+    expect(defaultPortion(userFood)).toEqual({quantity: 1, unit: 'serving'});
+    expect(defaultPortion({kcal_per_100: 50, kcal_per_serving: null, serving_g: null})).toEqual({quantity: 100, unit: 'g'});
   });
 });
