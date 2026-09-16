@@ -6,6 +6,7 @@ import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
 import com.facebook.react.defaults.DefaultReactActivityDelegate
+import dev.matinzd.healthconnect.permissions.HealthConnectPermissionDelegate
 
 class MainActivity : ReactActivity() {
 
@@ -17,6 +18,9 @@ class MainActivity : ReactActivity() {
       intent?.data = null
     }
     super.onCreate(savedInstanceState)
+    // Health Connect permission results come back through an activity
+    // contract; the library needs an activity to register it on.
+    HealthConnectPermissionDelegate.setPermissionDelegate(this)
   }
 
   /**

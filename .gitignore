@@ -60,3 +60,5 @@ plans_etc/work-hours-report-implementation-plan-2026-07-23.md
 # generated per-build by scripts/gen-version.js
 src/version.ts
 android/app/version.properties
+envCreds/.withings.env
+*.env

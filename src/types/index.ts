@@ -358,3 +358,24 @@ export interface FoodEntry {
   created_at: string;
   updated_at: string;
 }
+
+/** One day of Health Connect totals (schema v31). Every metric is optional —
+ *  a row exists as soon as any source reported anything for that date. */
+export interface HealthDaily {
+  /** Local YYYY-MM-DD. */
+  date: string;
+  steps: number | null;
+  distance_m: number | null;
+  sleep_minutes: number | null;
+  sleep_start: string | null;
+  sleep_end: string | null;
+  weight_kg: number | null;
+  height_cm: number | null;
+  active_kcal: number | null;
+  total_kcal: number | null;
+  resting_hr: number | null;
+  synced_at: string;
+  created_at: string;
+  updated_at: string;
+}
+export type HealthDailyInput = Omit<HealthDaily, 'created_at' | 'updated_at'>;
