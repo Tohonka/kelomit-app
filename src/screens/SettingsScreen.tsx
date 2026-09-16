@@ -97,6 +97,13 @@ export default function SettingsScreen({navigation}: Props) {
           <Text style={styles.rowTitle}>{t('common.version')}</Text>
           <Text style={styles.rowValue}>{APP_VERSION}</Text>
         </View>
+        {/* Licence attribution for the bundled/queried food databases. */}
+        <View style={styles.row}>
+          <View>
+            <Text style={styles.rowTitle}>{t('settings.foodData')}</Text>
+            <Text style={styles.rowSubtitle}>{t('settings.foodDataValue')}</Text>
+          </View>
+        </View>
       </ScrollView>
     </View>
   );

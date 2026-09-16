@@ -273,6 +273,8 @@ const fi: typeof en = {
     syncing: 'Synkronoidaan…',
     syncNeverRun: 'Ei synkronoitu',
     offNotice: 'Ruoan viivakoodihaut lähetetään Open Food Factsiin (vain viivakoodi). Tulokset tallennetaan tähän laitteeseen.',
+    foodData: 'Ruokatiedot',
+    foodDataValue: 'Fineli — Terveyden ja hyvinvoinnin laitos (THL), CC BY 4.0 · Open Food Facts, ODbL',
     syncLastAt: 'Viimeksi: {{when}}',
     syncNotConfigured: 'Aseta ensin palvelimen osoite ja tunniste',
     syncFailed: 'Synkronointi epäonnistui: {{error}}',
@@ -746,6 +748,8 @@ const fi: typeof en = {
     barcodeUnknown: 'Ei löytynyt Open Food Factsista – täytä tiedot kerran, ne muistetaan.',
     barcodeOffline: 'Ei yhteyttä – täytä tiedot kerran, ne muistetaan.',
     scanFailed: 'Viivakoodinlukija ei ole käytettävissä tällä laitteella.',
+    sourceFineli: 'Fineli',
+    sourceOwn: 'Oma',
   },
   smallTask: {
     duringWorkday: 'Työpäivän aikana',

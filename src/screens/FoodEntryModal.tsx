@@ -28,15 +28,20 @@ import {
   getFoodEntry,
   getProduct,
   getProductByBarcode,
+  getProductBySourceRef,
+  searchProducts,
   updateFoodEntry,
   upsertProduct,
 } from '../db/food';
+import {FINELI_UNIT_LABELS, getFineliUnits, searchFineli} from '../db/fineli';
 import {getOrCreateDay} from '../db/days';
 import {formatDate, todayDate, localDateOf} from '../utils/dateUtils';
-import {scaleKcal, kcalFor, defaultPortion} from '../utils/foodMath';
+import {scaleKcal, kcalFor, defaultPortion, fineliToProduct} from '../utils/foodMath';
 import {haptic, HAPTIC_SAVE} from '../utils/haptics';
 import type {RootStackScreenProps} from '../navigation/navigationTypes';
-import type {FoodProduct, FoodUnit} from '../types';
+import type {FineliFood, FoodProduct, FoodUnit} from '../types';
+
+type Suggestion = {kind: 'product'; product: FoodProduct} | {kind: 'fineli'; food: FineliFood};
 
 type Props = RootStackScreenProps<'FoodEntryModal'>;
 
@@ -160,13 +165,32 @@ const makeStyles = (c: Colors) =>
     productName: {fontSize: typography.sizes.base, fontWeight: typography.weights.semibold, color: c.textPrimary},
     productHint: {fontSize: typography.sizes.xs, color: c.textMuted, marginTop: 2},
     pending: {fontSize: typography.sizes.xs, color: c.textMuted},
+    suggestions: {
+      backgroundColor: c.bgCard,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: c.border,
+      overflow: 'hidden',
+    },
+    suggestion: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: c.border,
+    },
+    suggestionName: {flex: 1, fontSize: typography.sizes.base, color: c.textPrimary},
+    suggestionHint: {fontSize: typography.sizes.xs, color: c.textMuted},
     saveRow: {marginTop: spacing.xl},
   });
 
 export default function FoodEntryModal({navigation, route}: Props) {
   const {entryId, prefill, date: routeDate, scan} = route.params ?? {};
   const isEdit = entryId != null;
-  const {t} = useTranslation();
+  const {t, i18n} = useTranslation();
+  const lang: 'fi' | 'en' = i18n.resolvedLanguage === 'fi' ? 'fi' : 'en';
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
@@ -188,6 +212,10 @@ export default function FoodEntryModal({navigation, route}: Props) {
   const [quantity, setQuantity] = useState(prefill?.quantity != null ? String(prefill.quantity) : '');
   const [unit, setUnit] = useState<FoodUnit>(prefill?.unit ?? 'serving');
   const [scanning, setScanning] = useState(false);
+  // Name autocomplete (F3): own products first, then bundled Fineli foods.
+  // Only while the user is typing — never for a prefilled/loaded name.
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [suggestOpen, setSuggestOpen] = useState(false);
   const [loading, setLoading] = useState(isEdit);
   const [isSaving, setIsSaving] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -243,6 +271,8 @@ export default function FoodEntryModal({navigation, route}: Props) {
   const link = (p: FoodProduct) => {
     setProduct(p);
     setPendingBarcode(null);
+    setSuggestOpen(false);
+    setSuggestions([]);
     setName(prev => (prev.trim() ? prev : p.brand ? `${p.brand} ${p.name}` : p.name));
     const portion = defaultPortion(p);
     setQuantity(String(portion.quantity));
@@ -254,6 +284,53 @@ export default function FoodEntryModal({navigation, route}: Props) {
     setProduct(null);
     setPendingBarcode(null);
     setQuantity('');
+  };
+
+  useEffect(() => {
+    const q = name.trim();
+    if (!suggestOpen || product || q.length < 2) {
+      setSuggestions([]);
+      return;
+    }
+    let active = true;
+    const timer = setTimeout(async () => {
+      try {
+        const [own, fineli] = await Promise.all([searchProducts(q), searchFineli(q, lang)]);
+        if (!active) { return; }
+        const ownIds = new Set(own.map(p => p.source === 'fineli' ? p.source_ref : null));
+        setSuggestions([
+          ...own.map(p => ({kind: 'product', product: p}) as Suggestion),
+          ...fineli
+            .filter(f => !ownIds.has(String(f.id)))
+            .map(f => ({kind: 'fineli', food: f}) as Suggestion),
+        ]);
+      } catch {
+        if (active) { setSuggestions([]); }
+      }
+    }, 150);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [name, suggestOpen, product, lang]);
+
+  const pickSuggestion = async (s: Suggestion) => {
+    try {
+      let p: FoodProduct;
+      if (s.kind === 'product') {
+        p = s.product;
+      } else {
+        // One product row per Fineli food, created on first pick.
+        const existing = await getProductBySourceRef('fineli', String(s.food.id));
+        p = existing ?? (await upsertProduct(
+          fineliToProduct(s.food, await getFineliUnits(s.food.id), FINELI_UNIT_LABELS, lang),
+        ));
+      }
+      setName(p.brand ? `${p.brand} ${p.name}` : p.name);
+      link(p);
+    } catch (e) {
+      Alert.alert(t('common.error'), String(e));
+    }
   };
 
   // Local cache first (offline, instant), then Open Food Facts; a miss leaves the
@@ -449,12 +526,41 @@ export default function FoodEntryModal({navigation, route}: Props) {
       <TextInput
         style={styles.input}
         value={name}
-        onChangeText={setName}
+        onChangeText={v => {
+          setName(v);
+          setSuggestOpen(true);
+        }}
         placeholder={t('food.namePlaceholder')}
         placeholderTextColor={colors.textMuted}
         autoFocus={!isEdit && !prefill && !scan}
         maxLength={120}
       />
+      {suggestions.length > 0 && (
+        <View style={styles.suggestions}>
+          {suggestions.map(s => {
+            const key = s.kind === 'product' ? `p-${s.product.id}` : `f-${s.food.id}`;
+            const label =
+              s.kind === 'product'
+                ? s.product.brand ? `${s.product.brand} ${s.product.name}` : s.product.name
+                : lang === 'fi' ? s.food.name_fi : s.food.name_en ?? s.food.name_fi;
+            const kcal100 = s.kind === 'product' ? s.product.kcal_per_100 : s.food.kcal_per_100;
+            return (
+              <TouchableOpacity key={key} style={styles.suggestion} onPress={() => pickSuggestion(s)}>
+                <Icon
+                  name={s.kind === 'product' ? 'history' : 'database-outline'}
+                  size={18}
+                  color={colors.textMuted}
+                />
+                <Text style={styles.suggestionName} numberOfLines={1}>{label}</Text>
+                <Text style={styles.suggestionHint}>
+                  {s.kind === 'product' ? t('food.sourceOwn') : t('food.sourceFineli')}
+                  {kcal100 != null ? ` · ${t('food.perHundred', {kcal: Math.round(kcal100)})}` : ''}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
 
       {product && (
         <>

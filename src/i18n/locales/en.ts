@@ -271,6 +271,8 @@ const en = {
     syncing: 'Syncing…',
     syncNeverRun: 'Never synced',
     offNotice: 'Food barcode lookups are sent to Open Food Facts (the barcode only). Results are stored on this device.',
+    foodData: 'Food data',
+    foodDataValue: 'Fineli — Finnish Institute for Health and Welfare (THL), CC BY 4.0 · Open Food Facts, ODbL',
     syncLastAt: 'Last sync: {{when}}',
     syncNotConfigured: 'Set a server URL and token first',
     syncFailed: 'Last sync failed: {{error}}',
@@ -744,6 +746,8 @@ const en = {
     barcodeUnknown: 'Not in Open Food Facts — fill it in once and it’s remembered.',
     barcodeOffline: 'No connection — fill it in once and it’s remembered.',
     scanFailed: 'The barcode scanner is not available on this device.',
+    sourceFineli: 'Fineli',
+    sourceOwn: 'Own',
   },
   smallTask: {
     duringWorkday: 'During workday',

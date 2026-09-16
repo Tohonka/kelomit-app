@@ -1,6 +1,7 @@
 import React, {useEffect, useState, useRef} from 'react';
 import {View, Text, StyleSheet, ActivityIndicator, AppState, StatusBar, Linking} from 'react-native';
 import {maybeImportHealth} from './src/services/healthConnect';
+import {seedFineliIfNeeded} from './src/db/fineli';
 import './src/i18n';
 import {useTranslation} from 'react-i18next';
 import type {AppStateStatus} from 'react-native';
@@ -67,6 +68,9 @@ function AppContent() {
         });
         await load();
         setDbReady(true);
+        // Bundled Fineli food data: a few seconds once per release, off the
+        // critical path — search just returns nothing until it lands.
+        seedFineliIfNeeded().catch(seedError => diag('fineli.seed.fail', String(seedError)));
         ensureNotificationChannel().catch(() => {});
         // Log any sessions a home-screen widget finished while we were closed.
         useSessionStore.getState().reconcile().catch(() => {});
