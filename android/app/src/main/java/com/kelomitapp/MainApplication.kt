@@ -6,6 +6,7 @@ import com.facebook.react.ReactApplication
 import com.facebook.react.ReactHost
 import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
+import com.kelomitapp.food.FoodPackage
 import com.kelomitapp.location.BackgroundLocationPackage
 import com.kelomitapp.reporting.WorkReportPackage
 import com.kelomitapp.widget.WidgetSessionPackage
@@ -23,6 +24,8 @@ class MainApplication : Application(), ReactApplication {
           add(BackgroundLocationPackage())
           // Native work-report PDF renderer — not autolinked.
           add(WorkReportPackage())
+          // Google code-scanner bridge for the food log — not autolinked.
+          add(FoodPackage())
         },
     )
   }
