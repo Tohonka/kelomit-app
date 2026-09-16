@@ -13,6 +13,7 @@ import TagsProjectsSettings from '../screens/settings/TagsProjectsSettings';
 import SearchScreen from '../screens/SearchScreen';
 import InterfaceSettings from '../screens/settings/InterfaceSettings';
 import TrackingSettings from '../screens/settings/TrackingSettings';
+import HealthSettings from '../screens/settings/HealthSettings';
 import WorkDetailsSettings from '../screens/settings/WorkDetailsSettings';
 import ReportingSettings from '../screens/settings/ReportingSettings';
 import DataSettings from '../screens/settings/DataSettings';
@@ -131,6 +132,11 @@ export default function RootNavigator() {
         name="TrackingSettings"
         component={TrackingSettings}
         options={{title: t('navigation.tracking')}}
+      />
+      <Stack.Screen
+        name="HealthSettings"
+        component={HealthSettings}
+        options={{title: t('health.title')}}
       />
       <Stack.Screen
         name="WorkDetailsSettings"

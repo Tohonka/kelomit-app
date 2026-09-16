@@ -25,6 +25,19 @@
          alarm could fire and then silently fail to restart tracking while
          the app is closed. Falls back to an inexact alarm if not granted. -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- Health Connect daily totals (plan 2026-09-14 H1): read-only, opt-in
+         behind Settings → Health. HEALTH_DATA_HISTORY lets the first import
+         reach past the 30-day window, which otherwise resets on every
+         uninstall→reinstall sideload. -->
+    <uses-permission android:name="android.permission.health.READ_STEPS" />
+    <uses-permission android:name="android.permission.health.READ_DISTANCE" />
+    <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED" />
+    <uses-permission android:name="android.permission.health.READ_TOTAL_CALORIES_BURNED" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP" />
+    <uses-permission android:name="android.permission.health.READ_WEIGHT" />
+    <uses-permission android:name="android.permission.health.READ_HEIGHT" />
+    <uses-permission android:name="android.permission.health.READ_RESTING_HEART_RATE" />
+    <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_HISTORY" />
 
     <!-- Media-library / external-storage permissions intentionally trimmed
          (Iteration 3 Phase 2): gallery imports use the Android system photo
@@ -40,6 +53,11 @@
         tools:node="remove" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         tools:node="remove" />
+
+    <!-- Lets the Health Connect client resolve the provider package. -->
+    <queries>
+      <package android:name="com.google.android.apps.healthdata" />
+    </queries>
 
     <application
       android:name=".MainApplication"
@@ -79,7 +97,24 @@
             <category android:name="android.intent.category.BROWSABLE" />
             <data android:scheme="kelomit" />
         </intent-filter>
+        <!-- Health Connect permission rationale (through Android 13): tapping
+             the privacy-policy link in the permission sheet just opens the app. -->
+        <intent-filter>
+            <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+        </intent-filter>
       </activity>
+
+      <!-- Same rationale hook for Android 14+. -->
+      <activity-alias
+        android:name="ViewPermissionUsageActivity"
+        android:exported="true"
+        android:targetActivity=".MainActivity"
+        android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
+        <intent-filter>
+          <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+          <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+        </intent-filter>
+      </activity-alias>
 
       <!-- Home-screen session widgets (Iteration 3 Phase 9.2). ACTION_TOGGLE is
            our own start/stop broadcast; APPWIDGET_UPDATE is the system's. -->

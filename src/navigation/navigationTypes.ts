@@ -37,6 +37,7 @@ export type RootStackParamList = {
   SearchScreen: undefined;
   InterfaceSettings: undefined;
   TrackingSettings: undefined;
+  HealthSettings: undefined;
   WorkDetailsSettings: undefined;
   ReportingSettings: undefined;
   DataSettings: undefined;
