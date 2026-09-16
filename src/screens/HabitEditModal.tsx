@@ -12,6 +12,7 @@ import Button from '../components/ui/Button';
 import {useTheme, typography, spacing, radius} from '../theme';
 import type {Colors} from '../theme';
 import type {RootStackScreenProps} from '../navigation/navigationTypes';
+import {isLifeKind, type LifeMatcherKind} from '../utils/habitMatch';
 import type {HabitGoalKind, HabitMatcherKind, Trigger} from '../types';
 
 const makeStyles = (c: Colors) =>
@@ -91,7 +92,22 @@ const makeStyles = (c: Colors) =>
 const key = (kind: HabitMatcherKind, id: number) => `${kind}:${id}`;
 
 interface Keyword { kind: HabitMatcherKind; id: number; name: string }
-const KIND_ICON: Record<HabitMatcherKind, string> = {project: 'folder-outline', tag: 'pound', trigger: 'flash-outline'};
+const KIND_ICON: Record<HabitMatcherKind, string> = {
+  project: 'folder-outline',
+  tag: 'pound',
+  trigger: 'flash-outline',
+  steps: 'walk',
+  sleep_minutes: 'sleep',
+  food_entries: 'silverware-fork-knife',
+  food_kcal: 'fire',
+};
+// Day-level matchers (H2): label key + default threshold shown as placeholder.
+const LIFE_KINDS: {kind: LifeMatcherKind; labelKey: string; placeholder: string}[] = [
+  {kind: 'steps', labelKey: 'habits.lifeSteps', placeholder: '8000'},
+  {kind: 'sleep_minutes', labelKey: 'habits.lifeSleep', placeholder: '420'},
+  {kind: 'food_entries', labelKey: 'habits.lifeFoodEntries', placeholder: '1'},
+  {kind: 'food_kcal', labelKey: 'habits.lifeFoodKcal', placeholder: '2200'},
+];
 
 export default function HabitEditModal({route, navigation}: RootStackScreenProps<'HabitEditModal'>) {
   const {mode, categoryId, habitId} = route.params;
@@ -109,6 +125,14 @@ export default function HabitEditModal({route, navigation}: RootStackScreenProps
   const [selected, setSelected] = useState<Set<string>>(
     () => new Set((habitId ? allMatchers.get(habitId) ?? [] : []).map(m => key(m.kind, m.ref_id))),
   );
+  // Threshold text per selected day-level matcher, keyed like `selected`.
+  const [thresholds, setThresholds] = useState<Map<string, string>>(() => {
+    const m = new Map<string, string>();
+    for (const x of habitId ? allMatchers.get(habitId) ?? [] : []) {
+      if (isLifeKind(x.kind) && x.threshold != null) { m.set(key(x.kind, x.ref_id), String(x.threshold)); }
+    }
+    return m;
+  });
   useEffect(() => {
     if (mode !== 'habit') { return; }
     loadProjects();
@@ -123,8 +147,9 @@ export default function HabitEditModal({route, navigation}: RootStackScreenProps
       ...projects.map(p => ({kind: 'project' as const, id: p.id, name: p.name})),
       ...tags.map(tg => ({kind: 'tag' as const, id: tg.id, name: tg.name})),
       ...triggers.map(tr => ({kind: 'trigger' as const, id: tr.id, name: tr.name})),
+      ...LIFE_KINDS.map(l => ({kind: l.kind, id: 0, name: t(l.labelKey)})),
     ],
-    [projects, tags, triggers],
+    [projects, tags, triggers, t],
   );
   const chosen = options.filter(o => selected.has(key(o.kind, o.id)));
   const q = keyword.trim().toLowerCase();
@@ -182,7 +207,12 @@ export default function HabitEditModal({route, navigation}: RootStackScreenProps
         id,
         [...selected].map(k => {
           const [kind, ref] = k.split(':');
-          return {kind: kind as HabitMatcherKind, ref_id: Number(ref)};
+          const n = parseFloat((thresholds.get(k) ?? '').replace(',', '.'));
+          return {
+            kind: kind as HabitMatcherKind,
+            ref_id: Number(ref),
+            threshold: isLifeKind(kind as HabitMatcherKind) && Number.isFinite(n) && n > 0 ? n : null,
+          };
         }),
       );
     }
@@ -346,6 +376,36 @@ export default function HabitEditModal({route, navigation}: RootStackScreenProps
               ))}
             </View>
           )}
+
+          {/* Day-level matchers: always visible so they're discoverable, each
+              with its threshold once selected. */}
+          <Text style={[styles.label, {marginTop: spacing.lg}]}>{t('habits.lifeSection')}</Text>
+          <Text style={styles.hint}>{t('habits.lifeHint')}</Text>
+          {LIFE_KINDS.map(l => {
+            const k = key(l.kind, 0);
+            const on = selected.has(k);
+            return (
+              <View key={k} style={[styles.numRow, {marginTop: spacing.sm}]}>
+                <TouchableOpacity
+                  style={[styles.suggestion, on && styles.chipActive, styles.flex1]}
+                  onPress={() => (on ? unselect(k) : select(l.kind, 0))}>
+                  <Icon name={KIND_ICON[l.kind]} size={14} color={on ? colors.primary : colors.textMuted} />
+                  <Text style={on ? styles.chipTextActive : styles.chipText}>{t(l.labelKey)}</Text>
+                </TouchableOpacity>
+                {on && (
+                  <TextInput
+                    style={[styles.input, styles.numInput]}
+                    value={thresholds.get(k) ?? ''}
+                    onChangeText={v => setThresholds(prev => new Map(prev).set(k, v))}
+                    keyboardType="numeric"
+                    maxLength={6}
+                    placeholder={l.placeholder}
+                    placeholderTextColor={colors.textMuted}
+                  />
+                )}
+              </View>
+            );
+          })}
         </View>
       )}
 
