@@ -36,10 +36,16 @@ import {
 import {FINELI_UNIT_LABELS, getFineliUnits, searchFineli} from '../db/fineli';
 import {getOrCreateDay} from '../db/days';
 import {formatDate, todayDate, localDateOf} from '../utils/dateUtils';
-import {scaleKcal, kcalFor, defaultPortion, fineliToProduct} from '../utils/foodMath';
+import {
+  scaleKcal,
+  fineliToProduct,
+  portionOptions,
+  portionKcal,
+  type PortionOption,
+} from '../utils/foodMath';
 import {haptic, HAPTIC_SAVE} from '../utils/haptics';
 import type {RootStackScreenProps} from '../navigation/navigationTypes';
-import type {FineliFood, FoodProduct, FoodUnit} from '../types';
+import type {FineliFood, FineliUnit, FoodProduct, FoodUnit} from '../types';
 
 type Suggestion = {kind: 'product'; product: FoodProduct} | {kind: 'fineli'; food: FineliFood};
 
@@ -58,6 +64,10 @@ function combineDateTime(dateStr: string, hours: number, minutes: number): strin
 function parsePositive(s: string): number | null {
   const n = parseFloat(s.replace(',', '.'));
   return s.trim() && Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function fmtAmount(n: number): string {
+  return String(Math.round(n * 100) / 100);
 }
 
 interface Photo {
@@ -94,20 +104,34 @@ const makeStyles = (c: Colors) =>
     inputMultiline: {minHeight: 80},
     row: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
     flex1: {flex: 1},
-    chip: {
-      minHeight: 48,
+    amountInput: {width: 88, textAlign: 'center'},
+    unitScroll: {flex: 1},
+    unitRow: {gap: spacing.xs, alignItems: 'center', paddingRight: spacing.sm},
+    unitChip: {
+      minHeight: 40,
       paddingHorizontal: spacing.md,
       borderRadius: radius.pill,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.bgCard,
+      justifyContent: 'center',
+    },
+    unitChipActive: {backgroundColor: c.primary, borderColor: c.primary},
+    unitChipText: {fontSize: typography.sizes.sm, fontWeight: typography.weights.medium, color: c.textPrimary},
+    unitChipTextActive: {color: c.white},
+    factorBtn: {
+      minHeight: 40,
+      minWidth: 44,
+      paddingHorizontal: spacing.sm,
+      borderRadius: radius.md,
       borderWidth: 1,
       borderColor: c.border,
       backgroundColor: c.bgCard,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    chipActive: {backgroundColor: c.primary, borderColor: c.primary},
-    chipDisabled: {opacity: 0.4},
-    chipText: {fontSize: typography.sizes.md, fontWeight: typography.weights.semibold, color: c.textPrimary},
-    chipTextActive: {color: c.white},
+    factorBtnDisabled: {opacity: 0.4},
+    factorText: {fontSize: typography.sizes.sm, fontWeight: typography.weights.semibold, color: c.textPrimary},
     dateBtn: {
       flex: 1,
       minHeight: 48,
@@ -206,11 +230,13 @@ export default function FoodEntryModal({navigation, route}: Props) {
   const [note, setNote] = useState('');
   const [photo, setPhoto] = useState<Photo | null>(null);
   const [removedPhotos, setRemovedPhotos] = useState<string[]>([]);
-  // Product link (F2): a scanned / remembered product plus the amount eaten.
+  // Product link (F2/F3): a scanned / remembered / Fineli product plus the
+  // amount eaten in one of its units.
   const [product, setProduct] = useState<FoodProduct | null>(null);
+  const [fineliUnits, setFineliUnits] = useState<FineliUnit[]>([]);
   const [pendingBarcode, setPendingBarcode] = useState<string | null>(null);
-  const [quantity, setQuantity] = useState(prefill?.quantity != null ? String(prefill.quantity) : '');
-  const [unit, setUnit] = useState<FoodUnit>(prefill?.unit ?? 'serving');
+  const [amount, setAmount] = useState(prefill?.quantity != null ? fmtAmount(prefill.quantity) : '');
+  const [unitKey, setUnitKey] = useState<string>(prefill?.unit === 'serving' ? 'serving' : 'g');
   const [scanning, setScanning] = useState(false);
   // Name autocomplete (F3): own products first, then bundled Fineli foods.
   // Only while the user is typing — never for a prefilled/loaded name.
@@ -220,9 +246,24 @@ export default function FoodEntryModal({navigation, route}: Props) {
   const [isSaving, setIsSaving] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
+  const options: PortionOption[] = useMemo(
+    () => (product ? portionOptions(product, fineliUnits, FINELI_UNIT_LABELS, lang, t('food.unitServing')) : []),
+    [product, fineliUnits, lang, t],
+  );
+  const option = options.find(o => o.key === unitKey) ?? options[0];
+
   useEffect(() => {
     ensureMediaDir().catch(() => {});
   }, []);
+
+  // Fineli products carry their household units; load them once per link.
+  useEffect(() => {
+    if (product?.source === 'fineli' && product.source_ref) {
+      getFineliUnits(Number(product.source_ref)).then(setFineliUnits).catch(() => setFineliUnits([]));
+    } else {
+      setFineliUnits([]);
+    }
+  }, [product]);
 
   useEffect(() => {
     if (entryId == null) {
@@ -238,8 +279,8 @@ export default function FoodEntryModal({navigation, route}: Props) {
         setEatenAt(e.eaten_at);
         setNote(e.note ?? '');
         setPhoto(e.file_path ? {file_path: e.file_path, thumbnail_path: e.thumbnail_path} : null);
-        setQuantity(e.quantity != null ? String(e.quantity) : '');
-        setUnit(e.unit ?? 'serving');
+        setAmount(e.quantity != null ? fmtAmount(e.quantity) : '');
+        setUnitKey(e.unit === 'serving' ? 'serving' : 'g');
         if (e.product_id != null) { setProduct(await getProduct(e.product_id)); }
       }
       setLoading(false);
@@ -251,9 +292,9 @@ export default function FoodEntryModal({navigation, route}: Props) {
     return kcal.trim() && Number.isFinite(n) ? Math.round(n) : null;
   };
 
-  const recompute = (p: FoodProduct, qty: number | null, u: FoodUnit) => {
-    if (qty == null) { return; }
-    const k = kcalFor(p, qty, u);
+  const recompute = (p: FoodProduct, qty: number | null, opt: PortionOption | undefined) => {
+    if (qty == null || !opt) { return; }
+    const k = portionKcal(p.kcal_per_100, opt, qty);
     if (k != null) { setKcal(String(k)); }
   };
 
@@ -262,9 +303,9 @@ export default function FoodEntryModal({navigation, route}: Props) {
     const next = scaleKcal(parsedKcal(), factor);
     if (next == null) { return; }
     setKcal(String(next));
-    setQuantity(q => {
+    setAmount(q => {
       const n = parsePositive(q);
-      return n == null ? q : String(Math.round(n * factor * 100) / 100);
+      return n == null ? q : fmtAmount(n * factor);
     });
   };
 
@@ -274,16 +315,21 @@ export default function FoodEntryModal({navigation, route}: Props) {
     setSuggestOpen(false);
     setSuggestions([]);
     setName(prev => (prev.trim() ? prev : p.brand ? `${p.brand} ${p.name}` : p.name));
-    const portion = defaultPortion(p);
-    setQuantity(String(portion.quantity));
-    setUnit(portion.unit);
-    recompute(p, portion.quantity, portion.unit);
+    // Default amount: one serving when the product knows one, else 100 g.
+    const opts = portionOptions(p, [], FINELI_UNIT_LABELS, lang, t('food.unitServing'));
+    const serving = opts.find(o => o.key !== 'g');
+    const opt = serving ?? opts[0];
+    const qty = serving ? 1 : 100;
+    setUnitKey(opt.key);
+    setAmount(String(qty));
+    recompute(p, qty, opt);
   };
 
   const unlink = () => {
     setProduct(null);
     setPendingBarcode(null);
-    setQuantity('');
+    setAmount('');
+    setUnitKey('g');
   };
 
   useEffect(() => {
@@ -397,9 +443,18 @@ export default function FoodEntryModal({navigation, route}: Props) {
       const finalName = name.trim() || t('food.photoPlaceholder');
       const finalKcal = parsedKcal();
       let productId = product?.id ?? null;
-      let qty = productId ? parsePositive(quantity) : null;
-      let u: FoodUnit | null = productId ? unit : null;
-      if (!productId && pendingBarcode) {
+      let qty: number | null = null;
+      let u: FoodUnit | null = null;
+      if (productId) {
+        // Units with a mass are stored as grams so the row stays meaningful
+        // whatever unit list the product shows later; a mass-less serving is
+        // stored as servings.
+        const n = parsePositive(amount);
+        if (n != null && option) {
+          if (option.grams != null) { qty = n * option.grams; u = 'g'; }
+          else { qty = n; u = 'serving'; }
+        }
+      } else if (pendingBarcode) {
         // "Add once, use later": the manual entry becomes a remembered product.
         const created = await upsertProduct({
           barcode: pendingBarcode,
@@ -458,8 +513,23 @@ export default function FoodEntryModal({navigation, route}: Props) {
 
   const dateStr = localDateOf(eatenAt);
   const hasKcal = kcal.trim().length > 0;
-  const units: FoodUnit[] =
-    product && (product.kcal_per_serving != null || product.serving_g != null) ? ['serving', 'g'] : ['g'];
+
+  const factorButtons = (
+    <>
+      <TouchableOpacity
+        style={[styles.factorBtn, !hasKcal && styles.factorBtnDisabled]}
+        disabled={!hasKcal}
+        onPress={() => applyFactor(0.5)}>
+        <Text style={styles.factorText}>×½</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.factorBtn, !hasKcal && styles.factorBtnDisabled]}
+        disabled={!hasKcal}
+        onPress={() => applyFactor(2)}>
+        <Text style={styles.factorText}>×2</Text>
+      </TouchableOpacity>
+    </>
+  );
 
   return (
     <ScrollView
@@ -492,7 +562,7 @@ export default function FoodEntryModal({navigation, route}: Props) {
         <>
           <Text style={styles.sectionLabel}>{t('food.product')}</Text>
           <View style={styles.productChip}>
-            <Icon name="barcode" size={20} color={colors.primary} />
+            <Icon name={product.source === 'fineli' ? 'database-outline' : 'barcode'} size={20} color={colors.primary} />
             <View style={styles.flex1}>
               <Text style={styles.productName} numberOfLines={1}>
                 {product.brand ? `${product.brand} · ${product.name}` : product.name}
@@ -567,28 +637,36 @@ export default function FoodEntryModal({navigation, route}: Props) {
           <Text style={styles.sectionLabel}>{t('food.quantity')}</Text>
           <View style={styles.row}>
             <TextInput
-              style={[styles.input, styles.flex1]}
-              value={quantity}
+              style={[styles.input, styles.amountInput]}
+              value={amount}
               onChangeText={q => {
-                setQuantity(q);
-                recompute(product, parsePositive(q), unit);
+                setAmount(q);
+                recompute(product, parsePositive(q), option);
               }}
               keyboardType="numeric"
               maxLength={7}
             />
-            {units.map(u => (
-              <TouchableOpacity
-                key={u}
-                style={[styles.chip, unit === u && styles.chipActive]}
-                onPress={() => {
-                  setUnit(u);
-                  recompute(product, parsePositive(quantity), u);
-                }}>
-                <Text style={[styles.chipText, unit === u && styles.chipTextActive]}>
-                  {t(u === 'g' ? 'food.unitG' : 'food.unitServing')}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.unitScroll}
+              contentContainerStyle={styles.unitRow}
+              keyboardShouldPersistTaps="handled">
+              {options.map(o => {
+                const active = option?.key === o.key;
+                return (
+                  <TouchableOpacity
+                    key={o.key}
+                    style={[styles.unitChip, active && styles.unitChipActive]}
+                    onPress={() => {
+                      setUnitKey(o.key);
+                      recompute(product, parsePositive(amount), o);
+                    }}>
+                    <Text style={[styles.unitChipText, active && styles.unitChipTextActive]}>{o.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
           </View>
         </>
       )}
@@ -604,18 +682,7 @@ export default function FoodEntryModal({navigation, route}: Props) {
           keyboardType="numeric"
           maxLength={6}
         />
-        <TouchableOpacity
-          style={[styles.chip, !hasKcal && styles.chipDisabled]}
-          disabled={!hasKcal}
-          onPress={() => applyFactor(0.5)}>
-          <Text style={styles.chipText}>×½</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.chip, !hasKcal && styles.chipDisabled]}
-          disabled={!hasKcal}
-          onPress={() => applyFactor(2)}>
-          <Text style={styles.chipText}>×2</Text>
-        </TouchableOpacity>
+        {factorButtons}
       </View>
 
       <Text style={styles.sectionLabel}>{t('food.time')}</Text>

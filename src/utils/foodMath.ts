@@ -88,3 +88,52 @@ export function fineliToProduct(
     image_url: null,
   };
 }
+
+/** One selectable amount unit in the editor: grams per unit when the unit has
+ *  a mass (g, dl, slice…), else kcal per unit (a serving with unknown mass). */
+export interface PortionOption {
+  key: string;
+  label: string;
+  grams: number | null;
+  kcalPerUnit: number | null;
+}
+
+/** Amount options for a product: grams always; its serving; every Fineli
+ *  household unit when the product came from Fineli. */
+export function portionOptions(
+  p: Pick<FoodProduct, 'source' | 'kcal_per_100' | 'kcal_per_serving' | 'serving_g' | 'serving_label'>,
+  fineliUnits: FineliUnit[],
+  unitLabels: Record<string, [string, string]>,
+  lang: 'fi' | 'en',
+  servingFallbackLabel: string,
+): PortionOption[] {
+  const out: PortionOption[] = [{key: 'g', label: 'g', grams: 1, kcalPerUnit: null}];
+  if (p.source === 'fineli' && fineliUnits.length > 0) {
+    for (const u of fineliUnits) {
+      out.push({
+        key: u.code,
+        label: `${unitLabels[u.code]?.[lang === 'fi' ? 0 : 1] ?? u.code} · ${Math.round(u.grams)} g`,
+        grams: u.grams,
+        kcalPerUnit: null,
+      });
+    }
+  } else if (p.serving_g != null || p.kcal_per_serving != null) {
+    out.push({
+      key: 'serving',
+      label: p.serving_label ?? servingFallbackLabel,
+      grams: p.serving_g,
+      kcalPerUnit: p.kcal_per_serving,
+    });
+  }
+  return out;
+}
+
+/** kcal for `qty` of `opt`: by mass when both mass and kcal/100 are known, else
+ *  by the unit's own kcal. Null when the product can't say. */
+export function portionKcal(kcalPer100: number | null, opt: PortionOption, qty: number): number | null {
+  if (opt.grams != null && kcalPer100 != null) {
+    return Math.round((kcalPer100 * opt.grams * qty) / 100);
+  }
+  if (opt.kcalPerUnit != null) { return Math.round(opt.kcalPerUnit * qty); }
+  return null;
+}

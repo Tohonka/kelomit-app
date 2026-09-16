@@ -1,4 +1,4 @@
-import {rankRecents, scaleKcal, kcalFor, defaultPortion, fineliToProduct} from '../src/utils/foodMath';
+import {rankRecents, scaleKcal, kcalFor, defaultPortion, fineliToProduct, portionOptions, portionKcal} from '../src/utils/foodMath';
 import type {FoodEntry} from '../src/types';
 
 const at = (id: number, name: string, localHHMM: string, daysAgo = 0, kcal: number | null = 100): FoodEntry => {
@@ -73,5 +73,29 @@ describe('fineliToProduct', () => {
     const p = fineliToProduct(food, [{code: 'KPL_M', grams: 35}, {code: 'PORTM', grams: 35}], labels, 'en');
     expect(p).toMatchObject({name: 'Rye bread', source: 'fineli', source_ref: '1009', kcal_per_100: 239.5, serving_g: 35, serving_label: 'medium-sized piece', kcal_per_serving: 84, barcode: null});
     expect(fineliToProduct(food, [], labels, 'fi')).toMatchObject({name: 'Ruisleipä', serving_g: null, serving_label: null, kcal_per_serving: null});
+  });
+});
+
+describe('portionOptions / portionKcal', () => {
+  const labels = {DL: ['desilitra', 'decilitre'] as [string, string], KPL_M: ['keskikokoinen (kpl)', 'medium-sized piece'] as [string, string]};
+  const candy = {source: 'off' as const, kcal_per_100: 400, kcal_per_serving: null, serving_g: null, serving_label: null};
+  const cheese = {source: 'off' as const, kcal_per_100: 272, kcal_per_serving: 27.2, serving_g: 10, serving_label: '10 g'};
+  const userFood = {source: 'user' as const, kcal_per_100: null, kcal_per_serving: 350, serving_g: null, serving_label: null};
+  const fineli = {source: 'fineli' as const, kcal_per_100: 239.5, kcal_per_serving: 84, serving_g: 35, serving_label: 'keskikokoinen (kpl)'};
+
+  it('always offers grams; adds the serving or the Fineli units', () => {
+    expect(portionOptions(candy, [], labels, 'fi', 'annos').map(o => o.key)).toEqual(['g']);
+    expect(portionOptions(cheese, [], labels, 'en', 'serving').map(o => o.label)).toEqual(['g', '10 g']);
+    expect(portionOptions(userFood, [], labels, 'en', 'serving')[1]).toMatchObject({key: 'serving', label: 'serving', grams: null, kcalPerUnit: 350});
+    const f = portionOptions(fineli, [{code: 'KPL_M', grams: 35}, {code: 'DL', grams: 100}], labels, 'en', 'serving');
+    expect(f.map(o => o.label)).toEqual(['g', 'medium-sized piece · 35 g', 'decilitre · 100 g']);
+  });
+
+  it('computes kcal by mass first, else per unit, else null', () => {
+    const [g] = portionOptions(candy, [], labels, 'fi', 'annos');
+    expect(portionKcal(400, g, 20)).toBe(80);
+    const serving = portionOptions(userFood, [], labels, 'en', 'serving')[1];
+    expect(portionKcal(null, serving, 2)).toBe(700);
+    expect(portionKcal(null, g, 20)).toBeNull();
   });
 });
