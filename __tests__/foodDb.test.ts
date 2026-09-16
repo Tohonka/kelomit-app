@@ -7,7 +7,7 @@ jest.mock('../src/db/database', () => ({
 import {migrations} from '../src/db/migrations';
 import {
   createFoodEntry, updateFoodEntry, deleteFoodEntry, getFoodEntriesForDay, getFoodEntry,
-  getRecentFoodEntries, upsertProduct, getProductByBarcode, getProduct, searchProducts, getProductBySourceRef,
+  getRecentFoodEntries, upsertProduct, getProductByBarcode, getProduct, searchProducts, getProductBySourceRef, getFoodKcalByDay,
 } from '../src/db/food';
 
 beforeEach(() => {
@@ -110,4 +110,12 @@ describe('product search', () => {
     expect(await getProductBySourceRef('fineli', '1009')).toBeNull();
     expect(lastCall()[1]).toEqual(['fineli', '1009']);
   });
+});
+
+it('sums kcal per day over a date range', async () => {
+  mockExecute.mockResolvedValueOnce({rows: [{date: '2026-09-16', kcal: 1240, entries: 4, no_kcal: 1}]});
+  const out = await getFoodKcalByDay('2026-09-14', '2026-09-20');
+  expect(lastCall()[0]).toContain('GROUP BY d.date');
+  expect(lastCall()[1]).toEqual(['2026-09-14', '2026-09-20']);
+  expect(out['2026-09-16']).toEqual({kcal: 1240, entries: 4, noKcal: 1});
 });

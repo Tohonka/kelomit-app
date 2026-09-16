@@ -224,3 +224,32 @@ export async function getProductBySourceRef(source: FoodSource, ref: string): Pr
   if (!result.rows || result.rows.length === 0) { return null; }
   return rowToProduct(result.rows[0] as RawRow);
 }
+
+export interface FoodDayTotals {
+  kcal: number;
+  entries: number;
+  noKcal: number;
+}
+
+/** Per-date kcal totals in a local-date range (Balance). */
+export async function getFoodKcalByDay(startDate: string, endDate: string): Promise<Record<string, FoodDayTotals>> {
+  const db = getDB();
+  const result = await db.execute(
+    `SELECT d.date AS date, COALESCE(SUM(f.kcal), 0) AS kcal, COUNT(*) AS entries,
+            SUM(CASE WHEN f.kcal IS NULL THEN 1 ELSE 0 END) AS no_kcal
+     FROM food_entries f JOIN days d ON d.id = f.day_id
+     WHERE d.date >= ? AND d.date <= ?
+     GROUP BY d.date;`,
+    [startDate, endDate],
+  );
+  const out: Record<string, FoodDayTotals> = {};
+  for (const r of result.rows ?? []) {
+    const row = r as RawRow;
+    out[row.date as string] = {
+      kcal: Number(row.kcal ?? 0),
+      entries: Number(row.entries ?? 0),
+      noKcal: Number(row.no_kcal ?? 0),
+    };
+  }
+  return out;
+}

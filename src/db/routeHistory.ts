@@ -603,3 +603,24 @@ export async function reconcileDayRouteHistory(
     }
   });
 }
+
+/** Every derived segment in a local-date range, oldest first (Balance). */
+export async function getSegmentsInRange(
+  startDate: string,
+  endDate: string,
+): Promise<Array<{date: string; segment: DayRouteSegment}>> {
+  const db = getDB();
+  const result = await db.execute(
+    `SELECT s.*, d.date AS day_date
+     FROM day_route_segments s JOIN days d ON d.id = s.day_id
+     WHERE d.date >= ? AND d.date <= ?
+     ORDER BY d.date ASC, s.sequence ASC;`,
+    [startDate, endDate],
+  );
+  const out: Array<{date: string; segment: DayRouteSegment}> = [];
+  for (const row of result.rows ?? []) {
+    const segment = rowToSegment(row as RawRow);
+    if (segment) { out.push({date: (row as RawRow).day_date as string, segment}); }
+  }
+  return out;
+}
