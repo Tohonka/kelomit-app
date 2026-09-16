@@ -7,7 +7,7 @@ jest.mock('../src/db/database', () => ({
 import {migrations} from '../src/db/migrations';
 import {
   createFoodEntry, updateFoodEntry, deleteFoodEntry, getFoodEntriesForDay, getFoodEntry,
-  getRecentFoodEntries,
+  getRecentFoodEntries, upsertProduct, getProductByBarcode, getProduct,
 } from '../src/db/food';
 
 beforeEach(() => {
@@ -67,4 +67,35 @@ it('deletes by id', async () => {
   await deleteFoodEntry(7);
   expect(lastCall()[0]).toContain('DELETE FROM food_entries WHERE id = ?');
   expect(lastCall()[1]).toEqual([7]);
+});
+
+describe('products', () => {
+  const productRow = {
+    id: 4, barcode: '6408430039517', name: 'Oltermanni 17%', brand: 'Valio', kcal_per_100: 272,
+    kcal_per_serving: 27.2, protein_per_100: 29, carbs_per_100: 0, fat_per_100: 17, serving_g: 10,
+    serving_label: '10 g', source: 'off', source_ref: '6408430039517', image_url: null, archived: 0,
+    created_at: 'c', updated_at: 'u',
+  };
+
+  it('upserts by barcode with RETURNING and maps the row', async () => {
+    mockExecute.mockResolvedValueOnce({rows: [productRow]});
+    const p = await upsertProduct({
+      barcode: '6408430039517', name: ' Oltermanni 17% ', brand: 'Valio', kcal_per_100: 272,
+      kcal_per_serving: 27.2, protein_per_100: 29, carbs_per_100: 0, fat_per_100: 17, serving_g: 10,
+      serving_label: '10 g', source: 'off', source_ref: '6408430039517', image_url: null,
+    });
+    expect(lastCall()[0]).toContain('ON CONFLICT(barcode) DO UPDATE SET');
+    expect(lastCall()[0]).toContain('RETURNING *');
+    expect(lastCall()[1].slice(0, 3)).toEqual(['6408430039517', 'Oltermanni 17%', 'Valio']);
+    expect(p).toMatchObject({id: 4, source: 'off', archived: false, kcal_per_serving: 27.2});
+  });
+
+  it('looks up by barcode (unarchived only) and by id', async () => {
+    mockExecute.mockResolvedValueOnce({rows: []});
+    expect(await getProductByBarcode('123')).toBeNull();
+    expect(lastCall()[0]).toContain('WHERE barcode = ? AND archived = 0');
+    expect(lastCall()[1]).toEqual(['123']);
+    mockExecute.mockResolvedValueOnce({rows: [productRow]});
+    expect((await getProduct(4))?.name).toBe('Oltermanni 17%');
+  });
 });

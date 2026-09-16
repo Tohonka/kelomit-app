@@ -1,4 +1,4 @@
-import type {FoodEntry} from '../types';
+import type {FoodEntry, FoodProduct, FoodUnit} from '../types';
 
 /** A one-tap re-log template: what to copy from a past entry onto "now". */
 export type RecentFood = Pick<FoodEntry, 'name' | 'kcal' | 'product_id' | 'quantity' | 'unit'>;
@@ -38,4 +38,25 @@ export function rankRecents(entries: FoodEntry[], nowMinutesOfDay: number, limit
 
 export function scaleKcal(kcal: number | null, factor: number): number | null {
   return kcal == null ? null : Math.round(kcal * factor);
+}
+
+type PortionSource = Pick<FoodProduct, 'kcal_per_100' | 'kcal_per_serving' | 'serving_g'>;
+
+/** kcal for `quantity` of a product in `unit`; null when the product can't say. */
+export function kcalFor(p: PortionSource, quantity: number, unit: FoodUnit): number | null {
+  if (unit === 'g' || unit === 'ml') {
+    return p.kcal_per_100 != null ? Math.round((p.kcal_per_100 * quantity) / 100) : null;
+  }
+  if (p.kcal_per_serving != null) { return Math.round(p.kcal_per_serving * quantity); }
+  if (p.kcal_per_100 != null && p.serving_g != null) {
+    return Math.round(((p.kcal_per_100 * p.serving_g) / 100) * quantity);
+  }
+  return null;
+}
+
+/** One serving when the product knows one, else 100 g. */
+export function defaultPortion(p: PortionSource): {quantity: number; unit: FoodUnit} {
+  return p.kcal_per_serving != null || p.serving_g != null
+    ? {quantity: 1, unit: 'serving'}
+    : {quantity: 100, unit: 'g'};
 }

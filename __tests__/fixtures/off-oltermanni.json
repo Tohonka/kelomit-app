@@ -1,0 +1,23 @@
+{
+  "code": "6408430039517",
+  "status": 1,
+  "status_verbose": "product found",
+  "product": {
+    "code": "6408430039517",
+    "product_name": "Oltermanni 17%",
+    "product_name_fi": "Oltermanni 17%",
+    "brands": "Valio",
+    "quantity": "900 g",
+    "serving_size": "10 g",
+    "serving_quantity": 10,
+    "image_front_small_url": "https://images.openfoodfacts.org/images/products/640/843/003/9517/front_en.3.200.jpg",
+    "nutriments": {
+      "energy-kcal_100g": 272,
+      "energy-kj_100g": 1135,
+      "energy-kcal_serving": 27.2,
+      "proteins_100g": 29,
+      "carbohydrates_100g": 0,
+      "fat_100g": 17
+    }
+  }
+}
