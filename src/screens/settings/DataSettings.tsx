@@ -31,6 +31,12 @@ type ExportState = 'hidden' | 'ready' | 'picking_from' | 'picking_to';
 
 const makeLocalStyles = (c: Colors) =>
   StyleSheet.create({
+    notice: {
+      marginHorizontal: spacing.lg,
+      marginTop: spacing.xl,
+      fontSize: typography.sizes.xs,
+      color: c.textMuted,
+    },
     exportPanel: {
       marginHorizontal: spacing.lg,
       marginTop: spacing.xs,
@@ -358,6 +364,9 @@ export default function DataSettings(_props: Props) {
             ? <ActivityIndicator size="small" color={colors.primary} />
             : <Text style={styles.rowCaret}>›</Text>}
         </TouchableOpacity>
+
+        {/* Where data leaves the phone besides sync (master plan decision #15). */}
+        <Text style={local.notice}>{t('settings.offNotice')}</Text>
       </ScrollView>
     </SafeAreaView>
   );

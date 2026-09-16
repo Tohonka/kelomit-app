@@ -1,4 +1,4 @@
-import React, {useEffect, useMemo, useState} from 'react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {
   View,
@@ -10,8 +10,10 @@ import {
   Image,
   Alert,
   Platform,
+  ToastAndroid,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import {useTheme, typography, spacing, radius} from '../theme';
 import type {Colors} from '../theme';
 import Button from '../components/ui/Button';
@@ -19,13 +21,22 @@ import TimePicker from '../components/ui/TimePicker';
 import {capturePhoto} from '../utils/mediaCapture';
 import {deleteMediaFile, ensureMediaDir, fileUri} from '../utils/mediaUtils';
 import {getLastKnownPosition} from '../services/gpsService';
-import {createFoodEntry, getFoodEntry, updateFoodEntry} from '../db/food';
+import {scanBarcode} from '../native/barcodeScanner';
+import {lookupBarcode} from '../services/openFoodFacts';
+import {
+  createFoodEntry,
+  getFoodEntry,
+  getProduct,
+  getProductByBarcode,
+  updateFoodEntry,
+  upsertProduct,
+} from '../db/food';
 import {getOrCreateDay} from '../db/days';
 import {formatDate, todayDate, localDateOf} from '../utils/dateUtils';
-import {scaleKcal} from '../utils/foodMath';
+import {scaleKcal, kcalFor, defaultPortion} from '../utils/foodMath';
 import {haptic, HAPTIC_SAVE} from '../utils/haptics';
 import type {RootStackScreenProps} from '../navigation/navigationTypes';
-import type {FoodUnit} from '../types';
+import type {FoodProduct, FoodUnit} from '../types';
 
 type Props = RootStackScreenProps<'FoodEntryModal'>;
 
@@ -39,14 +50,14 @@ function combineDateTime(dateStr: string, hours: number, minutes: number): strin
   return new Date(y, m - 1, d, hours, minutes, 0, 0).toISOString();
 }
 
+function parsePositive(s: string): number | null {
+  const n = parseFloat(s.replace(',', '.'));
+  return s.trim() && Number.isFinite(n) && n > 0 ? n : null;
+}
+
 interface Photo {
   file_path: string;
   thumbnail_path: string | null;
-}
-interface Linked {
-  product_id: number | null;
-  quantity: number | null;
-  unit: FoodUnit | null;
 }
 
 const PHOTO = 120;
@@ -88,8 +99,10 @@ const makeStyles = (c: Colors) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
+    chipActive: {backgroundColor: c.primary, borderColor: c.primary},
     chipDisabled: {opacity: 0.4},
     chipText: {fontSize: typography.sizes.md, fontWeight: typography.weights.semibold, color: c.textPrimary},
+    chipTextActive: {color: c.white},
     dateBtn: {
       flex: 1,
       minHeight: 48,
@@ -131,13 +144,27 @@ const makeStyles = (c: Colors) =>
       borderWidth: 1.5,
       borderColor: c.border,
     },
+    addBtnDisabled: {opacity: 0.5},
     addEmoji: {fontSize: 22},
     addLabel: {fontSize: typography.sizes.xs, color: c.textSecondary, fontWeight: typography.weights.medium},
+    productChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      padding: spacing.md,
+      borderRadius: radius.md,
+      backgroundColor: c.bgCard,
+      borderWidth: 1,
+      borderColor: c.primary,
+    },
+    productName: {fontSize: typography.sizes.base, fontWeight: typography.weights.semibold, color: c.textPrimary},
+    productHint: {fontSize: typography.sizes.xs, color: c.textMuted, marginTop: 2},
+    pending: {fontSize: typography.sizes.xs, color: c.textMuted},
     saveRow: {marginTop: spacing.xl},
   });
 
 export default function FoodEntryModal({navigation, route}: Props) {
-  const {entryId, prefill, date: routeDate} = route.params ?? {};
+  const {entryId, prefill, date: routeDate, scan} = route.params ?? {};
   const isEdit = entryId != null;
   const {t} = useTranslation();
   const {colors} = useTheme();
@@ -155,11 +182,12 @@ export default function FoodEntryModal({navigation, route}: Props) {
   const [note, setNote] = useState('');
   const [photo, setPhoto] = useState<Photo | null>(null);
   const [removedPhotos, setRemovedPhotos] = useState<string[]>([]);
-  const [linked, setLinked] = useState<Linked>({
-    product_id: prefill?.product_id ?? null,
-    quantity: prefill?.quantity ?? null,
-    unit: prefill?.unit ?? null,
-  });
+  // Product link (F2): a scanned / remembered product plus the amount eaten.
+  const [product, setProduct] = useState<FoodProduct | null>(null);
+  const [pendingBarcode, setPendingBarcode] = useState<string | null>(null);
+  const [quantity, setQuantity] = useState(prefill?.quantity != null ? String(prefill.quantity) : '');
+  const [unit, setUnit] = useState<FoodUnit>(prefill?.unit ?? 'serving');
+  const [scanning, setScanning] = useState(false);
   const [loading, setLoading] = useState(isEdit);
   const [isSaving, setIsSaving] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -169,33 +197,101 @@ export default function FoodEntryModal({navigation, route}: Props) {
   }, []);
 
   useEffect(() => {
-    if (entryId == null) { return; }
-    getFoodEntry(entryId).then(e => {
+    if (entryId == null) {
+      if (prefill?.product_id != null) {
+        getProduct(prefill.product_id).then(p => { if (p) { setProduct(p); } });
+      }
+      return;
+    }
+    getFoodEntry(entryId).then(async e => {
       if (e) {
         setName(e.name);
         setKcal(e.kcal != null ? String(e.kcal) : '');
         setEatenAt(e.eaten_at);
         setNote(e.note ?? '');
         setPhoto(e.file_path ? {file_path: e.file_path, thumbnail_path: e.thumbnail_path} : null);
-        setLinked({product_id: e.product_id, quantity: e.quantity, unit: e.unit});
+        setQuantity(e.quantity != null ? String(e.quantity) : '');
+        setUnit(e.unit ?? 'serving');
+        if (e.product_id != null) { setProduct(await getProduct(e.product_id)); }
       }
       setLoading(false);
     });
-  }, [entryId]);
+  }, [entryId, prefill?.product_id]);
 
   const parsedKcal = (): number | null => {
     const n = parseFloat(kcal);
     return kcal.trim() && Number.isFinite(n) ? Math.round(n) : null;
   };
 
-  // ×½ / ×2 scale the number directly; a linked quantity follows so a later
-  // product-based recompute (F2+) stays consistent.
+  const recompute = (p: FoodProduct, qty: number | null, u: FoodUnit) => {
+    if (qty == null) { return; }
+    const k = kcalFor(p, qty, u);
+    if (k != null) { setKcal(String(k)); }
+  };
+
+  // ×½ / ×2 scale kcal and the amount together.
   const applyFactor = (factor: number) => {
     const next = scaleKcal(parsedKcal(), factor);
     if (next == null) { return; }
     setKcal(String(next));
-    setLinked(l => ({...l, quantity: l.quantity != null ? l.quantity * factor : null}));
+    setQuantity(q => {
+      const n = parsePositive(q);
+      return n == null ? q : String(Math.round(n * factor * 100) / 100);
+    });
   };
+
+  const link = (p: FoodProduct) => {
+    setProduct(p);
+    setPendingBarcode(null);
+    setName(prev => (prev.trim() ? prev : p.brand ? `${p.brand} ${p.name}` : p.name));
+    const portion = defaultPortion(p);
+    setQuantity(String(portion.quantity));
+    setUnit(portion.unit);
+    recompute(p, portion.quantity, portion.unit);
+  };
+
+  const unlink = () => {
+    setProduct(null);
+    setPendingBarcode(null);
+    setQuantity('');
+  };
+
+  // Local cache first (offline, instant), then Open Food Facts; a miss leaves the
+  // barcode pending so the manual entry is remembered as a product on save.
+  const startScan = async () => {
+    if (scanning) { return; }
+    setScanning(true);
+    try {
+      const code = await scanBarcode();
+      if (!code) { return; }
+      const local = await getProductByBarcode(code);
+      if (local) { link(local); return; }
+      try {
+        const off = await lookupBarcode(code);
+        if (off) { link(await upsertProduct(off)); return; }
+        ToastAndroid.show(t('food.barcodeUnknown'), ToastAndroid.LONG);
+      } catch {
+        ToastAndroid.show(t('food.barcodeOffline'), ToastAndroid.LONG);
+      }
+      setProduct(null);
+      setPendingBarcode(code);
+    } catch {
+      Alert.alert(t('common.error'), t('food.scanFailed'));
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  // Food tab's barcode button opens straight into the scanner — once.
+  const autoScanned = useRef(false);
+  useEffect(() => {
+    if (scan && !autoScanned.current) {
+      autoScanned.current = true;
+      startScan();
+    }
+    // startScan is recreated every render; `scan` is the real trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scan]);
 
   const takePhoto = async (fromGallery: boolean) => {
     try {
@@ -221,14 +317,40 @@ export default function FoodEntryModal({navigation, route}: Props) {
     setIsSaving(true);
     try {
       const day = await getOrCreateDay(localDateOf(eatenAt));
+      const finalName = name.trim() || t('food.photoPlaceholder');
+      const finalKcal = parsedKcal();
+      let productId = product?.id ?? null;
+      let qty = productId ? parsePositive(quantity) : null;
+      let u: FoodUnit | null = productId ? unit : null;
+      if (!productId && pendingBarcode) {
+        // "Add once, use later": the manual entry becomes a remembered product.
+        const created = await upsertProduct({
+          barcode: pendingBarcode,
+          name: finalName,
+          brand: null,
+          kcal_per_100: null,
+          kcal_per_serving: finalKcal,
+          protein_per_100: null,
+          carbs_per_100: null,
+          fat_per_100: null,
+          serving_g: null,
+          serving_label: null,
+          source: 'user',
+          source_ref: null,
+          image_url: null,
+        });
+        productId = created.id;
+        qty = 1;
+        u = 'serving';
+      }
       const fields = {
         day_id: day.id,
         eaten_at: eatenAt,
-        name: name.trim() || t('food.photoPlaceholder'),
-        kcal: parsedKcal(),
-        product_id: linked.product_id,
-        quantity: linked.quantity,
-        unit: linked.unit,
+        name: finalName,
+        kcal: finalKcal,
+        product_id: productId,
+        quantity: qty,
+        unit: u,
         note: note.trim() || null,
         file_path: photo?.file_path ?? null,
         thumbnail_path: photo?.thumbnail_path ?? null,
@@ -259,6 +381,8 @@ export default function FoodEntryModal({navigation, route}: Props) {
 
   const dateStr = localDateOf(eatenAt);
   const hasKcal = kcal.trim().length > 0;
+  const units: FoodUnit[] =
+    product && (product.kcal_per_serving != null || product.serving_g != null) ? ['serving', 'g'] : ['g'];
 
   return (
     <ScrollView
@@ -287,6 +411,40 @@ export default function FoodEntryModal({navigation, route}: Props) {
         </View>
       )}
 
+      {product ? (
+        <>
+          <Text style={styles.sectionLabel}>{t('food.product')}</Text>
+          <View style={styles.productChip}>
+            <Icon name="barcode" size={20} color={colors.primary} />
+            <View style={styles.flex1}>
+              <Text style={styles.productName} numberOfLines={1}>
+                {product.brand ? `${product.brand} · ${product.name}` : product.name}
+              </Text>
+              {product.kcal_per_100 != null && (
+                <Text style={styles.productHint}>
+                  {t('food.perHundred', {kcal: Math.round(product.kcal_per_100)})}
+                </Text>
+              )}
+            </View>
+            <TouchableOpacity onPress={unlink} accessibilityLabel={t('common.clear')} hitSlop={8}>
+              <Icon name="close" size={20} color={colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+        </>
+      ) : (
+        <TouchableOpacity
+          style={[styles.addBtn, scanning && styles.addBtnDisabled]}
+          disabled={scanning}
+          onPress={startScan}
+          accessibilityLabel={t('food.scan')}>
+          <Icon name="barcode-scan" size={22} color={colors.textSecondary} />
+          <Text style={styles.addLabel}>{t('food.scan')}</Text>
+        </TouchableOpacity>
+      )}
+      {!product && pendingBarcode && (
+        <Text style={styles.pending}>{t('food.pendingBarcode', {code: pendingBarcode})}</Text>
+      )}
+
       <Text style={styles.sectionLabel}>{t('food.name')}</Text>
       <TextInput
         style={styles.input}
@@ -294,9 +452,40 @@ export default function FoodEntryModal({navigation, route}: Props) {
         onChangeText={setName}
         placeholder={t('food.namePlaceholder')}
         placeholderTextColor={colors.textMuted}
-        autoFocus={!isEdit && !prefill}
+        autoFocus={!isEdit && !prefill && !scan}
         maxLength={120}
       />
+
+      {product && (
+        <>
+          <Text style={styles.sectionLabel}>{t('food.quantity')}</Text>
+          <View style={styles.row}>
+            <TextInput
+              style={[styles.input, styles.flex1]}
+              value={quantity}
+              onChangeText={q => {
+                setQuantity(q);
+                recompute(product, parsePositive(q), unit);
+              }}
+              keyboardType="numeric"
+              maxLength={7}
+            />
+            {units.map(u => (
+              <TouchableOpacity
+                key={u}
+                style={[styles.chip, unit === u && styles.chipActive]}
+                onPress={() => {
+                  setUnit(u);
+                  recompute(product, parsePositive(quantity), u);
+                }}>
+                <Text style={[styles.chipText, unit === u && styles.chipTextActive]}>
+                  {t(u === 'g' ? 'food.unitG' : 'food.unitServing')}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </>
+      )}
 
       <Text style={styles.sectionLabel}>{t('food.kcal')}</Text>
       <View style={styles.row}>

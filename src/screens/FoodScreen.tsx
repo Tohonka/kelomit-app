@@ -214,6 +214,12 @@ export default function FoodScreen({navigation}: TabScreenProps<'Food'>) {
             <Icon name="chevron-right" size={28} color={colors.textSecondary} />
           </TouchableOpacity>
           <TouchableOpacity
+            style={styles.navBtn}
+            accessibilityLabel={t('food.scan')}
+            onPress={() => navigation.navigate('FoodEntryModal', {date, scan: true})}>
+            <Icon name="barcode-scan" size={26} color={colors.textSecondary} />
+          </TouchableOpacity>
+          <TouchableOpacity
             style={styles.addBtn}
             accessibilityLabel={t('food.logFood')}
             onPress={() => navigation.navigate('FoodEntryModal', {date})}>

@@ -30,7 +30,7 @@ export type RootStackParamList = {
   QuickAddModal: {date?: string; dayId: number; entryType: EntryType; autoCapture?: boolean};
   /** Food log editor: `entryId` edits, `prefill` seeds a new entry, `date`
    *  picks the day for a new entry (default today). */
-  FoodEntryModal: {date?: string; entryId?: number; prefill?: FoodPrefill} | undefined;
+  FoodEntryModal: {date?: string; entryId?: number; prefill?: FoodPrefill; scan?: boolean} | undefined;
   ProjectsScreen: undefined;
   TagsScreen: undefined;
   TagsProjectsSettings: undefined;
