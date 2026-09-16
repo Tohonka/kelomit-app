@@ -1,5 +1,4 @@
 import React from 'react';
-import {TextInput} from 'react-native';
 import {
   act,
   create,
@@ -20,6 +19,8 @@ jest.mock('../src/store/settingsStore', () => ({
     setWeekdayOverride: jest.fn(),
     pay_period_start_day: 1,
     setPayPeriodStartDay: mockSetPayPeriodStartDay,
+    weekly_target_hours: 40,
+    setWeeklyTargetHours: jest.fn(),
   }),
 }));
 jest.mock('react-i18next', () => ({
@@ -76,11 +77,11 @@ it('does not save a start day outside 1 through 28', async () => {
   await act(async () => {
     renderer = create(<WorkDetailsSettings />);
   });
-  const input = renderer.root.findByType(TextInput);
+  const input = renderer.root.findByProps({accessibilityLabel: 'Pay period start day'});
 
   act(() => input.props.onChangeText('29'));
   await act(async () => input.props.onEndEditing());
 
   expect(mockSetPayPeriodStartDay).not.toHaveBeenCalled();
-  expect(renderer.root.findByType(TextInput).props.value).toBe('1');
+  expect(renderer.root.findByProps({accessibilityLabel: 'Pay period start day'}).props.value).toBe('1');
 });

@@ -69,7 +69,15 @@ export default function WorkDetailsSettings() {
     prefill_from_usual, setPrefillFromUsual,
     weekday_hours, setWeekdayOverride,
     pay_period_start_day, setPayPeriodStartDay,
+    weekly_target_hours, setWeeklyTargetHours,
   } = useSettingsStore();
+  const [targetInput, setTargetInput] = useState(String(weekly_target_hours));
+  useEffect(() => { setTargetInput(String(weekly_target_hours)); }, [weekly_target_hours]);
+  const saveWeeklyTarget = () => {
+    const h = parseFloat(targetInput.replace(',', '.'));
+    if (Number.isFinite(h) && h > 0 && h <= 168) { setWeeklyTargetHours(h); }
+    else { setTargetInput(String(weekly_target_hours)); }
+  };
   const [payPeriodInput, setPayPeriodInput] = useState(
     String(pay_period_start_day),
   );
@@ -144,6 +152,23 @@ export default function WorkDetailsSettings() {
             </Text>
           </View>
         </TouchableOpacity>
+
+        <View style={styles.row}>
+          <View style={styles.rowTextWrap}>
+            <Text style={styles.rowLabel}>{t('settings.weeklyTarget')}</Text>
+            <Text style={styles.rowSubLabel}>{t('settings.weeklyTargetHint')}</Text>
+          </View>
+          <TextInput
+            style={local.payPeriodInput}
+            value={targetInput}
+            onChangeText={setTargetInput}
+            onEndEditing={saveWeeklyTarget}
+            keyboardType="numeric"
+            maxLength={5}
+            selectTextOnFocus
+            accessibilityLabel={t('settings.weeklyTarget')}
+          />
+        </View>
 
         <Text style={styles.sectionHeader}>{t('settings.payPeriod')}</Text>
         <View style={styles.row}>

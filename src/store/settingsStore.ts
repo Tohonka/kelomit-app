@@ -49,6 +49,8 @@ interface SettingsState extends Settings {
   quickadd_default_project_id: number | null;
   quickadd_default_tag: string;
   quickadd_default_activity: ActivityType;
+  /** Worked-hours goal the Balance ring measures a week against. */
+  weekly_target_hours: number;
   /** Opt-in: read daily totals from Health Connect on app foreground. */
   health_enabled: boolean;
   body_weight_kg: number | null;
@@ -83,6 +85,7 @@ interface SettingsState extends Settings {
   setQuickAddDefaultActivity: (type: ActivityType) => Promise<void>;
   setHealthEnabled: (enabled: boolean) => Promise<void>;
   setBodyProfile: (patch: Partial<BodyProfile>) => Promise<void>;
+  setWeeklyTargetHours: (hours: number) => Promise<void>;
 }
 
 const ACTIVITY_TYPES: ActivityType[] = ['work', 'personal_work', 'personal'];
@@ -112,6 +115,7 @@ export const useSettingsStore = create<SettingsState>(set => ({
   quickadd_default_project_id: null,
   quickadd_default_tag: 'Quick add',
   quickadd_default_activity: 'work',
+  weekly_target_hours: 40,
   health_enabled: false,
   body_weight_kg: null,
   body_height_cm: null,
@@ -159,6 +163,7 @@ export const useSettingsStore = create<SettingsState>(set => ({
       const n = parseFloat(v ?? '');
       return Number.isFinite(n) ? n : null;
     };
+    const weekly_target_hours = numOrNull(raw.weekly_target_hours) ?? 40;
     const health_enabled = raw.health_enabled === 'true';
     const body_weight_kg = numOrNull(raw.body_weight_kg);
     const body_height_cm = numOrNull(raw.body_height_cm);
@@ -182,6 +187,7 @@ export const useSettingsStore = create<SettingsState>(set => ({
       quickadd_default_project_id,
       quickadd_default_tag,
       quickadd_default_activity,
+      weekly_target_hours,
       health_enabled,
       body_weight_kg,
       body_height_cm,
@@ -194,6 +200,11 @@ export const useSettingsStore = create<SettingsState>(set => ({
   setHealthEnabled: async enabled => {
     await setSetting('health_enabled', String(enabled));
     set({health_enabled: enabled});
+  },
+
+  setWeeklyTargetHours: async hours => {
+    await setSetting('weekly_target_hours', String(hours));
+    set({weekly_target_hours: hours});
   },
 
   setBodyProfile: async patch => {
