@@ -10,7 +10,7 @@ import {
   type Permission,
   type ReadHealthDataHistoryPermission,
 } from 'react-native-health-connect';
-import {upsertHealthDaily} from '../db/health';
+import {getHealthDailyRange, upsertHealthDaily} from '../db/health';
 import {getSetting, setSetting} from '../db/settings';
 import {useSettingsStore} from '../store/settingsStore';
 import {buildHealthDays, type DayValue, type Sample} from '../utils/healthAggregate';
@@ -44,6 +44,7 @@ const LAST_IMPORT_KEY = 'health_last_import';
 const IMPORT_INTERVAL_MS = 3 * 60 * 60 * 1000;
 const RECENT_WINDOW_DAYS = 7;
 const FIRST_WINDOW_DAYS = 90;
+const PAGE_SIZE = 1000;
 
 export type HealthStatus = 'available' | 'update_required' | 'unavailable';
 
@@ -121,22 +122,37 @@ async function dailyTotals(recordType: TotalType, startTime: string, endTime: st
   return out;
 }
 
-async function samples(
-  recordType: 'Weight' | 'Height' | 'RestingHeartRate',
+type SampleType = 'Weight' | 'Height' | 'RestingHeartRate';
+
+/** Every record in the window, following page tokens (history imports of a
+ *  few years can exceed one page). */
+async function readAll<T extends SampleType | 'SleepSession'>(
+  recordType: T,
   startTime: string,
   endTime: string,
-): Promise<Sample[]> {
-  // ponytail: one page. Weight/height/resting-HR samples over 90 days fit the
-  // default page size for one person; add pageToken paging if a source floods it.
-  const {records} = await readRecords(recordType, {
-    timeRangeFilter: {operator: 'between', startTime, endTime},
-  });
-  return (records as unknown as {
+): Promise<unknown[]> {
+  const all: unknown[] = [];
+  let pageToken: string | undefined;
+  do {
+    const res = await readRecords(recordType, {
+      timeRangeFilter: {operator: 'between', startTime, endTime},
+      pageSize: PAGE_SIZE,
+      pageToken,
+    });
+    all.push(...res.records);
+    pageToken = res.pageToken;
+  } while (pageToken);
+  return all;
+}
+
+async function samples(recordType: SampleType, startTime: string, endTime: string): Promise<Sample[]> {
+  const records = (await readAll(recordType, startTime, endTime)) as {
     time: string;
     weight?: {inKilograms: number};
     height?: {inMeters: number};
     beatsPerMinute?: number;
-  }[]).map(r => ({
+  }[];
+  return records.map(r => ({
     time: r.time,
     value:
       recordType === 'Weight' ? r.weight?.inKilograms ?? NaN
@@ -153,13 +169,13 @@ export async function importHealthDays(fromDate: string, toDate: string): Promis
   const endTime = localStart(shiftDate(toDate, 1));
   // Sleep that ends on fromDate may have started the evening before.
   const sleepStart = localStart(shiftDate(fromDate, -1));
-  const [steps, distanceM, activeKcal, totalKcal, sleepRes, weightKg, heightCm, restingHr] =
+  const [steps, distanceM, activeKcal, totalKcal, sleepRecords, weightKg, heightCm, restingHr] =
     await Promise.all([
       dailyTotals('Steps', startTime, endTime),
       dailyTotals('Distance', startTime, endTime),
       dailyTotals('ActiveCaloriesBurned', startTime, endTime),
       dailyTotals('TotalCaloriesBurned', startTime, endTime),
-      readRecords('SleepSession', {timeRangeFilter: {operator: 'between', startTime: sleepStart, endTime}}),
+      readAll('SleepSession', sleepStart, endTime) as Promise<{startTime: string; endTime: string}[]>,
       samples('Weight', startTime, endTime),
       samples('Height', startTime, endTime),
       samples('RestingHeartRate', startTime, endTime),
@@ -170,7 +186,7 @@ export async function importHealthDays(fromDate: string, toDate: string): Promis
       distanceM,
       activeKcal,
       totalKcal,
-      sleep: sleepRes.records.map(r => ({startTime: r.startTime, endTime: r.endTime})),
+      sleep: sleepRecords.map(r => ({startTime: r.startTime, endTime: r.endTime})),
       weightKg,
       heightCm,
       restingHr,
@@ -181,21 +197,43 @@ export async function importHealthDays(fromDate: string, toDate: string): Promis
     await upsertHealthDaily(row);
   }
   await setSetting(LAST_IMPORT_KEY, new Date().toISOString());
-  await prefillBodyProfile(rows);
+  await applyBodyProfile(rows, false);
   return rows.length;
 }
 
-/** First import fills an empty body profile from the latest Health Connect
- *  weight/height; a value the user typed is never overwritten. */
-async function prefillBodyProfile(rows: {weight_kg: number | null; height_cm: number | null}[]): Promise<void> {
+/** Copy the latest weight/height in `rows` into the body profile. With
+ *  `force` false only empty fields are filled (first import); with `force`
+ *  true the user asked for it, so stored values are overwritten too. */
+async function applyBodyProfile(
+  rows: {weight_kg: number | null; height_cm: number | null}[],
+  force: boolean,
+): Promise<boolean> {
   const s = useSettingsStore.getState();
   const latest = (key: 'weight_kg' | 'height_cm') => [...rows].reverse().find(r => r[key] != null)?.[key] ?? null;
   const patch: {body_weight_kg?: number; body_height_cm?: number} = {};
   const w = latest('weight_kg');
   const h = latest('height_cm');
-  if (s.body_weight_kg == null && w != null) { patch.body_weight_kg = Math.round(w * 10) / 10; }
-  if (s.body_height_cm == null && h != null) { patch.body_height_cm = Math.round(h); }
-  if (Object.keys(patch).length > 0) { await s.setBodyProfile(patch); }
+  if ((force || s.body_weight_kg == null) && w != null) { patch.body_weight_kg = Math.round(w * 10) / 10; }
+  if ((force || s.body_height_cm == null) && h != null) { patch.body_height_cm = Math.round(h); }
+  if (Object.keys(patch).length === 0) { return false; }
+  await s.setBodyProfile(patch);
+  return true;
+}
+
+/** "Update now": body profile ← latest imported weight/height (last year).
+ *  Returns false when nothing was imported yet. Reads our own table, so it
+ *  works offline. */
+export async function refreshBodyProfile(): Promise<boolean> {
+  const today = todayDate();
+  const rows = await getHealthDailyRange(shiftDate(today, -365), today);
+  return applyBodyProfile(rows, true);
+}
+
+/** "Import history": the last `days` days, however far the history permission
+ *  lets us reach. Returns the number of day rows written. */
+export async function importHistory(days: number): Promise<number> {
+  const today = todayDate();
+  return importHealthDays(shiftDate(today, -days), today);
 }
 
 /** Foreground trigger: import at most every 3 h while enabled. The first run

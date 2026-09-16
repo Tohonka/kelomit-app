@@ -19,10 +19,13 @@ import {
   connectHealth,
   getHealthStatus,
   getLastImportAt,
+  importHistory,
   maybeImportHealth,
   openHealthSettings,
+  refreshBodyProfile,
   type HealthStatus,
 } from '../../services/healthConnect';
+import ActionSheet from '../../components/ui/ActionSheet';
 import {todayDate} from '../../utils/dateUtils';
 import {useTheme, typography, spacing, radius} from '../../theme';
 import type {Colors} from '../../theme';
@@ -143,6 +146,34 @@ export default function HealthSettings(_props: Props) {
     }
   };
 
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const runHistory = async (days: number) => {
+    setBusy(true);
+    try {
+      const n = await importHistory(days);
+      ToastAndroid.show(t('health.imported', {n}), ToastAndroid.SHORT);
+      await refresh();
+    } catch (e) {
+      Alert.alert(t('common.error'), String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const historyActions = [
+    {label: t('health.months3'), onPress: () => { runHistory(92); }},
+    {label: t('health.months12'), onPress: () => { runHistory(366); }},
+    {label: t('health.years5'), onPress: () => { runHistory(5 * 366); }},
+  ];
+
+  const handleUpdateBody = async () => {
+    try {
+      const ok = await refreshBodyProfile();
+      ToastAndroid.show(t(ok ? 'health.updated' : 'health.noBodyData'), ToastAndroid.SHORT);
+    } catch (e) {
+      Alert.alert(t('common.error'), String(e));
+    }
+  };
+
   const statusText =
     status === 'available'
       ? t('health.statusAvailable')
@@ -200,6 +231,13 @@ export default function HealthSettings(_props: Props) {
               </View>
               <Text style={styles.rowCaret}>›</Text>
             </TouchableOpacity>
+            <TouchableOpacity style={styles.row} onPress={() => setHistoryOpen(true)} disabled={busy}>
+              <View style={styles.rowTextWrap}>
+                <Text style={styles.rowLabel}>{t('health.importHistory')}</Text>
+                <Text style={styles.rowSubLabel}>{t('health.importHistoryHint')}</Text>
+              </View>
+              <Text style={styles.rowCaret}>›</Text>
+            </TouchableOpacity>
             <View style={styles.row}>
               <View style={styles.rowTextWrap}>
                 <Text style={styles.rowLabel}>{t('health.today')}</Text>
@@ -218,6 +256,16 @@ export default function HealthSettings(_props: Props) {
 
         <Text style={styles.sectionHeader}>{t('health.bodySection')}</Text>
         <Text style={local.hint}>{t('health.bodyHint')}</Text>
+
+        {health_enabled && (
+          <TouchableOpacity style={styles.row} onPress={handleUpdateBody}>
+            <View style={styles.rowTextWrap}>
+              <Text style={styles.rowLabel}>{t('health.updateBody')}</Text>
+              <Text style={styles.rowSubLabel}>{t('health.updateBodyHint')}</Text>
+            </View>
+            <Text style={styles.rowCaret}>›</Text>
+          </TouchableOpacity>
+        )}
 
         <View style={styles.row}>
           <Text style={styles.rowLabel}>{t('health.weightKg')}</Text>
@@ -274,6 +322,12 @@ export default function HealthSettings(_props: Props) {
           </View>
         </View>
       </ScrollView>
+      <ActionSheet
+        visible={historyOpen}
+        title={t('health.importHistory')}
+        onClose={() => setHistoryOpen(false)}
+        actions={historyActions}
+      />
     </SafeAreaView>
   );
 }
