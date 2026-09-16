@@ -1,4 +1,5 @@
-import type {FoodEntry, FoodProduct, FoodUnit} from '../types';
+import type {FineliFood, FineliUnit, FoodEntry, FoodProduct, FoodUnit} from '../types';
+import type {ProductFields} from '../db/food';
 
 /** A one-tap re-log template: what to copy from a past entry onto "now". */
 export type RecentFood = Pick<FoodEntry, 'name' | 'kcal' | 'product_id' | 'quantity' | 'unit'>;
@@ -59,4 +60,31 @@ export function defaultPortion(p: PortionSource): {quantity: number; unit: FoodU
   return p.kcal_per_serving != null || p.serving_g != null
     ? {quantity: 1, unit: 'serving'}
     : {quantity: 100, unit: 'g'};
+}
+
+/** Make a reusable product out of a Fineli food; its first household unit
+ *  (most useful first — see scripts/build-fineli.js UNIT_ORDER) becomes the serving. */
+export function fineliToProduct(
+  food: FineliFood,
+  units: FineliUnit[],
+  unitLabels: Record<string, [string, string]>,
+  lang: 'fi' | 'en',
+): ProductFields {
+  const first = units[0];
+  const label = first ? unitLabels[first.code]?.[lang === 'fi' ? 0 : 1] ?? first.code : null;
+  return {
+    barcode: null,
+    name: lang === 'fi' ? food.name_fi : food.name_en ?? food.name_fi,
+    brand: null,
+    kcal_per_100: food.kcal_per_100,
+    kcal_per_serving: first ? Math.round((food.kcal_per_100 * first.grams) / 100) : null,
+    protein_per_100: food.protein_per_100,
+    carbs_per_100: food.carbs_per_100,
+    fat_per_100: food.fat_per_100,
+    serving_g: first?.grams ?? null,
+    serving_label: label,
+    source: 'fineli',
+    source_ref: String(food.id),
+    image_url: null,
+  };
 }

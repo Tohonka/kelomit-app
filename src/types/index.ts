@@ -379,3 +379,20 @@ export interface HealthDaily {
   updated_at: string;
 }
 export type HealthDailyInput = Omit<HealthDaily, 'created_at' | 'updated_at'>;
+
+/** One generic food from the bundled Fineli dataset (schema v32). */
+export interface FineliFood {
+  id: number;
+  name_fi: string;
+  name_en: string | null;
+  name_sv: string | null;
+  kcal_per_100: number;
+  protein_per_100: number | null;
+  carbs_per_100: number | null;
+  fat_per_100: number | null;
+}
+/** A household measure for a Fineli food ("KPL_M" = medium piece, 35 g). */
+export interface FineliUnit {
+  code: string;
+  grams: number;
+}

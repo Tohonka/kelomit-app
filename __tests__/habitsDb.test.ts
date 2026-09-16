@@ -28,7 +28,7 @@ it('migration 28 creates the five habit tables with cascades', () => {
   expect(sql).toContain("CHECK(goal_kind IN ('minutes','count'))");
   expect(sql).toContain("CHECK(kind IN ('project','tag','trigger'))");
   expect(migrations.find(m => m.version === 29)?.up.join('\n')).toContain('ALTER TABLE habits ADD COLUMN color');
-  expect(migrations[migrations.length - 1].version).toBe(31);
+  expect(migrations[migrations.length - 1].version).toBe(32);
 });
 
 describe('categories', () => {
