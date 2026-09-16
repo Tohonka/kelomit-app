@@ -181,7 +181,21 @@ export async function importHealthDays(fromDate: string, toDate: string): Promis
     await upsertHealthDaily(row);
   }
   await setSetting(LAST_IMPORT_KEY, new Date().toISOString());
+  await prefillBodyProfile(rows);
   return rows.length;
+}
+
+/** First import fills an empty body profile from the latest Health Connect
+ *  weight/height; a value the user typed is never overwritten. */
+async function prefillBodyProfile(rows: {weight_kg: number | null; height_cm: number | null}[]): Promise<void> {
+  const s = useSettingsStore.getState();
+  const latest = (key: 'weight_kg' | 'height_cm') => [...rows].reverse().find(r => r[key] != null)?.[key] ?? null;
+  const patch: {body_weight_kg?: number; body_height_cm?: number} = {};
+  const w = latest('weight_kg');
+  const h = latest('height_cm');
+  if (s.body_weight_kg == null && w != null) { patch.body_weight_kg = Math.round(w * 10) / 10; }
+  if (s.body_height_cm == null && h != null) { patch.body_height_cm = Math.round(h); }
+  if (Object.keys(patch).length > 0) { await s.setBodyProfile(patch); }
 }
 
 /** Foreground trigger: import at most every 3 h while enabled. The first run

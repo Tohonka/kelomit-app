@@ -88,6 +88,10 @@ export default function HealthSettings(_props: Props) {
   const [height, setHeight] = useState(body_height_cm != null ? String(body_height_cm) : '');
   const [year, setYear] = useState(birth_year != null ? String(birth_year) : '');
 
+  // An import can fill the profile behind the inputs (prefillBodyProfile).
+  useEffect(() => { setWeight(body_weight_kg != null ? String(body_weight_kg) : ''); }, [body_weight_kg]);
+  useEffect(() => { setHeight(body_height_cm != null ? String(body_height_cm) : ''); }, [body_height_cm]);
+
   const refresh = useCallback(async () => {
     setLastImport(await getLastImportAt());
     setToday(await getHealthDaily(todayDate()));
