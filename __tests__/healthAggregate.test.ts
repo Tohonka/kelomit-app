@@ -51,3 +51,18 @@ describe('buildHealthDays', () => {
     expect(rows[0]).toMatchObject({weight_kg: 82.4, resting_hr: 52, height_cm: null});
   });
 });
+
+it('unions overlapping sessions from several sources instead of summing them', () => {
+  const rows = buildHealthDays({
+    ...empty,
+    sleep: [
+      {startTime: local(2026, 9, 15, 23, 0), endTime: local(2026, 9, 16, 7, 0)},   // watch
+      {startTime: local(2026, 9, 15, 23, 30), endTime: local(2026, 9, 16, 6, 30)}, // phone, inside the first
+      {startTime: local(2026, 9, 16, 6, 45), endTime: local(2026, 9, 16, 7, 20)},  // overlaps the tail
+    ],
+  }, 'now');
+  expect(rows).toHaveLength(1);
+  expect(rows[0].sleep_minutes).toBe(8 * 60 + 20);
+  expect(rows[0].sleep_start).toBe(local(2026, 9, 15, 23, 0));
+  expect(rows[0].sleep_end).toBe(local(2026, 9, 16, 7, 20));
+});

@@ -69,13 +69,29 @@ export function buildHealthDays(input: HealthImportInput, syncedAt: string): Hea
   setTotal(input.activeKcal, 'active_kcal');
   setTotal(input.totalKcal, 'total_kcal');
 
+  // Several sources (watch, phone, the provider's own app) can report the same
+  // night as overlapping sessions; summing them double-counts (a "17 h night").
+  // Union the intervals per wake-up date first, then sum.
+  const nights = new Map<string, {start: number; end: number}[]>();
   for (const s of input.sleep) {
-    const minutes = Math.round((new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 60000);
-    if (!(minutes > 0)) { continue; }
-    const d = at(localDateOf(s.endTime));
-    d.sleep_minutes = (d.sleep_minutes ?? 0) + minutes;
-    if (!d.sleep_start || s.startTime < d.sleep_start) { d.sleep_start = s.startTime; }
-    if (!d.sleep_end || s.endTime > d.sleep_end) { d.sleep_end = s.endTime; }
+    const start = new Date(s.startTime).getTime();
+    const end = new Date(s.endTime).getTime();
+    if (!(end > start)) { continue; }
+    const date = localDateOf(s.endTime);
+    nights.set(date, [...(nights.get(date) ?? []), {start, end}]);
+  }
+  for (const [date, spans] of nights) {
+    spans.sort((a, b) => a.start - b.start);
+    const merged: {start: number; end: number}[] = [];
+    for (const span of spans) {
+      const last = merged[merged.length - 1];
+      if (last && span.start <= last.end) { last.end = Math.max(last.end, span.end); }
+      else { merged.push({...span}); }
+    }
+    const d = at(date);
+    d.sleep_minutes = Math.round(merged.reduce((sum, m) => sum + (m.end - m.start), 0) / 60000);
+    d.sleep_start = new Date(merged[0].start).toISOString();
+    d.sleep_end = new Date(merged[merged.length - 1].end).toISOString();
   }
 
   const latest = (samples: Sample[], key: 'weight_kg' | 'height_cm' | 'resting_hr') => {
