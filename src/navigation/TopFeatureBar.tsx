@@ -18,6 +18,7 @@ const FEATURES: {route: string; labelKey: string; icon: string}[] = [
   // active tab, so it just never highlights — fine until it moves to the day header.
   {route: 'SearchScreen', labelKey: 'navigation.search', icon: 'magnify'},
   {route: 'Habits', labelKey: 'habits.title', icon: 'checkbox-marked-circle-outline'},
+  {route: 'Food', labelKey: 'food.title', icon: 'silverware-fork-knife'},
 ];
 
 const CIRCLE = 52;

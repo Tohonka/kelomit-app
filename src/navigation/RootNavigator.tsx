@@ -6,6 +6,7 @@ import {DayMapOverviewScreen, DayMapFullScreen} from '../screens/MapTab';
 import EntryDetailScreen from '../screens/EntryDetailScreen';
 import AddEntryModal from '../screens/AddEntryModal';
 import QuickAddModal from '../screens/QuickAddModal';
+import FoodEntryModal from '../screens/FoodEntryModal';
 import ProjectsScreen from '../screens/ProjectsScreen';
 import TagsScreen from '../screens/TagsScreen';
 import TagsProjectsSettings from '../screens/settings/TagsProjectsSettings';
@@ -91,6 +92,15 @@ export default function RootNavigator() {
           presentation: 'modal',
           headerStyle: {backgroundColor: colors.bgCard},
         }}
+      />
+      <Stack.Screen
+        name="FoodEntryModal"
+        component={FoodEntryModal}
+        options={({route}) => ({
+          title: route.params?.entryId ? t('food.editFood') : t('food.logFood'),
+          presentation: 'modal',
+          headerStyle: {backgroundColor: colors.bgCard},
+        })}
       />
       <Stack.Screen
         name="ProjectsScreen"

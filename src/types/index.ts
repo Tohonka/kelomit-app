@@ -315,3 +315,46 @@ export interface Settings {
   prefill_from_usual: boolean;
   pay_period_start_day: number;
 }
+
+/** Food log (schema v30). kcal is optional by design — a name-only or
+ *  photo-only row is a complete entry. */
+export type FoodUnit = 'g' | 'ml' | 'serving' | 'piece';
+export type FoodSource = 'user' | 'off' | 'fineli';
+export interface FoodProduct {
+  id: number;
+  barcode: string | null;
+  name: string;
+  brand: string | null;
+  kcal_per_100: number | null;
+  kcal_per_serving: number | null;
+  protein_per_100: number | null;
+  carbs_per_100: number | null;
+  fat_per_100: number | null;
+  serving_g: number | null;
+  serving_label: string | null;
+  source: FoodSource;
+  source_ref: string | null;
+  image_url: string | null;
+  archived: boolean;
+  created_at: string;
+  updated_at: string;
+}
+export interface FoodEntry {
+  id: number;
+  day_id: number;
+  /** ISO 8601. Defaults to "now" on creation; user-editable. */
+  eaten_at: string;
+  name: string;
+  kcal: number | null;
+  product_id: number | null;
+  quantity: number | null;
+  unit: FoodUnit | null;
+  note: string | null;
+  file_path: string | null;
+  thumbnail_path: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  location_label: string | null;
+  created_at: string;
+  updated_at: string;
+}
