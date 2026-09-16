@@ -1,5 +1,6 @@
 import React, {useEffect, useState, useRef} from 'react';
 import {View, Text, StyleSheet, ActivityIndicator, AppState, StatusBar, Linking} from 'react-native';
+import {maybeImportHealth} from './src/services/healthConnect';
 import './src/i18n';
 import {useTranslation} from 'react-i18next';
 import type {AppStateStatus} from 'react-native';
@@ -115,6 +116,9 @@ function AppContent() {
       }, locations);
     };
 
+    // Health Connect daily totals: throttled inside, no-op unless enabled.
+    maybeImportHealth().catch(healthError => diag('health.import.fail', String(healthError)));
+
     // Initial start is delayed; resume-from-background (below) starts immediately.
     const startTimer = setTimeout(() => {
       syncGps().catch(syncError => diag('track.sync.fail', String(syncError)));
@@ -135,6 +139,7 @@ function AppContent() {
         reconcileHabitWidgets();
         // Fire and forget — sync failures never surface here.
         maybeAutoSync().catch(() => {});
+        maybeImportHealth().catch(healthError => diag('health.import.fail', String(healthError)));
       } else if (
         appState.current === 'active' &&
         nextState.match(/inactive|background/)

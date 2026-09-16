@@ -11,6 +11,14 @@ import {parseWeekdayHours, type WeekdayHours, type WeekdayOverride} from '../uti
 
 export type NavVisibility = 'always' | 'home_only';
 export type WidgetVoiceMode = 'confirm' | 'auto';
+export type Sex = 'male' | 'female';
+/** Fallback body data for energy estimates when Health Connect has none (H1). */
+export interface BodyProfile {
+  body_weight_kg: number | null;
+  body_height_cm: number | null;
+  birth_year: number | null;
+  sex: Sex | null;
+}
 
 interface SettingsState extends Settings {
   loaded: boolean;
@@ -41,6 +49,12 @@ interface SettingsState extends Settings {
   quickadd_default_project_id: number | null;
   quickadd_default_tag: string;
   quickadd_default_activity: ActivityType;
+  /** Opt-in: read daily totals from Health Connect on app foreground. */
+  health_enabled: boolean;
+  body_weight_kg: number | null;
+  body_height_cm: number | null;
+  birth_year: number | null;
+  sex: Sex | null;
   load: () => Promise<void>;
   setGpsEnabled: (enabled: boolean) => Promise<void>;
   setGpsInterval: (ms: number) => Promise<void>;
@@ -67,6 +81,8 @@ interface SettingsState extends Settings {
   setQuickAddDefaultProjectId: (id: number | null) => Promise<void>;
   setQuickAddDefaultTag: (tag: string) => Promise<void>;
   setQuickAddDefaultActivity: (type: ActivityType) => Promise<void>;
+  setHealthEnabled: (enabled: boolean) => Promise<void>;
+  setBodyProfile: (patch: Partial<BodyProfile>) => Promise<void>;
 }
 
 const ACTIVITY_TYPES: ActivityType[] = ['work', 'personal_work', 'personal'];
@@ -96,6 +112,11 @@ export const useSettingsStore = create<SettingsState>(set => ({
   quickadd_default_project_id: null,
   quickadd_default_tag: 'Quick add',
   quickadd_default_activity: 'work',
+  health_enabled: false,
+  body_weight_kg: null,
+  body_height_cm: null,
+  birth_year: null,
+  sex: null,
   loaded: false,
 
   load: async () => {
@@ -134,6 +155,15 @@ export const useSettingsStore = create<SettingsState>(set => ({
     )
       ? (raw.quickadd_default_activity as ActivityType)
       : 'work';
+    const numOrNull = (v: string | undefined): number | null => {
+      const n = parseFloat(v ?? '');
+      return Number.isFinite(n) ? n : null;
+    };
+    const health_enabled = raw.health_enabled === 'true';
+    const body_weight_kg = numOrNull(raw.body_weight_kg);
+    const body_height_cm = numOrNull(raw.body_height_cm);
+    const birth_year = numOrNull(raw.birth_year);
+    const sex: Sex | null = raw.sex === 'male' || raw.sex === 'female' ? raw.sex : null;
     set({
       ...settings,
       theme_mode,
@@ -152,8 +182,25 @@ export const useSettingsStore = create<SettingsState>(set => ({
       quickadd_default_project_id,
       quickadd_default_tag,
       quickadd_default_activity,
+      health_enabled,
+      body_weight_kg,
+      body_height_cm,
+      birth_year,
+      sex,
       loaded: true,
     });
+  },
+
+  setHealthEnabled: async enabled => {
+    await setSetting('health_enabled', String(enabled));
+    set({health_enabled: enabled});
+  },
+
+  setBodyProfile: async patch => {
+    for (const [key, value] of Object.entries(patch)) {
+      await setSetting(key, value == null ? '' : String(value));
+    }
+    set(patch);
   },
 
   setGpsEnabled: async enabled => {
