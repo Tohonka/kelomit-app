@@ -12,7 +12,8 @@ import type {Colors} from '../theme';
 const FEATURES: {route: string; labelKey: string; icon: string}[] = [
   {route: 'Home', labelKey: 'navigation.home', icon: 'home-variant'},
   {route: 'Map', labelKey: 'dayMap.title', icon: 'map-marker-outline'},
-  {route: 'Data', labelKey: 'navigation.data', icon: 'chart-box-outline'},
+  // Route name stays 'Data'; the tab is "Balance" to the user (plan 2026-09-14 B1).
+  {route: 'Data', labelKey: 'navigation.data', icon: 'scale-balance'},
   {route: 'Gallery', labelKey: 'navigation.gallery', icon: 'image-multiple-outline'},
   // Search lives in the root stack; navigate() bubbles up to it. It's never an
   // active tab, so it just never highlights — fine until it moves to the day header.

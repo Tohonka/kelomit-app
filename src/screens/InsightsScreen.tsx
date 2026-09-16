@@ -1,20 +1,34 @@
-import React, {useEffect, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator} from 'react-native';
+import {useFocusEffect} from '@react-navigation/native';
 import {format} from 'date-fns';
 import {useShellPadding} from '../navigation/shellMetrics';
 import {getInsightsBreakdown, getWorkSecondsByDay, type InsightsData, type InsightSlice, type InsightsScope} from '../db/entries';
+import {getSegmentsInRange} from '../db/routeHistory';
+import {getFoodKcalByDay, type FoodDayTotals} from '../db/food';
+import {getHealthDailyRange} from '../db/health';
+import {useSettingsStore} from '../store/settingsStore';
+import {useHabitStore, effectiveDone} from '../store/habitStore';
 import {useTheme, typography, spacing, radius} from '../theme';
 import type {Colors} from '../theme';
 import {getDateFnsLocale} from '../i18n';
 import {formatHours} from '../utils/hoursUtils';
+import {formatDuration, shiftDate} from '../utils/dateUtils';
+import {summarizeSegments, type MovementSummary} from '../utils/movementSummary';
+import {movementKcal} from '../utils/energy';
 import TargetRing from '../components/insights/TargetRing';
+import DayBars, {type DayBar} from '../components/insights/DayBars';
+import type {DayRouteSegment, HealthDaily} from '../types';
+
+/*
+ * Balance (plan 2026-09-14 B1): the work-hours view grown into one picture of
+ * the period — Work / Movement / Habits / Food / Health. It shows, it never
+ * grades: no scores, no calorie targets, no streak shaming.
+ */
 
 type Period = 'week' | 'month' | 'last30';
 
-// Weekly worked-hours goal the target ring measures against. Tweakable knob —
-// promote to a setting when the "work details" screen grows one.
-const WEEKLY_TARGET_HOURS = 40;
 const DAY_CEILING_HOURS = 9; // tallest daily bar
 
 const PERIODS: {key: Period; labelKey: string}[] = [
@@ -53,6 +67,14 @@ function rangeFor(period: Period): {start: string; end: string} {
   const back = new Date(now);
   back.setDate(now.getDate() - 29);
   return {start: localDateStr(back), end};
+}
+function datesBetween(start: string, end: string): string[] {
+  const out: string[] = [];
+  for (let d = start; d <= end; d = shiftDate(d, 1)) { out.push(d); }
+  return out;
+}
+function km(meters: number): string {
+  return `${(meters / 1000).toFixed(1)} km`;
 }
 
 const makeStyles = (c: Colors) =>
@@ -97,6 +119,13 @@ const makeStyles = (c: Colors) =>
       marginTop: spacing.xl,
       marginBottom: spacing.xs,
     },
+    sectionTitle: {
+      fontSize: typography.sizes.md,
+      fontWeight: typography.weights.black,
+      color: c.textPrimary,
+      marginHorizontal: spacing.lg + 4,
+      marginTop: spacing.xxl,
+    },
     barsCard: {
       marginHorizontal: spacing.lg,
       paddingHorizontal: spacing.lg,
@@ -115,18 +144,24 @@ const makeStyles = (c: Colors) =>
     bar: {width: '100%', borderRadius: 5, minHeight: 4},
     barLabel: {fontSize: 11, color: c.textMuted},
     barLabelToday: {color: c.primary, fontWeight: typography.weights.bold},
-    // Breakdown
+    // Breakdown + stat rows
     breakRow: {marginBottom: 14},
     breakTop: {flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6},
     breakLabel: {fontSize: typography.sizes.sm, color: c.textPrimary, fontWeight: typography.weights.semibold, flex: 1},
     breakValue: {fontSize: typography.sizes.sm, color: c.textSecondary},
     breakTrack: {height: 8, borderRadius: 4, backgroundColor: c.bgMuted, overflow: 'hidden'},
     breakFill: {height: 8, borderRadius: 4},
+    statRow: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6},
+    statLabel: {fontSize: typography.sizes.sm, color: c.textSecondary},
+    statValue: {fontSize: typography.sizes.base, color: c.textPrimary, fontWeight: typography.weights.semibold},
+    statNote: {fontSize: typography.sizes.xs, color: c.textMuted, marginTop: spacing.sm},
     empty: {padding: spacing.xxl, alignItems: 'center'},
     emptyText: {fontSize: typography.sizes.base, color: c.textMuted, textAlign: 'center'},
     loader: {marginTop: spacing.xxl},
     flex1: {flex: 1},
   });
+
+type Styles = ReturnType<typeof makeStyles>;
 
 function Breakdown({
   title,
@@ -139,7 +174,7 @@ function Breakdown({
   slices: InsightSlice[];
   total: number;
   colorFor: (slice: InsightSlice, i: number) => string;
-  styles: ReturnType<typeof makeStyles>;
+  styles: Styles;
 }) {
   if (slices.length === 0) {
     return null;
@@ -167,34 +202,124 @@ function Breakdown({
   );
 }
 
+function Stat({label, value, styles}: {label: string; value: string; styles: Styles}) {
+  return (
+    <View style={styles.statRow}>
+      <Text style={styles.statLabel}>{label}</Text>
+      <Text style={styles.statValue}>{value}</Text>
+    </View>
+  );
+}
+
 export default function InsightsScreen() {
   const {t, i18n} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const shellPad = useShellPadding();
+  const weeklyTargetHours = useSettingsStore(s => s.weekly_target_hours);
+  const bodyWeightKg = useSettingsStore(s => s.body_weight_kg);
+  const loadHabits = useHabitStore(s => s.load);
+  const habitState = useHabitStore();
   const [period, setPeriod] = useState<Period>('week');
   const [scope, setScope] = useState<InsightsScope>('all');
   const [data, setData] = useState<InsightsData | null>(null);
   const [byDay, setByDay] = useState<Record<string, number>>({});
+  const [segments, setSegments] = useState<Array<{date: string; segment: DayRouteSegment}>>([]);
+  const [foodByDay, setFoodByDay] = useState<Record<string, FoodDayTotals>>({});
+  const [health, setHealth] = useState<HealthDaily[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const range = useMemo(() => rangeFor(period), [period]);
+  const dates = useMemo(() => datesBetween(range.start, range.end), [range]);
+
+  useFocusEffect(useCallback(() => { loadHabits().catch(() => {}); }, [loadHabits]));
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    const {start, end} = rangeFor(period);
-    Promise.all([getInsightsBreakdown(start, end, scope), getWorkSecondsByDay(start, end)])
-      .then(([d, day]) => {
+    const {start, end} = range;
+    Promise.all([
+      getInsightsBreakdown(start, end, scope),
+      getWorkSecondsByDay(start, end),
+      getSegmentsInRange(start, end).catch(() => []),
+      getFoodKcalByDay(start, end).catch(() => ({})),
+      getHealthDailyRange(start, end).catch(() => []),
+    ])
+      .then(([d, day, segs, food, hc]) => {
         if (cancelled) { return; }
         setData(d);
         setByDay(day);
+        setSegments(segs);
+        setFoodByDay(food);
+        setHealth(hc);
       })
       .finally(() => { if (!cancelled) { setLoading(false); } });
     return () => { cancelled = true; };
-  }, [period, scope]);
+  }, [range, scope]);
 
   const workedSecs = useMemo(() => Object.values(byDay).reduce((s, v) => s + v, 0), [byDay]);
   const showWorked = scope !== 'personal' && workedSecs > 0;
-  const hasData = data && (data.totalSeconds > 0 || showWorked);
+  const hasWork = !!data && (data.totalSeconds > 0 || showWorked);
+
+  // ── Movement ────────────────────────────────────────────────────────────
+  const movement: MovementSummary = useMemo(
+    () => summarizeSegments(segments.map(s => s.segment)),
+    [segments],
+  );
+  const footSecByDate = useMemo(() => {
+    const byDate: Record<string, DayRouteSegment[]> = {};
+    for (const s of segments) { (byDate[s.date] ??= []).push(s.segment); }
+    const out: Record<string, number> = {};
+    for (const [date, segs] of Object.entries(byDate)) { out[date] = summarizeSegments(segs).footSec; }
+    return out;
+  }, [segments]);
+  const hasMovement = movement.footSec + movement.cycleSec + movement.vehicleSec > 0;
+  const weightKg = [...health].reverse().find(h => h.weight_kg != null)?.weight_kg ?? bodyWeightKg;
+  const estKcal = weightKg != null && (movement.footSec > 0 || movement.cycleSec > 0)
+    ? movementKcal(movement, weightKg)
+    : null;
+
+  // ── Habits: days in the period where any habit of the group was done ────
+  const habitRows = useMemo(() => {
+    return habitState.categories
+      .map(cat => {
+        const ids = habitState.habits.filter(h => h.category_id === cat.id).map(h => h.id);
+        if (ids.length === 0) { return null; }
+        const done = dates.filter(d => ids.some(id => effectiveDone(habitState, id, d))).length;
+        return {id: cat.id, title: cat.title, done};
+      })
+      .filter((r): r is {id: number; title: string; done: number} => r != null);
+  }, [habitState, dates]);
+  const hasHabits = habitRows.length > 0;
+
+  // ── Food ────────────────────────────────────────────────────────────────
+  const food = useMemo(() => {
+    const days = Object.values(foodByDay);
+    const kcal = days.reduce((s, d) => s + d.kcal, 0);
+    const entries = days.reduce((s, d) => s + d.entries, 0);
+    const noKcal = days.reduce((s, d) => s + d.noKcal, 0);
+    return {kcal, entries, noKcal, days: days.length};
+  }, [foodByDay]);
+  const hasFood = food.entries > 0;
+
+  // ── Health ──────────────────────────────────────────────────────────────
+  const hc = useMemo(() => {
+    const avg = (vals: number[]) => (vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : null);
+    const steps = avg(health.map(h => h.steps).filter((v): v is number => v != null));
+    const sleep = avg(health.map(h => h.sleep_minutes).filter((v): v is number => v != null));
+    const hr = avg(health.map(h => h.resting_hr).filter((v): v is number => v != null));
+    const weights = health.map(h => h.weight_kg).filter((v): v is number => v != null);
+    return {
+      steps: steps != null ? Math.round(steps) : null,
+      sleep: sleep != null ? Math.round(sleep) : null,
+      hr: hr != null ? Math.round(hr) : null,
+      weightFrom: weights[0] ?? null,
+      weightTo: weights[weights.length - 1] ?? null,
+    };
+  }, [health]);
+  const hasHealth = hc.steps != null || hc.sleep != null || hc.weightTo != null || hc.hr != null;
+
+  const hasAnything = hasWork || hasMovement || hasHabits || hasFood || hasHealth;
 
   const accentFor = (slice: InsightSlice): string => {
     if (slice.key === 'work') { return colors.accentPink; }
@@ -204,7 +329,7 @@ export default function InsightsScreen() {
   };
   const cycle = [colors.accentPink, colors.accentCyan, colors.accentAmber];
 
-  // Weekly target ring + daily bars (week view only — they're week concepts).
+  // Week view: Mon–Sun columns shared by every daily bar chart.
   const weekDays = useMemo(() => {
     const monday = mondayOf(new Date());
     const today = localDateStr(new Date());
@@ -216,9 +341,12 @@ export default function InsightsScreen() {
       return {key, label: format(d, 'EEEEEE', {locale}), secs: byDay[key] ?? 0, isToday: key === today};
     });
   }, [byDay, i18n.resolvedLanguage]);
+  const weekBars = (valueOf: (key: string) => number): DayBar[] =>
+    weekDays.map(d => ({key: d.key, label: d.label, value: valueOf(d.key), isToday: d.isToday}));
 
-  const targetSecs = WEEKLY_TARGET_HOURS * 3600;
-  const targetPct = Math.min(1, workedSecs / targetSecs);
+  const targetSecs = weeklyTargetHours * 3600;
+  const targetPct = targetSecs > 0 ? Math.min(1, workedSecs / targetSecs) : 0;
+  const isWeek = period === 'week';
 
   return (
     <View style={styles.container}>
@@ -250,15 +378,16 @@ export default function InsightsScreen() {
 
         {loading && <ActivityIndicator style={styles.loader} color={colors.primary} />}
 
-        {!loading && !hasData && (
+        {!loading && !hasAnything && (
           <View style={styles.empty}>
-            <Text style={styles.emptyText}>{t('insights.empty')}</Text>
+            <Text style={styles.emptyText}>{t('balance.empty')}</Text>
           </View>
         )}
 
-        {!loading && hasData && (
+        {!loading && hasWork && (
           <>
-            {period === 'week' && scope !== 'personal' && (
+            <Text style={styles.sectionTitle}>{t('balance.work')}</Text>
+            {isWeek && scope !== 'personal' && (
               <>
                 <View style={[styles.card, styles.ringCard]}>
                   <TargetRing pct={targetPct} color={colors.primary} track={colors.bgMuted} innerBg={colors.bgCard}>
@@ -269,7 +398,7 @@ export default function InsightsScreen() {
                     <Text style={styles.ringLabel}>{t('insights.trackedThisWeek')}</Text>
                     <Text style={styles.ringTotal}>{formatHours(workedSecs)}</Text>
                     <Text style={styles.ringTarget}>
-                      {t('insights.ofTargetHours', {target: `${WEEKLY_TARGET_HOURS}h`})}
+                      {t('insights.ofTargetHours', {target: `${weeklyTargetHours}h`})}
                     </Text>
                   </View>
                 </View>
@@ -297,7 +426,7 @@ export default function InsightsScreen() {
               </>
             )}
 
-            {period !== 'week' && showWorked && (
+            {!isWeek && showWorked && (
               <View style={[styles.card, styles.ringCard]}>
                 <TargetRing
                   pct={data!.totalSeconds > 0 ? Math.min(1, data!.totalSeconds / workedSecs) : 0}
@@ -336,6 +465,115 @@ export default function InsightsScreen() {
               colorFor={(_s, i) => cycle[i % cycle.length]}
               styles={styles}
             />
+          </>
+        )}
+
+        {!loading && hasMovement && (
+          <>
+            <Text style={styles.sectionTitle}>{t('balance.movement')}</Text>
+            <View style={styles.card}>
+              {movement.footSec > 0 && (
+                <Stat label={t('balance.walking')} value={`${formatDuration(movement.footSec)} · ${km(movement.footM)}`} styles={styles} />
+              )}
+              {movement.cycleSec > 0 && (
+                <Stat label={t('balance.cycling')} value={`${formatDuration(movement.cycleSec)} · ${km(movement.cycleM)}`} styles={styles} />
+              )}
+              {movement.vehicleSec > 0 && (
+                <Stat label={t('balance.driving')} value={`${formatDuration(movement.vehicleSec)} · ${km(movement.vehicleM)}`} styles={styles} />
+              )}
+              {movement.stillSec > 0 && (
+                <Stat label={t('balance.still')} value={formatDuration(movement.stillSec)} styles={styles} />
+              )}
+              <Text style={styles.statNote}>
+                {estKcal != null ? t('balance.energyEstimate', {kcal: estKcal}) : t('balance.energyNeedsWeight')}
+              </Text>
+            </View>
+            {isWeek && (
+              <>
+                <Text style={styles.eyebrow}>{t('balance.walkingMinutes')}</Text>
+                <DayBars days={weekBars(k => Math.round((footSecByDate[k] ?? 0) / 60))} color={colors.accentCyan} />
+              </>
+            )}
+          </>
+        )}
+
+        {!loading && hasHabits && (
+          <>
+            <Text style={styles.sectionTitle}>{t('balance.habits')}</Text>
+            <View style={styles.card}>
+              {habitRows.map((r, i) => {
+                const pct = dates.length > 0 ? Math.round((r.done / dates.length) * 100) : 0;
+                return (
+                  <View key={r.id} style={i === habitRows.length - 1 ? undefined : styles.breakRow}>
+                    <View style={styles.breakTop}>
+                      <Text style={styles.breakLabel} numberOfLines={1}>{r.title}</Text>
+                      <Text style={styles.breakValue}>{t('balance.habitDays', {done: r.done, total: dates.length})}</Text>
+                    </View>
+                    <View style={styles.breakTrack}>
+                      <View style={[styles.breakFill, {width: `${Math.max(3, pct)}%`, backgroundColor: cycle[i % cycle.length]}]} />
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          </>
+        )}
+
+        {!loading && hasFood && (
+          <>
+            <Text style={styles.sectionTitle}>{t('balance.food')}</Text>
+            <View style={styles.card}>
+              <Stat label={t('balance.foodTotal', {kcal: food.kcal, n: food.entries})} value="" styles={styles} />
+              <Stat
+                label={t('balance.foodAvg', {kcal: food.days > 0 ? Math.round(food.kcal / food.days) : 0, days: food.days})}
+                value=""
+                styles={styles}
+              />
+              {food.noKcal > 0 && <Text style={styles.statNote}>{t('balance.foodNoKcal', {n: food.noKcal})}</Text>}
+            </View>
+            {isWeek && (
+              <>
+                <Text style={styles.eyebrow}>{t('balance.dailyKcal')}</Text>
+                <DayBars days={weekBars(k => foodByDay[k]?.kcal ?? 0)} color={colors.accentAmber} />
+              </>
+            )}
+          </>
+        )}
+
+        {!loading && hasHealth && (
+          <>
+            <Text style={styles.sectionTitle}>{t('balance.health')}</Text>
+            <View style={styles.card}>
+              {hc.steps != null && (
+                <Stat label={t('balance.steps')} value={t('balance.perDay', {n: hc.steps})} styles={styles} />
+              )}
+              {hc.sleep != null && (
+                <Stat
+                  label={t('balance.sleep')}
+                  value={t('balance.sleepAvg', {h: Math.floor(hc.sleep / 60), m: hc.sleep % 60})}
+                  styles={styles}
+                />
+              )}
+              {hc.weightTo != null && (
+                <Stat
+                  label={t('balance.weight')}
+                  value={t('balance.weightTrend', {from: (hc.weightFrom ?? hc.weightTo).toFixed(1), to: hc.weightTo.toFixed(1)})}
+                  styles={styles}
+                />
+              )}
+              {hc.hr != null && (
+                <Stat label={t('balance.restingHr')} value={t('balance.bpm', {n: hc.hr})} styles={styles} />
+              )}
+            </View>
+            {isWeek && hc.steps != null && (
+              <>
+                <Text style={styles.eyebrow}>{t('balance.dailySteps')}</Text>
+                <DayBars
+                  days={weekBars(k => health.find(h => h.date === k)?.steps ?? 0)}
+                  color={colors.accentPink}
+                />
+              </>
+            )}
           </>
         )}
       </ScrollView>
