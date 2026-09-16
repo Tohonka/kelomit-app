@@ -557,4 +557,28 @@ export const migrations: Migration[] = [
       'CREATE INDEX IF NOT EXISTS idx_food_entries_eaten ON food_entries(eaten_at)',
     ],
   },
+  {
+    version: 31,
+    up: [
+      // Health Connect daily aggregates (plan 2026-09-14 H1). Keyed by date, not
+      // day_id: health data exists on days without a Kelomit day row and we must
+      // not create day rows for every calendar day. Raw records are never stored.
+      `CREATE TABLE IF NOT EXISTS health_daily (
+        date TEXT PRIMARY KEY,
+        steps INTEGER,
+        distance_m REAL,
+        sleep_minutes INTEGER,
+        sleep_start TEXT,
+        sleep_end TEXT,
+        weight_kg REAL,
+        height_cm REAL,
+        active_kcal REAL,
+        total_kcal REAL,
+        resting_hr INTEGER,
+        synced_at TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )`,
+    ],
+  },
 ];

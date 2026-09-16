@@ -32,7 +32,7 @@ it('migration 30 creates food_products + food_entries and is the latest', () => 
   expect(sql).toContain("CHECK(source IN ('user','off','fineli'))");
   expect(sql).toContain("CHECK(unit IN ('g','ml','serving','piece'))");
   expect(sql).toContain('idx_food_entries_day');
-  expect(migrations[migrations.length - 1].version).toBe(30);
+  expect(migrations[migrations.length - 1].version).toBe(31);
 });
 
 it('creates with defaults and maps the row', async () => {
