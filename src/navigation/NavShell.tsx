@@ -30,7 +30,12 @@ export default function NavShell(props: BottomTabBarProps) {
   return (
     <>
       <TopFeatureBar {...props} />
-      <BottomPill active={active} onSelect={select} quickAddTarget={quickAddTarget} />
+      <BottomPill
+        active={active}
+        onSelect={select}
+        onOpenProfile={() => navigation.navigate('ProfileDrawer')}
+        quickAddTarget={quickAddTarget}
+      />
     </>
   );
 }

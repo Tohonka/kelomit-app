@@ -13,6 +13,7 @@ import TagsProjectsSettings from '../screens/settings/TagsProjectsSettings';
 import SearchScreen from '../screens/SearchScreen';
 import InterfaceSettings from '../screens/settings/InterfaceSettings';
 import TrackingSettings from '../screens/settings/TrackingSettings';
+import ProfileDrawer from '../screens/ProfileDrawer';
 import HealthSettings from '../screens/settings/HealthSettings';
 import WorkDetailsSettings from '../screens/settings/WorkDetailsSettings';
 import ReportingSettings from '../screens/settings/ReportingSettings';
@@ -102,6 +103,16 @@ export default function RootNavigator() {
           presentation: 'modal',
           headerStyle: {backgroundColor: colors.bgCard},
         })}
+      />
+      <Stack.Screen
+        name="ProfileDrawer"
+        component={ProfileDrawer}
+        options={{
+          headerShown: false,
+          presentation: 'transparentModal',
+          animation: 'slide_from_bottom',
+          contentStyle: {backgroundColor: 'transparent'},
+        }}
       />
       <Stack.Screen
         name="ProjectsScreen"

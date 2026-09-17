@@ -837,6 +837,16 @@ const fi: typeof en = {
     estimateNote: 'Vain päättyneet päivät. Arvioita, ei mittauksia.',
     dailyUsed: 'Energiankulutus päivittäin',
   },
+  profile: {
+    me: 'Minä',
+    namePlaceholder: 'Nimesi',
+    changePhoto: 'Vaihda profiilikuva',
+    addBody: 'Lisää paino, pituus ja syntymävuosi',
+    age: '{{n}} v',
+    weekHours: 'Työ tällä viikolla / {{target}} h',
+    widgets: 'Widgetit',
+    data: 'Data ja varmuuskopio',
+  },
   smallTask: {
     duringWorkday: 'Työpäivän aikana',
     positionHint: 'Sijainti listassa (valinnainen)',

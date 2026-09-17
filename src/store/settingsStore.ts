@@ -22,6 +22,10 @@ export interface BodyProfile {
   sex: Sex | null;
   /** How physical a counted work hour is (energy estimate, 2026-09-17). */
   work_activity: WorkActivity;
+  // Local user profile (2026-09-17). ponytail: plain settings keys; a real
+  // users table arrives with sync accounts.
+  profile_name: string;
+  profile_photo: string | null;
 }
 
 interface SettingsState extends Settings {
@@ -62,6 +66,8 @@ interface SettingsState extends Settings {
   birth_year: number | null;
   sex: Sex | null;
   work_activity: WorkActivity;
+  profile_name: string;
+  profile_photo: string | null;
   load: () => Promise<void>;
   setGpsEnabled: (enabled: boolean) => Promise<void>;
   setGpsInterval: (ms: number) => Promise<void>;
@@ -127,6 +133,8 @@ export const useSettingsStore = create<SettingsState>(set => ({
   birth_year: null,
   sex: null,
   work_activity: 'desk',
+  profile_name: '',
+  profile_photo: null,
   loaded: false,
 
   load: async () => {
@@ -202,6 +210,8 @@ export const useSettingsStore = create<SettingsState>(set => ({
       birth_year,
       sex,
       work_activity,
+      profile_name: raw.profile_name ?? '',
+      profile_photo: raw.profile_photo || null,
       loaded: true,
     });
   },

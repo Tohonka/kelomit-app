@@ -835,6 +835,16 @@ const en = {
     estimateNote: 'Finished days only. Estimates, not measurements.',
     dailyUsed: 'Energy used per day',
   },
+  profile: {
+    me: 'Me',
+    namePlaceholder: 'Your name',
+    changePhoto: 'Change profile photo',
+    addBody: 'Add weight, height and birth year',
+    age: '{{n}} y',
+    weekHours: 'Work this week / {{target}} h',
+    widgets: 'Widgets',
+    data: 'Data & backup',
+  },
   smallTask: {
     duringWorkday: 'During workday',
     positionHint: 'Position in list (optional)',

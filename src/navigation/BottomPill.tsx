@@ -1,12 +1,14 @@
 import React, {useMemo} from 'react';
 import {useTranslation} from 'react-i18next';
-import {View, Text, StyleSheet} from 'react-native';
+import {View, Text, Image, StyleSheet} from 'react-native';
 import Bounceable from '../components/ui/Bounceable';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import {useTheme, typography, radius} from '../theme';
 import type {Colors} from '../theme';
 import QuickAddButton from './QuickAddButton';
+import {useSettingsStore} from '../store/settingsStore';
+import {fileUri} from '../utils/mediaUtils';
 
 export type PillRoute = 'Home' | 'Calendar' | 'Settings';
 
@@ -14,6 +16,8 @@ interface Props {
   // Highlighted pill route, or null when shown outside the tab bar (day detail).
   active: PillRoute | null;
   onSelect: (route: PillRoute) => void;
+  /** The 4th slot: the profile drawer (Settings lives inside it). */
+  onOpenProfile: () => void;
   // Optional quick-add target day; without it the + targets today.
   quickAddTarget?: {date: string; dayId: number};
 }
@@ -47,9 +51,12 @@ const makeStyles = (c: Colors, bottom: number) =>
     },
     tab: {width: 60, alignItems: 'center', gap: 3, paddingVertical: 6},
     label: {fontSize: 10, fontWeight: typography.weights.semibold},
+    avatar: {width: 22, height: 22, borderRadius: 11},
+    avatarActive: {borderWidth: 1.5, borderColor: c.primary},
   });
 
-export default function BottomPill({active, onSelect, quickAddTarget}: Props) {
+export default function BottomPill({active, onSelect, onOpenProfile, quickAddTarget}: Props) {
+  const photo = useSettingsStore(s => s.profile_photo);
   const {t} = useTranslation();
   const {colors} = useTheme();
   const insets = useSafeAreaInsets();
@@ -72,7 +79,20 @@ export default function BottomPill({active, onSelect, quickAddTarget}: Props) {
         {tab('Home', 'navigation.home', 'home-variant')}
         {tab('Calendar', 'navigation.calendar', 'calendar-month')}
         <QuickAddButton target={quickAddTarget} />
-        {tab('Settings', 'common.settings', 'cog-outline')}
+        <Bounceable style={styles.tab} haptic accessibilityLabel={t('profile.me')} onPress={onOpenProfile}>
+          {photo ? (
+            <Image source={{uri: fileUri(photo)}} style={[styles.avatar, active === 'Settings' && styles.avatarActive]} />
+          ) : (
+            <Icon
+              name="account-circle-outline"
+              size={20}
+              color={active === 'Settings' ? colors.primary : colors.textMuted}
+            />
+          )}
+          <Text style={[styles.label, {color: active === 'Settings' ? colors.primary : colors.textMuted}]}>
+            {t('profile.me')}
+          </Text>
+        </Bounceable>
       </View>
     </View>
   );
