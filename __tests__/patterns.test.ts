@@ -18,9 +18,17 @@ describe('comparePair', () => {
     expect(comparePair(few, {x: 'sleep', y: 'kcal', lag: 0})).toBeNull();
     const flat: DayPoint[] = Array.from({length: 20}, (_, i) => ({date: day(i + 1), sleep: 400 + i, kcal: 2000 + (i % 2)}));
     expect(comparePair(flat, {x: 'sleep', y: 'kcal', lag: 0})).toBeNull();
-    // every x equal → nothing falls below the median
+    // every x equal → no split exists, under or at-most
     const same: DayPoint[] = Array.from({length: 20}, (_, i) => ({date: day(i + 1), sleep: 420, kcal: i * 100}));
     expect(comparePair(same, {x: 'sleep', y: 'kcal', lag: 0})).toBeNull();
+  });
+
+  it('a series full of ties splits at "at most the median" instead of going silent', () => {
+    // no exercise on 12 days, 45 min on 8
+    const points: DayPoint[] = Array.from({length: 21}, (_, i) => ({
+      date: day(i + 1), exercise: i < 12 ? 0 : 45, sleep: i === 0 ? null : (i - 1 < 12 ? 400 : 460),
+    }));
+    expect(comparePair(points, {x: 'exercise', y: 'sleep', lag: 1})).toMatchObject({threshold: 0, inclusive: true, lowMean: 400, highMean: 460});
   });
 
   it('skips days with missing data instead of reading them as zero', () => {

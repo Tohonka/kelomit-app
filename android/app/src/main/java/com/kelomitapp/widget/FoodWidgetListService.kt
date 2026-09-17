@@ -34,7 +34,9 @@ class FoodWidgetListService : RemoteViewsService() {
       )
       views.setOnClickFillInIntent(
         R.id.widget_food_item,
-        Intent().putExtra(EXTRA_FOOD_INDEX, position),
+        // The food itself, not its position: the list may be re-ranked between
+        // the launcher's last repaint and the tap.
+        Intent().putExtra(EXTRA_FOOD_JSON, food.toString()),
       )
       return views
     }

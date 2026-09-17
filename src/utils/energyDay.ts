@@ -183,6 +183,9 @@ export function energyDay(input: EnergyDayInput): EnergyDay {
   const extraSteps = Math.max(0, (input.steps ?? 0) - explained);
 
   // Most certain first; each bucket only gets what is left of the day.
+  // ponytail: work minutes aren't reduced by walking/driving done *during* work
+  // (no per-minute timeline here). ~7 kcal/h at desk, ~150 kcal/h at physical —
+  // intersect with the day legs if the physical setting gets real use.
   if (input.sleepMinutes != null) { push('sleep', input.sleepMinutes, PAR_SLEEP); }
   else { push('sleep', ASSUMED_SLEEP_MIN, PAR_SLEEP, true); }
   push('exercise', otherMin, otherMet);

@@ -65,6 +65,9 @@ export default function WheelPicker({options, value, onChange, width = 124}: Pro
   const base = Math.floor(REPEATS / 2) * n;
   const valueIdx = Math.max(0, options.findIndex(o => o.key === value));
   const [row, setRow] = useState(base + valueIdx);
+  // Initial position only: a changing contentOffset prop makes Android scrollTo
+  // immediately, which fights the snap animation.
+  const initialOffset = useRef({x: 0, y: (base + valueIdx) * ITEM_H}).current;
   const items = useMemo(
     () => Array.from({length: n * REPEATS}, (_, i) => options[i % n]),
     [options, n],
@@ -107,17 +110,21 @@ export default function WheelPicker({options, value, onChange, width = 124}: Pro
         showsVerticalScrollIndicator={false}
         snapToInterval={ITEM_H}
         decelerationRate="fast"
-        contentOffset={{x: 0, y: row * ITEM_H}}
+        contentOffset={initialOffset}
         onLayout={() => ref.current?.scrollTo({y: row * ITEM_H, animated: false})}
         onMomentumScrollEnd={settle}
-        onScrollEndDrag={settle}
         contentContainerStyle={styles.pad}>
         {items.map((o, i) => (
           <Pressable
             key={i}
             style={styles.item}
             accessibilityLabel={o.label}
-            onPress={() => ref.current?.scrollTo({y: i * ITEM_H, animated: true})}>
+            onPress={() => {
+              // A programmatic scroll emits no momentum-end on Android: select here.
+              ref.current?.scrollTo({y: i * ITEM_H, animated: true});
+              setRow(i);
+              if (o.key !== value) { onChange(o.key); }
+            }}>
             <Text style={i === row ? styles.textActive : styles.text} numberOfLines={1}>{o.label}</Text>
           </Pressable>
         ))}

@@ -2,6 +2,7 @@ import {getOrCreateDay} from '../db/days';
 import {
   createFoodEntry,
   getBarcodeProducts,
+  getProduct,
   getProductByBarcode,
   getRecentFoodEntries,
   onFoodChange,
@@ -16,6 +17,7 @@ import {
 import {defaultPortion, kcalFor, rankRecents, type RecentFood} from '../utils/foodMath';
 import {localDateOf} from '../utils/timeFormat';
 import {lookupBarcode} from './openFoodFacts';
+import {diag} from './diag';
 import type {FoodProduct, FoodUnit} from '../types';
 
 /*
@@ -72,7 +74,8 @@ export function parsePendingAdds(raw: unknown[]): PendingFoodAdd[] {
       product_id: num(o.product_id),
       quantity: num(o.quantity),
       unit: UNITS.includes(o.unit as FoodUnit) ? (o.unit as FoodUnit) : null,
-      eaten_at: o.eaten_at,
+      // Java's Instant.toString() varies in precision; our sorts compare strings.
+      eaten_at: new Date(o.eaten_at).toISOString(),
       ...(typeof o.barcode === 'string' && o.barcode ? {barcode: o.barcode} : {}),
     });
   }
@@ -85,7 +88,14 @@ export function parsePendingAdds(raw: unknown[]): PendingFoodAdd[] {
 async function resolveScan(p: PendingFoodAdd, barcode: string): Promise<RecentFood> {
   let product = await getProductByBarcode(barcode);
   if (!product) {
-    const off = await lookupBarcode(barcode).catch(() => null);
+    let off: Awaited<ReturnType<typeof lookupBarcode>>;
+    try {
+      off = await lookupBarcode(barcode);
+    } catch {
+      // Offline is not "unknown": log the bare entry and leave the barcode
+      // unclaimed, so the next scan of it still gets a real lookup.
+      return p;
+    }
     product = await upsertProduct(off ?? {
       barcode, name: p.name, brand: null, kcal_per_100: null, kcal_per_serving: null,
       protein_per_100: null, carbs_per_100: null, fat_per_100: null, serving_g: null,
@@ -109,12 +119,19 @@ export async function syncFoodWidget(): Promise<boolean> {
     // Clear first: a crash mid-drain loses a tap, which beats logging it twice.
     if (pending.length) { await nativeClearPendingFoodAdds(); }
     for (const p of pending) {
-      const tpl: RecentFood = p.barcode ? await resolveScan(p, p.barcode) : p;
-      const day = await getOrCreateDay(localDateOf(p.eaten_at));
-      await createFoodEntry({
-        day_id: day.id, eaten_at: p.eaten_at, name: tpl.name, kcal: tpl.kcal,
-        product_id: tpl.product_id, quantity: tpl.quantity, unit: tpl.unit,
-      });
+      // One bad row (e.g. a product deleted since the list was pushed) must
+      // not take the rest of the queue with it.
+      try {
+        const tpl: RecentFood = p.barcode ? await resolveScan(p, p.barcode) : p;
+        const day = await getOrCreateDay(localDateOf(p.eaten_at));
+        const known = tpl.product_id != null && (await getProduct(tpl.product_id)) != null;
+        await createFoodEntry({
+          day_id: day.id, eaten_at: p.eaten_at, name: tpl.name, kcal: tpl.kcal,
+          product_id: known ? tpl.product_id : null, quantity: tpl.quantity, unit: tpl.unit,
+        });
+      } catch (e) {
+        diag('widget.food.add.fail', String(e));
+      }
     }
     await pushFoodWidgetState();
     return pending.length > 0;

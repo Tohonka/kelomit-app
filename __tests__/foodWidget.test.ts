@@ -37,7 +37,7 @@ describe('buildFoodWidgetState', () => {
 });
 
 describe('parsePendingAdds', () => {
-  it('keeps well-formed rows and normalises the loose fields', () => {
+  it('keeps well-formed rows, normalises the loose fields and the timestamp precision', () => {
     const rows = parsePendingAdds([
       {name: 'Puuro', kcal: 250, product_id: null, quantity: 1, unit: 'serving', eaten_at: '2026-09-17T06:00:00Z'},
       {name: 'Barcode …1234', eaten_at: '2026-09-17T07:00:00Z', barcode: '6400000001234', unit: 'bogus', kcal: 'x'},
@@ -47,8 +47,8 @@ describe('parsePendingAdds', () => {
       null, 'junk',
     ]);
     expect(rows).toEqual([
-      {name: 'Puuro', kcal: 250, product_id: null, quantity: 1, unit: 'serving', eaten_at: '2026-09-17T06:00:00Z'},
-      {name: 'Barcode …1234', kcal: null, product_id: null, quantity: null, unit: null, eaten_at: '2026-09-17T07:00:00Z', barcode: '6400000001234'},
+      {name: 'Puuro', kcal: 250, product_id: null, quantity: 1, unit: 'serving', eaten_at: '2026-09-17T06:00:00.000Z'},
+      {name: 'Barcode …1234', kcal: null, product_id: null, quantity: null, unit: null, eaten_at: '2026-09-17T07:00:00.000Z', barcode: '6400000001234'},
     ]);
   });
 });

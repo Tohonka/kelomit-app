@@ -852,9 +852,11 @@ const fi: typeof en = {
   },
   patterns: {
     title: 'Havainnot',
-    sentence: 'Päivinä, jolloin {{x}} oli alle {{threshold}}: {{y}} oli keskimäärin {{low}}. Muina päivinä: {{high}}.',
-    sentenceNext: 'Päivinä, jolloin {{x}} oli alle {{threshold}}: seuraavan päivän {{y}} oli keskimäärin {{low}}. Muina päivinä: {{high}}.',
+    sentence: 'Päivinä, jolloin {{x}} oli {{cmp}} {{threshold}}: {{y}} oli keskimäärin {{low}}. Muina päivinä: {{high}}.',
+    sentenceNext: 'Päivinä, jolloin {{x}} oli {{cmp}} {{threshold}}: seuraavan päivän {{y}} oli keskimäärin {{low}}. Muina päivinä: {{high}}.',
     series: {sleep: 'uni', steps: 'askeleet', exercise: 'liikunta', kcal: 'syöminen', work: 'työ', habits: 'tehdyt tavat'},
+    under: 'alle',
+    atMost: 'enintään',
     needMore: '{{have}} käyttökelpoista päivää — havaintoihin tarvitaan noin {{need}}.',
     none: 'Mitään ei vielä erotu.',
     note: 'Viimeiset {{days}} päivää, jaettu mediaanista. Sattumia sattuu — nämä ovat havaintoja, eivät syitä.',

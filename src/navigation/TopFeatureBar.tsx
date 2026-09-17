@@ -133,6 +133,9 @@ function SortableCell({feature, index, cols, label, styles, iconColor, onDragTo,
   const wiggle = useSharedValue(0);
   const dragging = useRef(false);
   const start = useRef({x: 0, y: 0});
+  // A ref, so the gesture object stays the same while the order changes under it.
+  const home = useRef({x: homeX, y: homeY});
+  home.current = {x: homeX, y: homeY};
 
   useEffect(() => {
     wiggle.value = withRepeat(withSequence(withTiming(-2, {duration: 110}), withTiming(2, {duration: 110})), -1, true);
@@ -145,14 +148,18 @@ function SortableCell({feature, index, cols, label, styles, iconColor, onDragTo,
         .runOnJS(true)
         .onStart(() => {
           dragging.current = true;
-          start.current = {x: x.value, y: y.value};
+          start.current = home.current;
           lift.value = withTiming(1, {duration: 120});
           haptic(HAPTIC_TAP);
         })
         .onUpdate(e => {
-          x.value = start.current.x + e.translationX;
-          y.value = start.current.y + e.translationY;
-          onDragTo(feature.route, x.value, y.value);
+          // Locals, not x.value: reading a shared value back on the JS thread
+          // right after writing it can return the previous frame's number.
+          const nx = start.current.x + e.translationX;
+          const ny = start.current.y + e.translationY;
+          x.value = nx;
+          y.value = ny;
+          onDragTo(feature.route, nx, ny);
         })
         .onFinalize(() => {
           if (!dragging.current) { return; }
@@ -258,11 +265,13 @@ export default function TopFeatureBar({state, navigation}: BottomTabBarProps) {
             </Pressable>
           </View>
           <View style={{height: rows * CELL_H}}>
-            {features.map((f, i) => (
+            {/* Fixed render order: only `index` moves, so no native view is
+                re-parented under the finger mid-drag. */}
+            {FEATURES.map(f => (
               <SortableCell
                 key={f.route}
                 feature={f}
-                index={i}
+                index={order.indexOf(f.route)}
                 cols={cols}
                 label={t(f.labelKey)}
                 styles={styles}

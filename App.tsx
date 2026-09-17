@@ -127,7 +127,6 @@ function AppContent() {
     startFoodWriteBack();
     // Food widget: fold in taps made while we were away, then keep its list fresh.
     startFoodWidgetSync();
-    syncFoodWidget().catch(e => diag('widget.food.fail', String(e)));
     maybeImportHealth().catch(healthError => diag('health.import.fail', String(healthError)));
 
     // Initial start is delayed; resume-from-background (below) starts immediately.
@@ -148,6 +147,9 @@ function AppContent() {
         // A widget may have started/stopped a session while we were backgrounded.
         useSessionStore.getState().reconcile().catch(() => {});
         reconcileHabitWidgets();
+        // Food widget taps made while we were backgrounded (the GPS service
+        // keeps the process alive for days, so launch alone isn't enough).
+        syncFoodWidget().catch(e => diag('widget.food.fail', String(e)));
         // Fire and forget — sync failures never surface here.
         maybeAutoSync().catch(() => {});
         maybeImportHealth().catch(healthError => diag('health.import.fail', String(healthError)));

@@ -29,6 +29,7 @@ import {
   deleteFoodEntry,
   getFoodEntriesForDay,
   getRecentFoodEntries,
+  onFoodChange,
 } from '../db/food';
 import {
   filterFoods,
@@ -238,7 +239,11 @@ export default function FoodScreen({navigation, route}: TabScreenProps<'Food'>) 
     name: f.name, kcal: f.kcal, product_id: f.product_id, quantity: f.quantity, unit: f.unit,
   });
 
-  useFocusEffect(useCallback(() => { load(date).catch(() => {}); }, [load, date]));
+  // Reload on focus, and while focused on any write (widget adds drained on resume).
+  useFocusEffect(useCallback(() => {
+    load(date).catch(() => {});
+    return onFoodChange(() => { load(date).catch(() => {}); });
+  }, [load, date]));
 
   const isToday = date === todayDate();
 

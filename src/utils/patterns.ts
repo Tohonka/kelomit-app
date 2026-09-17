@@ -34,8 +34,10 @@ export const MIN_DAYS = 7;
 const MIN_DIFF = 0.1;
 
 export interface Pattern extends PatternPair {
-  /** Median of x: the "low" half is x < threshold. */
+  /** Median of x: the "low" half is x < threshold — or x <= threshold when
+   *  `inclusive` (a series full of ties, e.g. exercise = 0 on most days). */
   threshold: number;
+  inclusive: boolean;
   lowMean: number;
   highMean: number;
   lowDays: number;
@@ -66,15 +68,19 @@ export function comparePair(points: DayPoint[], pair: PatternPair): Pattern | nu
   const xs = rows.map(r => r.x).sort((a, b) => a - b);
   const mid = Math.floor(xs.length / 2);
   const threshold = xs.length % 2 === 1 ? xs[mid] : (xs[mid - 1] + xs[mid]) / 2;
-  const low = rows.filter(r => r.x < threshold).map(r => r.y);
-  const high = rows.filter(r => r.x >= threshold).map(r => r.y);
+  // Many equal values pile up on the median and empty the "under" half; then
+  // the tie goes to the low side instead.
+  const inclusive = rows.filter(r => r.x < threshold).length < MIN_DAYS;
+  const isLow = (x: number) => (inclusive ? x <= threshold : x < threshold);
+  const low = rows.filter(r => isLow(r.x)).map(r => r.y);
+  const high = rows.filter(r => !isLow(r.x)).map(r => r.y);
   if (low.length < MIN_DAYS || high.length < MIN_DAYS) { return null; }
   const lowMean = mean(low);
   const highMean = mean(high);
   const top = Math.max(Math.abs(lowMean), Math.abs(highMean));
   const strength = top > 0 ? Math.abs(highMean - lowMean) / top : 0;
   if (strength < MIN_DIFF) { return null; }
-  return {...pair, threshold, lowMean, highMean, lowDays: low.length, highDays: high.length, strength};
+  return {...pair, threshold, inclusive, lowMean, highMean, lowDays: low.length, highDays: high.length, strength};
 }
 
 /** The strongest few patterns in `points`, strongest first. */

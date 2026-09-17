@@ -850,9 +850,11 @@ const en = {
   },
   patterns: {
     title: 'Patterns',
-    sentence: 'Days with {{x}} under {{threshold}}: {{y}} averaged {{low}}. Other days: {{high}}.',
-    sentenceNext: 'Days with {{x}} under {{threshold}}: the next day’s {{y}} averaged {{low}}. Other days: {{high}}.',
+    sentence: 'Days with {{x}} {{cmp}} {{threshold}}: {{y}} averaged {{low}}. Other days: {{high}}.',
+    sentenceNext: 'Days with {{x}} {{cmp}} {{threshold}}: the next day’s {{y}} averaged {{low}}. Other days: {{high}}.',
     series: {sleep: 'sleep', steps: 'steps', exercise: 'exercise', kcal: 'eating', work: 'work', habits: 'habits done'},
+    under: 'under',
+    atMost: 'at most',
     needMore: '{{have}} usable days so far — patterns need about {{need}}.',
     none: 'Nothing stands out yet.',
     note: 'Last {{days}} days, split at the median. Coincidences happen — these are observations, not causes.',

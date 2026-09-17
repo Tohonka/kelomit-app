@@ -46,6 +46,7 @@ const makeStyles = (c: Colors, bottom: number) =>
     root: {flex: 1, justifyContent: 'flex-end'},
     scrim: {position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: '#00000088'},
     sheet: {
+      flexShrink: 1,
       backgroundColor: c.bgCard,
       borderTopLeftRadius: radius.xl,
       borderTopRightRadius: radius.xl,
@@ -212,8 +213,11 @@ export default function ProfileDrawer({navigation}: Props) {
               <TextInput
                 style={styles.name}
                 value={name}
-                onChangeText={setName}
-                onBlur={() => setBodyProfile({profile_name: name.trim()})}
+                // Saved as typed: every way out of the drawer unmounts without a blur.
+                onChangeText={v => {
+                  setName(v);
+                  setBodyProfile({profile_name: v.trim()}).catch(() => {});
+                }}
                 placeholder={t('profile.namePlaceholder')}
                 placeholderTextColor={colors.textMuted}
                 maxLength={40}

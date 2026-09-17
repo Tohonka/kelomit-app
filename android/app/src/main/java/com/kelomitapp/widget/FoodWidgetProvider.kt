@@ -12,9 +12,10 @@ import android.widget.RemoteViews
 import android.widget.Toast
 import com.kelomitapp.MainActivity
 import com.kelomitapp.R
+import org.json.JSONObject
 
 const val ACTION_FOOD_ADD = "com.kelomitapp.widget.ACTION_FOOD_ADD"
-const val EXTRA_FOOD_INDEX = "food_index"
+const val EXTRA_FOOD_JSON = "food_json"
 
 /**
  * Food widget: a scrolling list of the user's own foods (tap = "ate this,
@@ -58,7 +59,7 @@ class FoodWidgetProvider : AppWidgetProvider() {
       views.setRemoteAdapter(R.id.widget_food_list, Intent(context, FoodWidgetListService::class.java))
       views.setEmptyView(R.id.widget_food_list, R.id.widget_food_empty)
       views.setOnClickPendingIntent(R.id.widget_food_empty, WidgetCommon.openAppPendingIntent(context))
-      // Rows fill in EXTRA_FOOD_INDEX, so the template must be mutable.
+      // Rows fill in EXTRA_FOOD_JSON, so the template must be mutable.
       val template = Intent(context, FoodWidgetProvider::class.java).setAction(ACTION_FOOD_ADD)
       views.setPendingIntentTemplate(
         R.id.widget_food_list,
@@ -100,8 +101,8 @@ class FoodWidgetProvider : AppWidgetProvider() {
   override fun onReceive(context: Context, intent: Intent) {
     super.onReceive(context, intent)
     if (intent.action != ACTION_FOOD_ADD) return
-    val index = intent.getIntExtra(EXTRA_FOOD_INDEX, -1)
-    val food = FoodWidgetStore.foods(context).optJSONObject(index) ?: return
+    val food = intent.getStringExtra(EXTRA_FOOD_JSON)
+      ?.let { runCatching { JSONObject(it) }.getOrNull() } ?: return
     FoodWidgetStore.queue(context, food)
     toastAdded(context, food.optString("name"))
   }

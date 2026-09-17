@@ -697,6 +697,7 @@ export default function InsightsScreen() {
                       {t(p.lag === 1 ? 'patterns.sentenceNext' : 'patterns.sentence', {
                         x: t(`patterns.series.${p.x}`),
                         y: t(`patterns.series.${p.y}`),
+                        cmp: t(p.inclusive ? 'patterns.atMost' : 'patterns.under'),
                         threshold: fmtSeries(p.x, p.threshold),
                         low: fmtSeries(p.y, p.lowMean),
                         high: fmtSeries(p.y, p.highMean),

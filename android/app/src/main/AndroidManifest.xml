@@ -182,6 +182,7 @@
         android:name=".widget.FoodScanActivity"
         android:theme="@android:style/Theme.Translucent.NoTitleBar"
         android:taskAffinity="com.kelomitapp.foodscan"
+        android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
         android:excludeFromRecents="true"
         android:exported="false" />
 

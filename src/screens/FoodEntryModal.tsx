@@ -456,8 +456,9 @@ export default function FoodEntryModal({navigation, route}: Props) {
           barcode: pendingBarcode,
           name: finalName,
           brand: null,
-          kcal_per_100: null,
-          kcal_per_serving: finalKcal,
+          // The typed kcal is for the whole amount; the product remembers one unit.
+          kcal_per_100: finalKcal != null && qty != null && (u === 'g' || u === 'ml') ? Math.round((finalKcal / qty) * 100) : null,
+          kcal_per_serving: finalKcal != null && qty != null && (u === 'piece' || u === 'serving') ? Math.round(finalKcal / qty) : finalKcal != null && qty == null ? finalKcal : null,
           protein_per_100: null,
           carbs_per_100: null,
           fat_per_100: null,
@@ -653,6 +654,9 @@ export default function FoodEntryModal({navigation, route}: Props) {
           )}
         </View>
         <WheelPicker
+          // Remount when the unit list changes length (product linked/unlinked):
+          // the wheel's row index is only meaningful for one list.
+          key={options.length}
           options={options}
           value={option?.key ?? 'g'}
           onChange={key => {
