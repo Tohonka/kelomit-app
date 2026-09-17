@@ -1,4 +1,4 @@
-import React, {useCallback, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {
   View,
@@ -9,6 +9,8 @@ import {
   Alert,
   Image,
   ToastAndroid,
+  TextInput,
+  FlatList,
 } from 'react-native';
 import {useFocusEffect} from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -17,6 +19,8 @@ import {useTheme, typography, spacing, radius} from '../theme';
 import type {Colors} from '../theme';
 import ActionSheet from '../components/ui/ActionSheet';
 import Bounceable from '../components/ui/Bounceable';
+import Sheet from '../components/ui/Sheet';
+import {getSetting, setSetting} from '../db/settings';
 import {getDayByDate, getOrCreateDay} from '../db/days';
 import {
   createFoodEntry,
@@ -24,15 +28,26 @@ import {
   getFoodEntriesForDay,
   getRecentFoodEntries,
 } from '../db/food';
-import {rankRecents, type RecentFood} from '../utils/foodMath';
+import {
+  filterFoods,
+  parseFoodSort,
+  rankRecents,
+  sortFoodEntries,
+  type FoodSort,
+  type FoodSortKey,
+  type RecentFood,
+} from '../utils/foodMath';
 import {formatDate, formatTime, shiftDate, todayDate} from '../utils/dateUtils';
 import {deleteMediaFile, fileUri} from '../utils/mediaUtils';
 import {haptic, HAPTIC_SAVE} from '../utils/haptics';
 import type {TabScreenProps} from '../navigation/navigationTypes';
 import type {FoodEntry} from '../types';
 
-// Recents are ranked from the last two months of entries.
-const RECENT_DAYS = 60;
+// "My foods" = everything logged in the last year; the chips are its top six.
+const MY_FOODS_DAYS = 365;
+const RECENT_CHIPS = 6;
+const SORT_SETTING = 'food_sort';
+const SORT_KEYS: FoodSortKey[] = ['time', 'kcal', 'name'];
 const THUMB = 40;
 
 const makeStyles = (c: Colors) =>
@@ -78,7 +93,7 @@ const makeStyles = (c: Colors) =>
       textTransform: 'uppercase',
       letterSpacing: 0.5,
     },
-    recentsRow: {paddingHorizontal: spacing.lg, gap: spacing.sm, flexDirection: 'row'},
+    recentsRow: {paddingHorizontal: spacing.lg, gap: spacing.sm, flexDirection: 'row', flexWrap: 'wrap'},
     chip: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -90,6 +105,7 @@ const makeStyles = (c: Colors) =>
       borderWidth: 1,
       borderColor: c.border,
     },
+    chipName: {maxWidth: 150},
     chipText: {fontSize: typography.sizes.sm, fontWeight: typography.weights.medium, color: c.textPrimary},
     chipKcal: {fontSize: typography.sizes.xs, color: c.textMuted},
     list: {marginTop: spacing.md, marginHorizontal: spacing.lg, gap: spacing.sm},
@@ -110,30 +126,113 @@ const makeStyles = (c: Colors) =>
     note: {fontSize: typography.sizes.xs, color: c.textMuted, marginTop: 2},
     kcal: {fontSize: typography.sizes.base, fontWeight: typography.weights.bold, color: c.textSecondary},
     againBtn: {padding: spacing.xs},
+    searchBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      marginTop: spacing.md,
+      marginHorizontal: spacing.lg,
+      paddingHorizontal: spacing.md,
+      minHeight: 44,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.bgCard,
+    },
+    searchBtnText: {flex: 1, fontSize: typography.sizes.base, color: c.textMuted},
+    listHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginTop: spacing.lg,
+      marginHorizontal: spacing.lg,
+    },
+    listLabel: {
+      fontSize: typography.sizes.xs,
+      fontWeight: typography.weights.semibold,
+      color: c.textMuted,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    sortBtn: {flexDirection: 'row', alignItems: 'center', gap: 4, padding: spacing.xs},
+    sortText: {fontSize: typography.sizes.xs, color: c.textSecondary},
+    sheetInput: {
+      marginHorizontal: spacing.lg,
+      marginBottom: spacing.sm,
+      paddingHorizontal: spacing.md,
+      minHeight: 44,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.bg,
+      fontSize: typography.sizes.base,
+      color: c.textPrimary,
+    },
+    sheetList: {maxHeight: 300},
+    foodRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      paddingHorizontal: spacing.lg,
+      minHeight: 48,
+    },
+    foodEdit: {padding: spacing.sm},
     empty: {padding: spacing.xxl, alignItems: 'center'},
     emptyText: {fontSize: typography.sizes.base, color: c.textMuted, textAlign: 'center'},
   });
 
-export default function FoodScreen({navigation}: TabScreenProps<'Food'>) {
+export default function FoodScreen({navigation, route}: TabScreenProps<'Food'>) {
   const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const shellPad = useShellPadding();
   const [date, setDate] = useState(todayDate());
   const [entries, setEntries] = useState<FoodEntry[]>([]);
-  const [recents, setRecents] = useState<RecentFood[]>([]);
+  const [myFoods, setMyFoods] = useState<RecentFood[]>([]);
+  const [sort, setSort] = useState<FoodSort>(parseFoodSort(null));
+  const [sortOpen, setSortOpen] = useState(false);
+  const [foodsOpen, setFoodsOpen] = useState(false);
+  const [query, setQuery] = useState('');
   const [target, setTarget] = useState<FoodEntry | null>(null);
 
   // Read-only day lookup: browsing days must not create day rows.
   const load = useCallback(async (d: string) => {
     const day = await getDayByDate(d);
     const rows = day ? await getFoodEntriesForDay(day.id) : [];
-    const since = new Date(Date.now() - RECENT_DAYS * 86400000).toISOString();
+    const since = new Date(Date.now() - MY_FOODS_DAYS * 86400000).toISOString();
     const recentRows = await getRecentFoodEntries(since);
     const now = new Date();
     setEntries(rows);
-    setRecents(rankRecents(recentRows, now.getHours() * 60 + now.getMinutes()));
+    setMyFoods(rankRecents(recentRows, now.getHours() * 60 + now.getMinutes(), Infinity));
   }, []);
+
+  useEffect(() => {
+    getSetting(SORT_SETTING).then(v => setSort(parseFoodSort(v))).catch(() => {});
+  }, []);
+
+  // The food widget's search icon lands here with `myFoods`.
+  useEffect(() => {
+    if (route.params?.myFoods) {
+      setFoodsOpen(true);
+      navigation.setParams({myFoods: undefined});
+    }
+  }, [route.params?.myFoods, navigation]);
+
+  // Picking the active key flips its direction.
+  const pickSort = (key: FoodSortKey) => {
+    const next: FoodSort = {key, dir: sort.key === key && sort.dir === 'asc' ? 'desc' : 'asc'};
+    setSort(next);
+    setSetting(SORT_SETTING, `${next.key}:${next.dir}`).catch(() => {});
+  };
+
+  const closeFoods = () => {
+    setFoodsOpen(false);
+    setQuery('');
+  };
+
+  const prefillOf = (f: RecentFood) => ({
+    name: f.name, kcal: f.kcal, product_id: f.product_id, quantity: f.quantity, unit: f.unit,
+  });
 
   useFocusEffect(useCallback(() => { load(date).catch(() => {}); }, [load, date]));
 
@@ -183,21 +282,27 @@ export default function FoodScreen({navigation}: TabScreenProps<'Food'>) {
       onPress: () =>
         navigation.navigate('FoodEntryModal', {
           date: todayDate(),
-          prefill: {name: e.name, kcal: e.kcal, product_id: e.product_id, quantity: e.quantity, unit: e.unit},
+          prefill: prefillOf(e),
         }),
     },
     {label: t('common.edit'), onPress: () => navigation.navigate('FoodEntryModal', {entryId: e.id})},
     {label: t('common.delete'), destructive: true, onPress: () => confirmDelete(e)},
   ];
 
+  const sorted = useMemo(() => sortFoodEntries(entries, sort), [entries, sort]);
+  const recents = myFoods.slice(0, RECENT_CHIPS);
+  const shownFoods = useMemo(() => filterFoods(myFoods, query), [myFoods, query]);
+  const foodKey = (f: RecentFood) => `${f.product_id ?? 'n'}-${f.name.toLowerCase()}`;
   const kcalTotal = entries.reduce((sum, e) => sum + (e.kcal ?? 0), 0);
   const withoutKcal = entries.filter(e => e.kcal == null).length;
 
   return (
     <View style={styles.container}>
       <ScrollView
-        style={{paddingTop: shellPad.paddingTop}}
-        contentContainerStyle={{paddingBottom: shellPad.paddingBottom + spacing.xl}}>
+        contentContainerStyle={{
+          paddingTop: shellPad.paddingTop,
+          paddingBottom: shellPad.paddingBottom + spacing.xl,
+        }}>
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.navBtn}
@@ -233,23 +338,31 @@ export default function FoodScreen({navigation}: TabScreenProps<'Food'>) {
           </Text>
         )}
 
-        {recents.length > 0 && (
+        {myFoods.length > 0 && (
           <>
+            <TouchableOpacity
+              style={styles.searchBtn}
+              accessibilityLabel={t('food.myFoods')}
+              onPress={() => setFoodsOpen(true)}>
+              <Icon name="magnify" size={20} color={colors.textMuted} />
+              <Text style={styles.searchBtnText}>{t('food.myFoodsHint')}</Text>
+              <Icon name="chevron-down" size={20} color={colors.textMuted} />
+            </TouchableOpacity>
             <Text style={styles.sectionLabel}>{t('food.recents')}</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recentsRow}>
+            <View style={styles.recentsRow}>
               {recents.map(r => (
                 <Bounceable
-                  key={`${r.product_id ?? 'n'}-${r.name.toLowerCase()}`}
+                  key={foodKey(r)}
                   style={styles.chip}
                   haptic
                   accessibilityLabel={`${t('food.addAgain')}: ${r.name}`}
                   onPress={() => addAgain(r)}>
                   <Icon name="plus" size={14} color={colors.primary} />
-                  <Text style={styles.chipText} numberOfLines={1}>{r.name}</Text>
+                  <Text style={[styles.chipText, styles.chipName]} numberOfLines={1}>{r.name}</Text>
                   {r.kcal != null && <Text style={styles.chipKcal}>{r.kcal}</Text>}
                 </Bounceable>
               ))}
-            </ScrollView>
+            </View>
           </>
         )}
 
@@ -258,8 +371,20 @@ export default function FoodScreen({navigation}: TabScreenProps<'Food'>) {
             <Text style={styles.emptyText}>{t('food.emptyDay')}</Text>
           </View>
         ) : (
+          <>
+          <View style={styles.listHeader}>
+            <Text style={styles.listLabel}>{t('food.eaten')}</Text>
+            <TouchableOpacity
+              style={styles.sortBtn}
+              accessibilityLabel={t('food.sort')}
+              hitSlop={8}
+              onPress={() => setSortOpen(true)}>
+              <Icon name={sort.dir === 'asc' ? 'sort-ascending' : 'sort-descending'} size={18} color={colors.textSecondary} />
+              <Text style={styles.sortText}>{t(`food.sortBy.${sort.key}`)}</Text>
+            </TouchableOpacity>
+          </View>
           <View style={styles.list}>
-            {entries.map(e => {
+            {sorted.map(e => {
               const thumb = e.thumbnail_path || e.file_path;
               return (
                 <Bounceable
@@ -286,8 +411,60 @@ export default function FoodScreen({navigation}: TabScreenProps<'Food'>) {
               );
             })}
           </View>
+          </>
         )}
       </ScrollView>
+
+      <ActionSheet
+        visible={sortOpen}
+        title={t('food.sort')}
+        onClose={() => setSortOpen(false)}
+        actions={SORT_KEYS.map(k => ({
+          label: `${t(`food.sortBy.${k}`)}${sort.key === k ? (sort.dir === 'asc' ? '  ↑' : '  ↓') : ''}`,
+          onPress: () => pickSort(k),
+        }))}
+      />
+
+      <Sheet visible={foodsOpen} title={t('food.myFoods')} onClose={closeFoods}>
+        <TextInput
+          style={styles.sheetInput}
+          value={query}
+          onChangeText={setQuery}
+          placeholder={t('food.myFoodsHint')}
+          placeholderTextColor={colors.textMuted}
+          autoFocus
+        />
+        <FlatList
+          style={styles.sheetList}
+          data={shownFoods}
+          keyExtractor={foodKey}
+          keyboardShouldPersistTaps="handled"
+          ListEmptyComponent={<Text style={[styles.emptyText, styles.empty]}>{t('food.myFoodsEmpty')}</Text>}
+          renderItem={({item}) => (
+            <TouchableOpacity
+              style={styles.foodRow}
+              accessibilityLabel={`${t('food.addAgain')}: ${item.name}`}
+              onPress={() => {
+                closeFoods();
+                addAgain(item);
+              }}>
+              <Icon name="plus" size={18} color={colors.primary} />
+              <Text style={[styles.name, styles.flex1]} numberOfLines={1}>{item.name}</Text>
+              <Text style={styles.kcal}>{item.kcal != null ? String(item.kcal) : '–'}</Text>
+              <TouchableOpacity
+                style={styles.foodEdit}
+                accessibilityLabel={t('food.duplicate')}
+                hitSlop={8}
+                onPress={() => {
+                  closeFoods();
+                  navigation.navigate('FoodEntryModal', {date, prefill: prefillOf(item)});
+                }}>
+                <Icon name="pencil-outline" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </TouchableOpacity>
+          )}
+        />
+      </Sheet>
 
       <ActionSheet
         visible={target != null}

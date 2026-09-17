@@ -18,6 +18,7 @@ import {useTheme, typography, spacing, radius} from '../theme';
 import type {Colors} from '../theme';
 import Button from '../components/ui/Button';
 import TimePicker from '../components/ui/TimePicker';
+import WheelPicker from '../components/ui/WheelPicker';
 import {capturePhoto} from '../utils/mediaCapture';
 import {deleteMediaFile, ensureMediaDir, fileUri} from '../utils/mediaUtils';
 import {getLastKnownPosition} from '../services/gpsService';
@@ -66,6 +67,11 @@ function parsePositive(s: string): number | null {
   return s.trim() && Number.isFinite(n) && n > 0 ? n : null;
 }
 
+/** Stored unit → wheel key. Mass amounts are stored as grams. */
+function unitKeyOf(unit: FoodUnit | null | undefined): string {
+  return unit === 'serving' || unit === 'piece' || unit === 'ml' ? unit : 'g';
+}
+
 function fmtAmount(n: number): string {
   return String(Math.round(n * 100) / 100);
 }
@@ -104,21 +110,9 @@ const makeStyles = (c: Colors) =>
     inputMultiline: {minHeight: 80},
     row: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
     flex1: {flex: 1},
-    amountInput: {width: 88, textAlign: 'center'},
-    unitScroll: {flex: 1},
-    unitRow: {gap: spacing.xs, alignItems: 'center', paddingRight: spacing.sm},
-    unitChip: {
-      minHeight: 40,
-      paddingHorizontal: spacing.md,
-      borderRadius: radius.pill,
-      borderWidth: 1,
-      borderColor: c.border,
-      backgroundColor: c.bgCard,
-      justifyContent: 'center',
-    },
-    unitChipActive: {backgroundColor: c.primary, borderColor: c.primary},
-    unitChipText: {fontSize: typography.sizes.sm, fontWeight: typography.weights.medium, color: c.textPrimary},
-    unitChipTextActive: {color: c.white},
+    amountWrap: {flex: 1, justifyContent: 'center'},
+    amountInput: {textAlign: 'center', paddingRight: 40},
+    amountClear: {position: 'absolute', right: 4, padding: spacing.sm},
     factorBtn: {
       minHeight: 40,
       minWidth: 44,
@@ -236,7 +230,7 @@ export default function FoodEntryModal({navigation, route}: Props) {
   const [fineliUnits, setFineliUnits] = useState<FineliUnit[]>([]);
   const [pendingBarcode, setPendingBarcode] = useState<string | null>(null);
   const [amount, setAmount] = useState(prefill?.quantity != null ? fmtAmount(prefill.quantity) : '');
-  const [unitKey, setUnitKey] = useState<string>(prefill?.unit === 'serving' ? 'serving' : 'g');
+  const [unitKey, setUnitKey] = useState<string>(unitKeyOf(prefill?.unit));
   const [scanning, setScanning] = useState(false);
   // Name autocomplete (F3): own products first, then bundled Fineli foods.
   // Only while the user is typing — never for a prefilled/loaded name.
@@ -246,9 +240,10 @@ export default function FoodEntryModal({navigation, route}: Props) {
   const [isSaving, setIsSaving] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
+  const unitLabels = useMemo(() => ({piece: t('food.unitPiece'), serving: t('food.unitServing')}), [t]);
   const options: PortionOption[] = useMemo(
-    () => (product ? portionOptions(product, fineliUnits, FINELI_UNIT_LABELS, lang, t('food.unitServing')) : []),
-    [product, fineliUnits, lang, t],
+    () => portionOptions(product, fineliUnits, FINELI_UNIT_LABELS, lang, unitLabels),
+    [product, fineliUnits, lang, unitLabels],
   );
   const option = options.find(o => o.key === unitKey) ?? options[0];
 
@@ -280,7 +275,7 @@ export default function FoodEntryModal({navigation, route}: Props) {
         setNote(e.note ?? '');
         setPhoto(e.file_path ? {file_path: e.file_path, thumbnail_path: e.thumbnail_path} : null);
         setAmount(e.quantity != null ? fmtAmount(e.quantity) : '');
-        setUnitKey(e.unit === 'serving' ? 'serving' : 'g');
+        setUnitKey(unitKeyOf(e.unit));
         if (e.product_id != null) { setProduct(await getProduct(e.product_id)); }
       }
       setLoading(false);
@@ -292,8 +287,8 @@ export default function FoodEntryModal({navigation, route}: Props) {
     return kcal.trim() && Number.isFinite(n) ? Math.round(n) : null;
   };
 
-  const recompute = (p: FoodProduct, qty: number | null, opt: PortionOption | undefined) => {
-    if (qty == null || !opt) { return; }
+  const recompute = (p: FoodProduct | null, qty: number | null, opt: PortionOption | undefined) => {
+    if (!p || qty == null || !opt) { return; }
     const k = portionKcal(p.kcal_per_100, opt, qty);
     if (k != null) { setKcal(String(k)); }
   };
@@ -316,10 +311,10 @@ export default function FoodEntryModal({navigation, route}: Props) {
     setSuggestions([]);
     setName(prev => (prev.trim() ? prev : p.brand ? `${p.brand} ${p.name}` : p.name));
     // Default amount: one serving when the product knows one, else 100 g.
-    const opts = portionOptions(p, [], FINELI_UNIT_LABELS, lang, t('food.unitServing'));
-    const serving = opts.find(o => o.key !== 'g');
-    const opt = serving ?? opts[0];
-    const qty = serving ? 1 : 100;
+    const opts = portionOptions(p, [], FINELI_UNIT_LABELS, lang, unitLabels);
+    const knowsServing = p.serving_g != null || p.kcal_per_serving != null;
+    const opt = opts.find(o => o.key === (knowsServing ? 'serving' : 'g')) ?? opts[0];
+    const qty = knowsServing ? 1 : 100;
     setUnitKey(opt.key);
     setAmount(String(qty));
     recompute(p, qty, opt);
@@ -443,18 +438,18 @@ export default function FoodEntryModal({navigation, route}: Props) {
       const finalName = name.trim() || t('food.photoPlaceholder');
       const finalKcal = parsedKcal();
       let productId = product?.id ?? null;
+      // Units with a mass are stored as grams so the row stays meaningful
+      // whatever unit list the product shows later; ml stays ml; a mass-less
+      // piece / serving is stored as a count. Works without a product too.
+      const n = parsePositive(amount);
       let qty: number | null = null;
       let u: FoodUnit | null = null;
-      if (productId) {
-        // Units with a mass are stored as grams so the row stays meaningful
-        // whatever unit list the product shows later; a mass-less serving is
-        // stored as servings.
-        const n = parsePositive(amount);
-        if (n != null && option) {
-          if (option.grams != null) { qty = n * option.grams; u = 'g'; }
-          else { qty = n; u = 'serving'; }
-        }
-      } else if (pendingBarcode) {
+      if (n != null && option) {
+        if (option.key === 'ml') { qty = n; u = 'ml'; }
+        else if (option.grams != null) { qty = n * option.grams; u = 'g'; }
+        else { qty = n; u = option.key === 'piece' ? 'piece' : 'serving'; }
+      }
+      if (!productId && pendingBarcode) {
         // "Add once, use later": the manual entry becomes a remembered product.
         const created = await upsertProduct({
           barcode: pendingBarcode,
@@ -472,8 +467,7 @@ export default function FoodEntryModal({navigation, route}: Props) {
           image_url: null,
         });
         productId = created.id;
-        qty = 1;
-        u = 'serving';
+        if (qty == null) { qty = 1; u = 'serving'; }
       }
       const fields = {
         day_id: day.id,
@@ -632,44 +626,40 @@ export default function FoodEntryModal({navigation, route}: Props) {
         </View>
       )}
 
-      {product && (
-        <>
-          <Text style={styles.sectionLabel}>{t('food.quantity')}</Text>
-          <View style={styles.row}>
-            <TextInput
-              style={[styles.input, styles.amountInput]}
-              value={amount}
-              onChangeText={q => {
-                setAmount(q);
-                recompute(product, parsePositive(q), option);
-              }}
-              keyboardType="numeric"
-              maxLength={7}
-            />
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.unitScroll}
-              contentContainerStyle={styles.unitRow}
-              keyboardShouldPersistTaps="handled">
-              {options.map(o => {
-                const active = option?.key === o.key;
-                return (
-                  <TouchableOpacity
-                    key={o.key}
-                    style={[styles.unitChip, active && styles.unitChipActive]}
-                    onPress={() => {
-                      setUnitKey(o.key);
-                      recompute(product, parsePositive(amount), o);
-                    }}>
-                    <Text style={[styles.unitChipText, active && styles.unitChipTextActive]}>{o.label}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-        </>
-      )}
+      <Text style={styles.sectionLabel}>{t('food.quantity')}</Text>
+      <View style={styles.row}>
+        <View style={styles.amountWrap}>
+          <TextInput
+            style={[styles.input, styles.amountInput]}
+            value={amount}
+            onChangeText={q => {
+              setAmount(q);
+              recompute(product, parsePositive(q), option);
+            }}
+            placeholder="–"
+            placeholderTextColor={colors.textMuted}
+            keyboardType="numeric"
+            maxLength={7}
+          />
+          {amount.length > 0 && (
+            <TouchableOpacity
+              style={styles.amountClear}
+              onPress={() => setAmount('')}
+              accessibilityLabel={t('common.clear')}
+              hitSlop={8}>
+              <Icon name="close-circle" size={18} color={colors.textMuted} />
+            </TouchableOpacity>
+          )}
+        </View>
+        <WheelPicker
+          options={options}
+          value={option?.key ?? 'g'}
+          onChange={key => {
+            setUnitKey(key);
+            recompute(product, parsePositive(amount), options.find(o => o.key === key));
+          }}
+        />
+      </View>
 
       <Text style={styles.sectionLabel}>{t('food.kcal')}</Text>
       <View style={styles.row}>

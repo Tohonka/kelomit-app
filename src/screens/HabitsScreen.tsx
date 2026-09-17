@@ -157,8 +157,10 @@ export default function HabitsScreen({navigation}: TabScreenProps<'Habits'>) {
   return (
     <View style={styles.container}>
       <ScrollView
-        style={{paddingTop: shellPad.paddingTop}}
-        contentContainerStyle={{paddingBottom: shellPad.paddingBottom + spacing.xl}}>
+        contentContainerStyle={{
+          paddingTop: shellPad.paddingTop,
+          paddingBottom: shellPad.paddingBottom + spacing.xl,
+        }}>
         <View style={styles.header}>
           <TouchableOpacity style={styles.monthBtn} onPress={() => setMonth(shiftMonth(month, -1))}>
             <Icon name="chevron-left" size={28} color={colors.textSecondary} />

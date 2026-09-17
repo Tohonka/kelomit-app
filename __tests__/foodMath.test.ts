@@ -1,4 +1,7 @@
-import {rankRecents, scaleKcal, kcalFor, defaultPortion, fineliToProduct, portionOptions, portionKcal} from '../src/utils/foodMath';
+import {
+  rankRecents, scaleKcal, kcalFor, defaultPortion, fineliToProduct, portionOptions, portionKcal,
+  sortFoodEntries, parseFoodSort, filterFoods,
+} from '../src/utils/foodMath';
 import type {FoodEntry} from '../src/types';
 
 const at = (id: number, name: string, localHHMM: string, daysAgo = 0, kcal: number | null = 100): FoodEntry => {
@@ -83,19 +86,48 @@ describe('portionOptions / portionKcal', () => {
   const userFood = {source: 'user' as const, kcal_per_100: null, kcal_per_serving: 350, serving_g: null, serving_label: null};
   const fineli = {source: 'fineli' as const, kcal_per_100: 239.5, kcal_per_serving: 84, serving_g: 35, serving_label: 'keskikokoinen (kpl)'};
 
-  it('always offers grams; adds the serving or the Fineli units', () => {
-    expect(portionOptions(candy, [], labels, 'fi', 'annos').map(o => o.key)).toEqual(['g']);
-    expect(portionOptions(cheese, [], labels, 'en', 'serving').map(o => o.label)).toEqual(['g', '10 g']);
-    expect(portionOptions(userFood, [], labels, 'en', 'serving')[1]).toMatchObject({key: 'serving', label: 'serving', grams: null, kcalPerUnit: 350});
-    const f = portionOptions(fineli, [{code: 'KPL_M', grams: 35}, {code: 'DL', grams: 100}], labels, 'en', 'serving');
-    expect(f.map(o => o.label)).toEqual(['g', 'medium-sized piece · 35 g', 'decilitre · 100 g']);
+  const L = {piece: 'pcs', serving: 'serving'};
+
+  it('always offers g / ml / pcs / serving; appends the Fineli units', () => {
+    expect(portionOptions(null, [], labels, 'fi', L).map(o => o.key)).toEqual(['g', 'ml', 'piece', 'serving']);
+    expect(portionOptions(candy, [], labels, 'fi', L).map(o => o.key)).toEqual(['g', 'ml', 'piece', 'serving']);
+    expect(portionOptions(cheese, [], labels, 'en', L).map(o => o.label)).toEqual(['g', 'ml', 'pcs', '10 g']);
+    expect(portionOptions(userFood, [], labels, 'en', L)[3]).toMatchObject({key: 'serving', label: 'serving', grams: null, kcalPerUnit: 350});
+    const f = portionOptions(fineli, [{code: 'KPL_M', grams: 35}, {code: 'DL', grams: 100}], labels, 'en', L);
+    expect(f.slice(4).map(o => o.label)).toEqual(['medium-sized piece · 35 g', 'decilitre · 100 g']);
   });
 
   it('computes kcal by mass first, else per unit, else null', () => {
-    const [g] = portionOptions(candy, [], labels, 'fi', 'annos');
+    const [g] = portionOptions(candy, [], labels, 'fi', L);
     expect(portionKcal(400, g, 20)).toBe(80);
-    const serving = portionOptions(userFood, [], labels, 'en', 'serving')[1];
-    expect(portionKcal(null, serving, 2)).toBe(700);
+    const piece = portionOptions(userFood, [], labels, 'en', L)[2];
+    expect(portionKcal(null, piece, 2)).toBe(700);
     expect(portionKcal(null, g, 20)).toBeNull();
+    const cheesePiece = portionOptions(cheese, [], labels, 'en', L)[2];
+    expect(portionKcal(272, cheesePiece, 3)).toBe(82);
+    expect(portionKcal(null, portionOptions(null, [], labels, 'en', L)[2], 3)).toBeNull();
+  });
+});
+
+describe('sortFoodEntries / parseFoodSort / filterFoods', () => {
+  const rows = [at(1, 'Puuro', '08:00', 0, 250), at(2, 'kahvi', '09:00', 0, null), at(3, 'Banaani', '10:00', 0, 90), at(4, 'Leipä', '11:00', 0, 250)];
+
+  it('parses the stored value, defaulting to time ascending', () => {
+    expect(parseFoodSort('kcal:desc')).toEqual({key: 'kcal', dir: 'desc'});
+    expect(parseFoodSort(null)).toEqual({key: 'time', dir: 'asc'});
+    expect(parseFoodSort('bogus:up')).toEqual({key: 'time', dir: 'asc'});
+  });
+
+  it('sorts by time, energy (no-kcal last either way, ties by time) and name', () => {
+    expect(sortFoodEntries(rows, {key: 'time', dir: 'desc'}).map(r => r.id)).toEqual([4, 3, 2, 1]);
+    expect(sortFoodEntries(rows, {key: 'kcal', dir: 'desc'}).map(r => r.id)).toEqual([1, 4, 3, 2]);
+    expect(sortFoodEntries(rows, {key: 'kcal', dir: 'asc'}).map(r => r.id)).toEqual([3, 1, 4, 2]);
+    expect(sortFoodEntries(rows, {key: 'name', dir: 'asc'}).map(r => r.name)).toEqual(['Banaani', 'kahvi', 'Leipä', 'Puuro']);
+  });
+
+  it('filters by every word, case-insensitively', () => {
+    const foods = [{name: 'Red Bull White Peach'}, {name: 'Ruisleipä'}];
+    expect(filterFoods(foods, 'bull red')).toEqual([foods[0]]);
+    expect(filterFoods(foods, '  ')).toEqual(foods);
   });
 });

@@ -58,7 +58,8 @@ export type TabParamList = {
   Data: undefined;
   Gallery: undefined;
   Habits: undefined;
-  Food: undefined;
+  /** `myFoods` opens the searchable my-foods sheet (food widget search icon). */
+  Food: {myFoods?: boolean} | undefined;
   Calendar: undefined;
   Settings: undefined;
 };

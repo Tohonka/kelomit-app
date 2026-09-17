@@ -98,17 +98,26 @@ export interface PortionOption {
   kcalPerUnit: number | null;
 }
 
-/** Amount options for a product: grams always; its serving; every Fineli
- *  household unit when the product came from Fineli. */
+/** Amount options: g, ml, pieces and servings always (the unit wheel), plus
+ *  every Fineli household unit when the product came from Fineli. Without a
+ *  product the units are plain labels — nothing can be computed from them. */
 export function portionOptions(
-  p: Pick<FoodProduct, 'source' | 'kcal_per_100' | 'kcal_per_serving' | 'serving_g' | 'serving_label'>,
+  p: Pick<FoodProduct, 'source' | 'kcal_per_100' | 'kcal_per_serving' | 'serving_g' | 'serving_label'> | null,
   fineliUnits: FineliUnit[],
   unitLabels: Record<string, [string, string]>,
   lang: 'fi' | 'en',
-  servingFallbackLabel: string,
+  labels: {piece: string; serving: string},
 ): PortionOption[] {
-  const out: PortionOption[] = [{key: 'g', label: 'g', grams: 1, kcalPerUnit: null}];
-  if (p.source === 'fineli' && fineliUnits.length > 0) {
+  const grams = p?.serving_g ?? null;
+  const kcalPerUnit = p?.kcal_per_serving ?? null;
+  const out: PortionOption[] = [
+    {key: 'g', label: 'g', grams: 1, kcalPerUnit: null},
+    // ponytail: 1 ml = 1 g. Per-product density when someone logs a lot of oil.
+    {key: 'ml', label: 'ml', grams: 1, kcalPerUnit: null},
+    {key: 'piece', label: labels.piece, grams, kcalPerUnit},
+    {key: 'serving', label: p?.serving_label ?? labels.serving, grams, kcalPerUnit},
+  ];
+  if (p?.source === 'fineli') {
     for (const u of fineliUnits) {
       out.push({
         key: u.code,
@@ -117,13 +126,6 @@ export function portionOptions(
         kcalPerUnit: null,
       });
     }
-  } else if (p.serving_g != null || p.kcal_per_serving != null) {
-    out.push({
-      key: 'serving',
-      label: p.serving_label ?? servingFallbackLabel,
-      grams: p.serving_g,
-      kcalPerUnit: p.kcal_per_serving,
-    });
   }
   return out;
 }
@@ -136,4 +138,45 @@ export function portionKcal(kcalPer100: number | null, opt: PortionOption, qty: 
   }
   if (opt.kcalPerUnit != null) { return Math.round(opt.kcalPerUnit * qty); }
   return null;
+}
+
+export type FoodSortKey = 'time' | 'kcal' | 'name';
+export interface FoodSort { key: FoodSortKey; dir: 'asc' | 'desc' }
+
+/** `time:asc` style setting value → sort; anything unknown → time ascending. */
+export function parseFoodSort(raw: string | null | undefined): FoodSort {
+  const [key, dir] = (raw ?? '').split(':');
+  return {
+    key: key === 'kcal' || key === 'name' ? key : 'time',
+    dir: dir === 'desc' ? 'desc' : 'asc',
+  };
+}
+
+/** Day list order. Entries without kcal sink to the bottom of an energy sort
+ *  in both directions; ties fall back to time. */
+export function sortFoodEntries<T extends Pick<FoodEntry, 'eaten_at' | 'kcal' | 'name'>>(entries: T[], sort: FoodSort): T[] {
+  const sign = sort.dir === 'asc' ? 1 : -1;
+  return [...entries].sort((a, b) => {
+    if (sort.key === 'kcal') {
+      if ((a.kcal == null) !== (b.kcal == null)) { return a.kcal == null ? 1 : -1; }
+      const d = (a.kcal ?? 0) - (b.kcal ?? 0);
+      if (d !== 0) { return d * sign; }
+    } else if (sort.key === 'name') {
+      const d = a.name.localeCompare(b.name, undefined, {sensitivity: 'base'});
+      if (d !== 0) { return d * sign; }
+    } else {
+      return a.eaten_at.localeCompare(b.eaten_at) * sign;
+    }
+    return a.eaten_at.localeCompare(b.eaten_at);
+  });
+}
+
+/** "My foods" filter: every word of the query must appear in the name. */
+export function filterFoods<T extends {name: string}>(foods: T[], query: string): T[] {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length === 0) { return foods; }
+  return foods.filter(f => {
+    const n = f.name.toLowerCase();
+    return words.every(w => n.includes(w));
+  });
 }
