@@ -847,6 +847,15 @@ const fi: typeof en = {
     widgets: 'Widgetit',
     data: 'Data ja varmuuskopio',
   },
+  patterns: {
+    title: 'Havainnot',
+    sentence: 'Päivinä, jolloin {{x}} oli alle {{threshold}}: {{y}} oli keskimäärin {{low}}. Muina päivinä: {{high}}.',
+    sentenceNext: 'Päivinä, jolloin {{x}} oli alle {{threshold}}: seuraavan päivän {{y}} oli keskimäärin {{low}}. Muina päivinä: {{high}}.',
+    series: {sleep: 'uni', steps: 'askeleet', exercise: 'liikunta', kcal: 'syöminen', work: 'työ', habits: 'tehdyt tavat'},
+    needMore: '{{have}} käyttökelpoista päivää — havaintoihin tarvitaan noin {{need}}.',
+    none: 'Mitään ei vielä erotu.',
+    note: 'Viimeiset {{days}} päivää, jaettu mediaanista. Sattumia sattuu — nämä ovat havaintoja, eivät syitä.',
+  },
   smallTask: {
     duringWorkday: 'Työpäivän aikana',
     positionHint: 'Sijainti listassa (valinnainen)',

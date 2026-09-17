@@ -9,13 +9,14 @@ import {getSegmentsInRange} from '../db/routeHistory';
 import {getFoodKcalByDay, type FoodDayTotals} from '../db/food';
 import {getHealthDailyRange} from '../db/health';
 import {loadEnergyRange, type EnergyRange} from '../services/energy';
+import {findPatterns, usableDays, MIN_DAYS, type DayPoint, type SeriesKey} from '../utils/patterns';
 import {useSettingsStore} from '../store/settingsStore';
 import {useHabitStore, effectiveDone} from '../store/habitStore';
 import {useTheme, typography, spacing, radius} from '../theme';
 import type {Colors} from '../theme';
 import {getDateFnsLocale} from '../i18n';
 import {formatHours} from '../utils/hoursUtils';
-import {datesBetween, formatDuration, todayDate} from '../utils/dateUtils';
+import {datesBetween, formatDuration, shiftDate, todayDate} from '../utils/dateUtils';
 import {summarizeSegments, type MovementSummary} from '../utils/movementSummary';
 import {movementKcal} from '../utils/energy';
 import TargetRing from '../components/insights/TargetRing';
@@ -72,6 +73,8 @@ function rangeFor(period: Period): {start: string; end: string} {
 function km(meters: number): string {
   return `${(meters / 1000).toFixed(1)} km`;
 }
+
+const PATTERN_DAYS = 90;
 
 const makeStyles = (c: Colors) =>
   StyleSheet.create({
@@ -151,6 +154,7 @@ const makeStyles = (c: Colors) =>
     statLabel: {fontSize: typography.sizes.sm, color: c.textSecondary},
     statValue: {fontSize: typography.sizes.base, color: c.textPrimary, fontWeight: typography.weights.semibold},
     statNote: {fontSize: typography.sizes.xs, color: c.textMuted, marginTop: spacing.sm},
+    pattern: {fontSize: typography.sizes.sm, color: c.textPrimary, lineHeight: 20, marginBottom: spacing.sm},
     empty: {padding: spacing.xxl, alignItems: 'center'},
     emptyText: {fontSize: typography.sizes.base, color: c.textMuted, textAlign: 'center'},
     loader: {marginTop: spacing.xxl},
@@ -224,6 +228,7 @@ export default function InsightsScreen() {
   const [foodByDay, setFoodByDay] = useState<Record<string, FoodDayTotals>>({});
   const [health, setHealth] = useState<HealthDaily[]>([]);
   const [energy, setEnergy] = useState<EnergyRange | null>(null);
+  const [patternRaw, setPatternRaw] = useState<DayPoint[]>([]);
   const [loading, setLoading] = useState(true);
 
   const range = useMemo(() => rangeFor(period), [period]);
@@ -255,6 +260,57 @@ export default function InsightsScreen() {
       .finally(() => { if (!cancelled) { setLoading(false); } });
     return () => { cancelled = true; };
   }, [range, scope]);
+
+  // Patterns look at the last 90 finished days whatever period is selected.
+  useFocusEffect(useCallback(() => {
+    let cancelled = false;
+    const end = shiftDate(todayDate(), -1);
+    const start = shiftDate(end, -(PATTERN_DAYS - 1));
+    Promise.all([
+      getHealthDailyRange(start, end).catch((): HealthDaily[] => []),
+      getFoodKcalByDay(start, end).catch((): Record<string, FoodDayTotals> => ({})),
+      getWorkSecondsByDay(start, end).catch((): Record<string, number> => ({})),
+    ]).then(([hcRows, foodRows, workRows]) => {
+      if (cancelled) { return; }
+      const hcByDate = new Map(hcRows.map(h => [h.date, h]));
+      setPatternRaw(datesBetween(start, end).map(date => {
+        const h = hcByDate.get(date);
+        const f = foodRows[date];
+        return {
+          date,
+          sleep: h?.sleep_minutes ?? null,
+          steps: h?.steps ?? null,
+          exercise: h?.exercise ? h.exercise.reduce((s, b) => s + b.minutes, 0) : null,
+          // a day with any kcal-less entry would read as a light day — skip it
+          kcal: f && f.noKcal === 0 ? f.kcal : null,
+          work: workRows[date] ? workRows[date] / 3600 : null,
+        };
+      }));
+    });
+    return () => { cancelled = true; };
+  }, []));
+
+  const patternPoints = useMemo(() => {
+    const ids = habitState.habits.filter(h => !h.archived).map(h => h.id);
+    if (ids.length === 0) { return patternRaw; }
+    return patternRaw.map(p => ({
+      ...p,
+      habits: (ids.filter(id => effectiveDone(habitState, id, p.date)).length / ids.length) * 100,
+    }));
+  }, [patternRaw, habitState]);
+  const patterns = useMemo(() => findPatterns(patternPoints), [patternPoints]);
+  const patternDays = useMemo(() => usableDays(patternPoints), [patternPoints]);
+
+  const fmtSeries = (key: SeriesKey, v: number): string => {
+    switch (key) {
+      case 'sleep': return `${Math.floor(v / 60)} h ${String(Math.round(v % 60)).padStart(2, '0')}`;
+      case 'steps': return String(Math.round(v / 100) * 100);
+      case 'exercise': return `${Math.round(v)} min`;
+      case 'kcal': return `${Math.round(v / 10) * 10} kcal`;
+      case 'work': return `${v.toFixed(1)} h`;
+      case 'habits': return `${Math.round(v)} %`;
+    }
+  };
 
   const workedSecs = useMemo(() => Object.values(byDay).reduce((s, v) => s + v, 0), [byDay]);
   const showWorked = scope !== 'personal' && workedSecs > 0;
@@ -621,6 +677,36 @@ export default function InsightsScreen() {
                 />
               </>
             )}
+          </>
+        )}
+
+        {!loading && patternDays > 0 && (
+          <>
+            <Text style={styles.sectionTitle}>{t('patterns.title')}</Text>
+            <View style={styles.card}>
+              {patterns.length === 0 ? (
+                <Text style={styles.statNote}>
+                  {patternDays < MIN_DAYS * 2
+                    ? t('patterns.needMore', {have: patternDays, need: MIN_DAYS * 2})
+                    : t('patterns.none')}
+                </Text>
+              ) : (
+                <>
+                  {patterns.map(p => (
+                    <Text key={`${p.x}-${p.y}`} style={styles.pattern}>
+                      {t(p.lag === 1 ? 'patterns.sentenceNext' : 'patterns.sentence', {
+                        x: t(`patterns.series.${p.x}`),
+                        y: t(`patterns.series.${p.y}`),
+                        threshold: fmtSeries(p.x, p.threshold),
+                        low: fmtSeries(p.y, p.lowMean),
+                        high: fmtSeries(p.y, p.highMean),
+                      })}
+                    </Text>
+                  ))}
+                  <Text style={styles.statNote}>{t('patterns.note', {days: PATTERN_DAYS})}</Text>
+                </>
+              )}
+            </View>
           </>
         )}
       </ScrollView>

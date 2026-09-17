@@ -845,6 +845,15 @@ const en = {
     widgets: 'Widgets',
     data: 'Data & backup',
   },
+  patterns: {
+    title: 'Patterns',
+    sentence: 'Days with {{x}} under {{threshold}}: {{y}} averaged {{low}}. Other days: {{high}}.',
+    sentenceNext: 'Days with {{x}} under {{threshold}}: the next day’s {{y}} averaged {{low}}. Other days: {{high}}.',
+    series: {sleep: 'sleep', steps: 'steps', exercise: 'exercise', kcal: 'eating', work: 'work', habits: 'habits done'},
+    needMore: '{{have}} usable days so far — patterns need about {{need}}.',
+    none: 'Nothing stands out yet.',
+    note: 'Last {{days}} days, split at the median. Coincidences happen — these are observations, not causes.',
+  },
   smallTask: {
     duringWorkday: 'During workday',
     positionHint: 'Position in list (optional)',
