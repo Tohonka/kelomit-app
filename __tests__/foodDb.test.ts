@@ -7,7 +7,7 @@ jest.mock('../src/db/database', () => ({
 import {migrations} from '../src/db/migrations';
 import {
   createFoodEntry, updateFoodEntry, deleteFoodEntry, getFoodEntriesForDay, getFoodEntry,
-  getRecentFoodEntries, upsertProduct, getProductByBarcode, getProduct, searchProducts, getProductBySourceRef, getFoodKcalByDay,
+  getRecentFoodEntries, upsertProduct, getProductByBarcode, getProduct, searchProducts, getProductBySourceRef, getFoodKcalByDay, onFoodChange,
 } from '../src/db/food';
 
 beforeEach(() => {
@@ -118,4 +118,19 @@ it('sums kcal per day over a date range', async () => {
   expect(lastCall()[0]).toContain('GROUP BY d.date');
   expect(lastCall()[1]).toEqual(['2026-09-14', '2026-09-20']);
   expect(out['2026-09-16']).toEqual({kcal: 1240, entries: 4, noKcal: 1});
+});
+
+it('tells listeners about every write, and a throwing listener cannot fail the save', async () => {
+  const seen: unknown[] = [];
+  const offBad = onFoodChange(() => { throw new Error('listener bug'); });
+  const off = onFoodChange(c => seen.push(c));
+  mockExecute.mockResolvedValueOnce({rows: [row]});
+  await createFoodEntry({day_id: 3, eaten_at: row.eaten_at, name: 'Ruisleipä'});
+  await updateFoodEntry(7, {kcal: 200});
+  await deleteFoodEntry(7);
+  expect(seen).toEqual([{kind: 'upsert', id: 7}, {kind: 'upsert', id: 7}, {kind: 'delete', id: 7}]);
+  off();
+  offBad();
+  await deleteFoodEntry(8);
+  expect(seen).toHaveLength(3);
 });

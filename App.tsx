@@ -1,6 +1,7 @@
 import React, {useEffect, useState, useRef} from 'react';
 import {View, Text, StyleSheet, ActivityIndicator, AppState, StatusBar, Linking} from 'react-native';
 import {maybeImportHealth} from './src/services/healthConnect';
+import {startFoodWriteBack} from './src/services/healthWrite';
 import {seedFineliIfNeeded} from './src/db/fineli';
 import './src/i18n';
 import {useTranslation} from 'react-i18next';
@@ -121,6 +122,7 @@ function AppContent() {
     };
 
     // Health Connect daily totals: throttled inside, no-op unless enabled.
+    startFoodWriteBack();
     maybeImportHealth().catch(healthError => diag('health.import.fail', String(healthError)));
 
     // Initial start is delayed; resume-from-background (below) starts immediately.

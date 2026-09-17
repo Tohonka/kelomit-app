@@ -14,6 +14,7 @@ import {
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {format} from 'date-fns';
 import {useSettingsStore, type Sex} from '../../store/settingsStore';
+import {enableFoodWriteBack} from '../../services/healthWrite';
 import {getHealthDaily} from '../../db/health';
 import {
   connectHealth,
@@ -81,6 +82,8 @@ export default function HealthSettings(_props: Props) {
     birth_year,
     sex,
     work_activity: workActivity,
+    health_write_food,
+    setHealthWriteFood,
     setBodyProfile,
   } = useSettingsStore();
 
@@ -133,6 +136,21 @@ export default function HealthSettings(_props: Props) {
       Alert.alert(t('common.error'), String(e));
     } finally {
       setBusy(false);
+    }
+  };
+
+  // Turning it on asks for the write permission; entries logged from then on
+  // are mirrored (older ones are not back-filled).
+  const handleWriteToggle = async () => {
+    if (health_write_food) {
+      await setHealthWriteFood(false);
+      return;
+    }
+    try {
+      if (await enableFoodWriteBack()) { await setHealthWriteFood(true); }
+      else { Alert.alert(t('health.title'), t('health.permissionsDenied')); }
+    } catch (e) {
+      Alert.alert(t('common.error'), String(e));
     }
   };
 
@@ -238,6 +256,17 @@ export default function HealthSettings(_props: Props) {
                 <Text style={styles.rowSubLabel}>{t('health.importHistoryHint')}</Text>
               </View>
               <Text style={styles.rowCaret}>›</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.row} onPress={handleWriteToggle} disabled={busy}>
+              <View style={styles.rowTextWrap}>
+                <Text style={styles.rowLabel}>{t('health.writeFood')}</Text>
+                <Text style={styles.rowSubLabel}>{t('health.writeFoodDescription')}</Text>
+              </View>
+              <View style={[styles.toggle, health_write_food && styles.toggleOn]}>
+                <Text style={[styles.toggleText, health_write_food && styles.toggleTextOn]}>
+                  {health_write_food ? t('common.on') : t('common.off')}
+                </Text>
+              </View>
             </TouchableOpacity>
             <View style={styles.row}>
               <View style={styles.rowTextWrap}>

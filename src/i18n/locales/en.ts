@@ -731,6 +731,8 @@ const en = {
     statusUnavailable: 'Health Connect is not available on this device',
     connect: 'Read from Health Connect',
     connectDescription: 'Steps, distance, calories, sleep, exercise sessions, weight, height, resting heart rate. Only daily totals are stored.',
+    writeFood: 'Write food to Health Connect',
+    writeFoodDescription: 'Entries with kcal appear as Nutrition records in Health Connect. Only entries logged after switching this on.',
     permissionsDenied: 'Permissions were not granted.',
     importNow: 'Import now',
     importing: 'Importing…',

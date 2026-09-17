@@ -50,6 +50,24 @@ function setClause(fields: Record<string, unknown>): {sql: string; params: (stri
   };
 }
 
+/** What happened to a food_entries row. Every writer goes through this file,
+ *  so this is the one place side effects (Health Connect write-back, the food
+ *  widget's list) can hang on without each caller remembering them. */
+export type FoodChange = {kind: 'upsert' | 'delete'; id: number};
+const changeListeners = new Set<(change: FoodChange) => void>();
+
+export function onFoodChange(listener: (change: FoodChange) => void): () => void {
+  changeListeners.add(listener);
+  return () => { changeListeners.delete(listener); };
+}
+
+function emit(change: FoodChange): void {
+  // A listener must never be able to fail a food save.
+  for (const l of changeListeners) {
+    try { l(change); } catch { /* swallowed on purpose */ }
+  }
+}
+
 export async function getFoodEntriesForDay(dayId: number): Promise<FoodEntry[]> {
   const db = getDB();
   const result = await db.execute(
@@ -101,7 +119,9 @@ export async function createFoodEntry(params: CreateFoodEntryParams): Promise<Fo
       params.location_label ?? null,
     ],
   );
-  return rowToFoodEntry(result.rows![0] as RawRow);
+  const created = rowToFoodEntry(result.rows![0] as RawRow);
+  emit({kind: 'upsert', id: created.id});
+  return created;
 }
 
 export async function updateFoodEntry(id: number, fields: FoodEntryFields): Promise<void> {
@@ -112,11 +132,13 @@ export async function updateFoodEntry(id: number, fields: FoodEntryFields): Prom
     `UPDATE food_entries SET ${sql}, updated_at = datetime('now') WHERE id = ?;`,
     [...params, id],
   );
+  emit({kind: 'upsert', id});
 }
 
 export async function deleteFoodEntry(id: number): Promise<void> {
   const db = getDB();
   await db.execute('DELETE FROM food_entries WHERE id = ?;', [id]);
+  emit({kind: 'delete', id});
 }
 
 // ---- products (F2 barcode / F3 Fineli) ----

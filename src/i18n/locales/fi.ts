@@ -733,6 +733,8 @@ const fi: typeof en = {
     statusUnavailable: 'Health Connect ei ole käytettävissä tällä laitteella',
     connect: 'Lue Health Connectista',
     connectDescription: 'Askeleet, matka, kalorit, uni, liikuntasuoritukset, paino, pituus, leposyke. Vain päiväkohtaiset summat tallennetaan.',
+    writeFood: 'Kirjoita ruoat Health Connectiin',
+    writeFoodDescription: 'Kcal-merkinnät näkyvät Health Connectissa ravintotietoina. Vain päälle kytkemisen jälkeen kirjatut.',
     permissionsDenied: 'Oikeuksia ei myönnetty.',
     importNow: 'Tuo nyt',
     importing: 'Tuodaan…',

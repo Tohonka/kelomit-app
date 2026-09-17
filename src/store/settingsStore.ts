@@ -61,6 +61,8 @@ interface SettingsState extends Settings {
   weekly_target_hours: number;
   /** Opt-in: read daily totals from Health Connect on app foreground. */
   health_enabled: boolean;
+  /** Opt-in: mirror food entries with kcal into Health Connect as Nutrition. */
+  health_write_food: boolean;
   body_weight_kg: number | null;
   body_height_cm: number | null;
   birth_year: number | null;
@@ -95,6 +97,7 @@ interface SettingsState extends Settings {
   setQuickAddDefaultTag: (tag: string) => Promise<void>;
   setQuickAddDefaultActivity: (type: ActivityType) => Promise<void>;
   setHealthEnabled: (enabled: boolean) => Promise<void>;
+  setHealthWriteFood: (enabled: boolean) => Promise<void>;
   setBodyProfile: (patch: Partial<BodyProfile>) => Promise<void>;
   setWeeklyTargetHours: (hours: number) => Promise<void>;
 }
@@ -128,6 +131,7 @@ export const useSettingsStore = create<SettingsState>(set => ({
   quickadd_default_activity: 'work',
   weekly_target_hours: 40,
   health_enabled: false,
+  health_write_food: false,
   body_weight_kg: null,
   body_height_cm: null,
   birth_year: null,
@@ -205,6 +209,7 @@ export const useSettingsStore = create<SettingsState>(set => ({
       quickadd_default_activity,
       weekly_target_hours,
       health_enabled,
+      health_write_food: raw.health_write_food === 'true',
       body_weight_kg,
       body_height_cm,
       birth_year,
@@ -214,6 +219,11 @@ export const useSettingsStore = create<SettingsState>(set => ({
       profile_photo: raw.profile_photo || null,
       loaded: true,
     });
+  },
+
+  setHealthWriteFood: async enabled => {
+    await setSetting('health_write_food', String(enabled));
+    set({health_write_food: enabled});
   },
 
   setHealthEnabled: async enabled => {
