@@ -117,6 +117,26 @@ class WidgetSessionModule(reactContext: ReactApplicationContext) :
     promise.resolve(null)
   }
 
+  // ── Food widget ─────────────────────────────────────────────────────────────
+
+  @ReactMethod
+  fun setFoodWidgetState(json: String, promise: Promise) {
+    FoodWidgetStore.setState(context, json)
+    FoodWidgetProvider.updateAll(context)
+    promise.resolve(null)
+  }
+
+  @ReactMethod
+  fun getPendingFoodAdds(promise: Promise) {
+    promise.resolve(FoodWidgetStore.getPending(context))
+  }
+
+  @ReactMethod
+  fun clearPendingFoodAdds(promise: Promise) {
+    FoodWidgetStore.clearPending(context)
+    promise.resolve(null)
+  }
+
   @ReactMethod
   fun refreshWidgets(promise: Promise) {
     WidgetCommon.updateAll(context)
@@ -137,6 +157,7 @@ class WidgetSessionModule(reactContext: ReactApplicationContext) :
       "addnote" -> AddNoteWidgetProvider::class.java
       "tracking" -> TrackingPauseWidgetProvider::class.java
       "habits" -> HabitWidgetProvider::class.java
+      "food" -> FoodWidgetProvider::class.java
       else -> SessionWidgetProvider::class.java
     }
     val ok = mgr != null &&

@@ -14,17 +14,35 @@ export function parseDeepLink(url: string | null): {entryType: QuickAddType} | n
   return type && QUICKADD_TYPES.includes(type) ? {entryType: type} : null;
 }
 
+/** Food widget links: `kelomit://food/search` (my-foods sheet) and
+ *  `kelomit://food/scan/<digits>` (editor with that barcode looked up). */
+export function parseFoodLink(url: string | null): {kind: 'search'} | {kind: 'scan'; barcode: string} | null {
+  if (!url) { return null; }
+  if (url === 'kelomit://food/search') { return {kind: 'search'}; }
+  const m = url.match(/^kelomit:\/\/food\/scan\/(\d{6,14})$/);
+  return m ? {kind: 'scan', barcode: m[1]} : null;
+}
+
 // A cold-start URL can arrive before the NavigationContainer is ready; stash it
 // and let onReady flush it.
 let _pending: string | null = null;
 
 export async function handleDeepLink(url: string | null): Promise<void> {
   const parsed = parseDeepLink(url);
-  if (!parsed) {
+  const food = parsed ? null : parseFoodLink(url);
+  if (!parsed && !food) {
     return;
   }
   if (!navigationRef.isReady()) {
     _pending = url;
+    return;
+  }
+  if (food) {
+    if (food.kind === 'search') { navigationRef.navigate('MainTabs', {screen: 'Food', params: {myFoods: true}}); }
+    else { navigationRef.navigate('FoodEntryModal', {barcode: food.barcode}); }
+    return;
+  }
+  if (!parsed) {
     return;
   }
   const day = await useDayStore.getState().loadToday();

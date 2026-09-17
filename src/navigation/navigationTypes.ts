@@ -30,7 +30,9 @@ export type RootStackParamList = {
   QuickAddModal: {date?: string; dayId: number; entryType: EntryType; autoCapture?: boolean};
   /** Food log editor: `entryId` edits, `prefill` seeds a new entry, `date`
    *  picks the day for a new entry (default today). */
-  FoodEntryModal: {date?: string; entryId?: number; prefill?: FoodPrefill; scan?: boolean} | undefined;
+  FoodEntryModal:
+    | {date?: string; entryId?: number; prefill?: FoodPrefill; scan?: boolean; /** already scanned (food widget) */ barcode?: string}
+    | undefined;
   /** Pull-up user drawer behind the pill's Me slot; Settings lives inside it. */
   ProfileDrawer: undefined;
   ProjectsScreen: undefined;

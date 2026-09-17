@@ -159,6 +159,32 @@
           android:resource="@xml/widget_habits_info" />
       </receiver>
 
+      <!-- Food widget (2026-09-17): my-foods list, search deep link, barcode quick-add. -->
+      <receiver
+        android:name=".widget.FoodWidgetProvider"
+        android:exported="false">
+        <intent-filter>
+          <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+          <action android:name="com.kelomitapp.widget.ACTION_FOOD_ADD" />
+        </intent-filter>
+        <meta-data
+          android:name="android.appwidget.provider"
+          android:resource="@xml/widget_food_info" />
+      </receiver>
+      <service
+        android:name=".widget.FoodWidgetListService"
+        android:permission="android.permission.BIND_REMOTEVIEWS"
+        android:exported="false" />
+      <!-- See-through host for the widget's barcode scan; its own task so it
+           never drags the app's main task to the front. No noHistory: the
+           scanner opens on top and we must still be alive for its result. -->
+      <activity
+        android:name=".widget.FoodScanActivity"
+        android:theme="@android:style/Theme.Translucent.NoTitleBar"
+        android:taskAffinity="com.kelomitapp.foodscan"
+        android:excludeFromRecents="true"
+        android:exported="false" />
+
       <receiver
         android:name=".widget.AddNoteWidgetProvider"
         android:exported="false">

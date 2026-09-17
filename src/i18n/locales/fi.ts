@@ -514,6 +514,7 @@ const fi: typeof en = {
     typeToggle: 'Painikewidget',
     typeHabits: 'Tapawidget',
     addHabits: 'Lisää tapawidget',
+    addFood: 'Lisää ruokawidgetti',
     habitsPick: 'Widgetin tavat (enintään 5, järjestyksessä)',
     habitsShowName: 'Näytä tapojen nimet',
     habitsHint: '1×1-widget näyttää yhden tavan; levennä sitä näyttääksesi useampia. Napauta ruutua merkitäksesi tavan tehdyksi tänään.',

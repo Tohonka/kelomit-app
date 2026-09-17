@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Food widget: header (title · search · barcode) over a scrolling list of my foods. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_bg"
+    android:padding="8dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+        <TextView
+            android:id="@+id/widget_food_title"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center_vertical"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:text="@string/widget_food_title"
+            android:textColor="@color/widget_text_primary"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+        <ImageView
+            android:id="@+id/widget_food_search"
+            android:layout_width="44dp"
+            android:layout_height="40dp"
+            android:padding="9dp"
+            android:contentDescription="@string/widget_food_search" />
+        <ImageView
+            android:id="@+id/widget_food_scan"
+            android:layout_width="44dp"
+            android:layout_height="40dp"
+            android:padding="9dp"
+            android:contentDescription="@string/widget_food_scan" />
+    </LinearLayout>
+
+    <ListView
+        android:id="@+id/widget_food_list"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:divider="@color/widget_border"
+        android:dividerHeight="1px" />
+
+    <TextView
+        android:id="@+id/widget_food_empty"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:padding="12dp"
+        android:text="@string/widget_food_empty"
+        android:textColor="@color/widget_text_muted"
+        android:textSize="12sp" />
+</LinearLayout>

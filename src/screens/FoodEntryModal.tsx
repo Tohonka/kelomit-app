@@ -205,7 +205,7 @@ const makeStyles = (c: Colors) =>
   });
 
 export default function FoodEntryModal({navigation, route}: Props) {
-  const {entryId, prefill, date: routeDate, scan} = route.params ?? {};
+  const {entryId, prefill, date: routeDate, scan, barcode: routeBarcode} = route.params ?? {};
   const isEdit = entryId != null;
   const {t, i18n} = useTranslation();
   const lang: 'fi' | 'en' = i18n.resolvedLanguage === 'fi' ? 'fi' : 'en';
@@ -376,11 +376,12 @@ export default function FoodEntryModal({navigation, route}: Props) {
 
   // Local cache first (offline, instant), then Open Food Facts; a miss leaves the
   // barcode pending so the manual entry is remembered as a product on save.
-  const startScan = async () => {
+  // `barcode` = a code the food widget already scanned: skip the camera, once.
+  const startScan = async (barcode?: string) => {
     if (scanning) { return; }
     setScanning(true);
     try {
-      const code = await scanBarcode();
+      const code = barcode ?? (await scanBarcode());
       if (!code) { return; }
       const local = await getProductByBarcode(code);
       if (local) { link(local); return; }
@@ -403,13 +404,13 @@ export default function FoodEntryModal({navigation, route}: Props) {
   // Food tab's barcode button opens straight into the scanner — once.
   const autoScanned = useRef(false);
   useEffect(() => {
-    if (scan && !autoScanned.current) {
+    if ((scan || routeBarcode) && !autoScanned.current) {
       autoScanned.current = true;
-      startScan();
+      startScan(routeBarcode);
     }
     // startScan is recreated every render; `scan` is the real trigger.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scan]);
+  }, [scan, routeBarcode]);
 
   const takePhoto = async (fromGallery: boolean) => {
     try {
@@ -576,7 +577,7 @@ export default function FoodEntryModal({navigation, route}: Props) {
         <TouchableOpacity
           style={[styles.addBtn, scanning && styles.addBtnDisabled]}
           disabled={scanning}
-          onPress={startScan}
+          onPress={() => startScan()}
           accessibilityLabel={t('food.scan')}>
           <Icon name="barcode-scan" size={22} color={colors.textSecondary} />
           <Text style={styles.addLabel}>{t('food.scan')}</Text>
@@ -596,7 +597,7 @@ export default function FoodEntryModal({navigation, route}: Props) {
         }}
         placeholder={t('food.namePlaceholder')}
         placeholderTextColor={colors.textMuted}
-        autoFocus={!isEdit && !prefill && !scan}
+        autoFocus={!isEdit && !prefill && !scan && !routeBarcode}
         maxLength={120}
       />
       {suggestions.length > 0 && (

@@ -29,6 +29,18 @@
     <!-- Habit widget (2026-09-07) -->
     <string name="widget_habits_description">Tick today\'s habits</string>
     <string name="widget_habits_empty">Pick habits in Kelomit › Settings › Widgets</string>
+    <!-- Food widget (2026-09-17) -->
+    <string name="widget_food_description">Log a food you eat often, search, or scan a barcode</string>
+    <string name="widget_food_title">Food</string>
+    <string name="widget_food_search">Search my foods</string>
+    <string name="widget_food_scan">Scan barcode</string>
+    <string name="widget_food_empty">Foods you log in Kelomit show up here</string>
+    <string name="widget_food_added">Added: %1$s</string>
+    <string name="widget_food_unknown_title">Unknown barcode</string>
+    <string name="widget_food_unknown_message">%1$s isn\'t one of your products yet.</string>
+    <string name="widget_food_add_anyway">Add anyway</string>
+    <string name="widget_food_add_edit">Add + edit</string>
+    <string name="widget_food_placeholder">Barcode …%1$s</string>
     <string name="timer_notification_channel">Timer</string>
     <string name="timer_notification_paused">Paused · %1$s</string>
     <!-- Background-location foreground service -->

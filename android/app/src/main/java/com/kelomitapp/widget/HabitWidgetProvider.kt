@@ -63,7 +63,7 @@ class HabitWidgetProvider : AppWidgetProvider() {
       }
     }
 
-    private fun glyphBitmap(context: Context, codepoint: Int, color: Int, sizePx: Int): Bitmap {
+    internal fun glyphBitmap(context: Context, codepoint: Int, color: Int, sizePx: Int): Bitmap {
       val bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
       val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         typeface = font(context)

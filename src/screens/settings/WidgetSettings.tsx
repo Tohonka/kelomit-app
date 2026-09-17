@@ -198,7 +198,7 @@ export default function WidgetSettings({navigation}: Props) {
     return () => sub.remove();
   }, [available, refresh]);
 
-  const handleAddWidget = async (type: 'full' | 'toggle' | 'addnote' | 'tracking' | 'habits') => {
+  const handleAddWidget = async (type: 'full' | 'toggle' | 'addnote' | 'tracking' | 'habits' | 'food') => {
     const ok = await nativeRequestPinWidget(type).catch(() => false);
     if (!ok) {
       Alert.alert(t('widgets.pinUnsupportedTitle'), t('widgets.pinUnsupported'));
@@ -269,6 +269,9 @@ export default function WidgetSettings({navigation}: Props) {
               </TouchableOpacity>
               <TouchableOpacity style={styles.addBtn} onPress={() => handleAddWidget('habits')}>
                 <Text style={styles.addBtnText}>{t('widgets.addHabits')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.addBtn} onPress={() => handleAddWidget('food')}>
+                <Text style={styles.addBtnText}>{t('widgets.addFood')}</Text>
               </TouchableOpacity>
             </View>
           </>

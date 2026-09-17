@@ -29,6 +29,7 @@ import {useSettingsStore} from './src/store/settingsStore';
 import {useSessionStore} from './src/store/sessionStore';
 import {useHabitStore} from './src/store/habitStore';
 import {syncHabitWidgets} from './src/services/habitWidgets';
+import {startFoodWidgetSync, syncFoodWidget} from './src/services/foodWidget';
 import {useTheme, lightColors, typography} from './src/theme';
 import RootNavigator from './src/navigation/RootNavigator';
 import {navigationRef} from './src/navigation/navigationRef';
@@ -76,6 +77,7 @@ function AppContent() {
         // Log any sessions a home-screen widget finished while we were closed.
         useSessionStore.getState().reconcile().catch(() => {});
         reconcileHabitWidgets();
+        syncFoodWidget().catch(e => diag('widget.food.fail', String(e)));
         // Drop raw trail points past the retention window (best-effort).
         pruneGpsTracksOlderThan().catch(() => {});
         pruneActivityEventsOlderThan().catch(() => {});
@@ -123,6 +125,9 @@ function AppContent() {
 
     // Health Connect daily totals: throttled inside, no-op unless enabled.
     startFoodWriteBack();
+    // Food widget: fold in taps made while we were away, then keep its list fresh.
+    startFoodWidgetSync();
+    syncFoodWidget().catch(e => diag('widget.food.fail', String(e)));
     maybeImportHealth().catch(healthError => diag('health.import.fail', String(healthError)));
 
     // Initial start is delayed; resume-from-background (below) starts immediately.
@@ -152,6 +157,8 @@ function AppContent() {
       ) {
         // Notes added this session may have auto-matched a habit: repaint the widget.
         syncHabitWidgets().catch(() => {});
+        // Re-rank the widget's list for the time of day it is left at.
+        syncFoodWidget().catch(() => {});
         const {gps_enabled, background_tracking} = useSettingsStore.getState();
         // With background tracking on, keep the watch alive (the foreground
         // service is already running). Otherwise stop tracking as before.

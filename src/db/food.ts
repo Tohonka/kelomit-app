@@ -185,6 +185,13 @@ export async function getProductByBarcode(barcode: string): Promise<FoodProduct 
   return rowToProduct(result.rows[0] as RawRow);
 }
 
+/** Every product a barcode scan can find (the food widget's offline map). */
+export async function getBarcodeProducts(): Promise<FoodProduct[]> {
+  const db = getDB();
+  const result = await db.execute('SELECT * FROM food_products WHERE barcode IS NOT NULL AND archived = 0;');
+  return (result.rows ?? []).map(r => rowToProduct(r as RawRow));
+}
+
 /** Insert, or refresh the row that already carries this barcode. A NULL barcode
  *  never conflicts, so this is a plain insert for foods without a code. */
 export async function upsertProduct(fields: ProductFields): Promise<FoodProduct> {

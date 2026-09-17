@@ -24,6 +24,9 @@ interface WidgetSessionNative {
   setHabitWidgetState(json: string): Promise<void>;
   getPendingHabitToggles(): Promise<string>;
   clearPendingHabitToggles(): Promise<void>;
+  setFoodWidgetState(json: string): Promise<void>;
+  getPendingFoodAdds(): Promise<string>;
+  clearPendingFoodAdds(): Promise<void>;
 }
 
 const Native = NativeModules.WidgetSession as WidgetSessionNative | undefined;
@@ -133,7 +136,7 @@ export async function nativeRefreshWidgets(): Promise<void> {
 /** Ask the launcher to place a new widget (Android pin flow). False = launcher
  *  doesn't support pinning; the caller points the user at the home-screen menu. */
 export async function nativeRequestPinWidget(
-  type: 'toggle' | 'full' | 'addnote' | 'tracking' | 'habits',
+  type: 'toggle' | 'full' | 'addnote' | 'tracking' | 'habits' | 'food',
 ): Promise<boolean> {
   return (await Native?.requestPinWidget(type)) ?? false;
 }
@@ -159,4 +162,28 @@ export async function nativeGetPendingHabitToggles(): Promise<PendingHabitToggle
 
 export async function nativeClearPendingHabitToggles(): Promise<void> {
   await Native?.clearPendingHabitToggles();
+}
+
+// ── Food widget ──────────────────────────────────────────────────────────────
+
+/** Push the my-foods list + barcode map; repaints every food widget. */
+export async function nativeSetFoodWidgetState(json: string): Promise<void> {
+  await Native?.setFoodWidgetState(json);
+}
+
+/** Raw queue of widget taps/scans; shape-checked by the caller. */
+export async function nativeGetPendingFoodAdds(): Promise<unknown[]> {
+  if (!Native) {
+    return [];
+  }
+  try {
+    const arr = JSON.parse(await Native.getPendingFoodAdds());
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function nativeClearPendingFoodAdds(): Promise<void> {
+  await Native?.clearPendingFoodAdds();
 }

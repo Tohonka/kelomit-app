@@ -43,6 +43,7 @@ object WidgetCommon {
       mgr.updateAppWidget(id, buildToggle(context, id))
     }
     HabitWidgetProvider.updateAll(context)
+    FoodWidgetProvider.updateAll(context)
   }
 
   /** PendingIntent that fires [ACTION_TOGGLE] for a specific widget. */

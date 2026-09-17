@@ -6,4 +6,15 @@
     <string name="day_end_no">Ei</string>
     <string name="widget_habits_description">Merkitse päivän tavat</string>
     <string name="widget_habits_empty">Valitse tavat: Kelomit › Asetukset › Widgetit</string>
+    <string name="widget_food_description">Kirjaa usein syömäsi ruoka, hae tai skannaa viivakoodi</string>
+    <string name="widget_food_title">Ruoka</string>
+    <string name="widget_food_search">Hae omista ruoista</string>
+    <string name="widget_food_scan">Skannaa viivakoodi</string>
+    <string name="widget_food_empty">Kelomitissa kirjaamasi ruoat näkyvät täällä</string>
+    <string name="widget_food_added">Lisätty: %1$s</string>
+    <string name="widget_food_unknown_title">Tuntematon viivakoodi</string>
+    <string name="widget_food_unknown_message">%1$s ei ole vielä omissa tuotteissasi.</string>
+    <string name="widget_food_add_anyway">Lisää silti</string>
+    <string name="widget_food_add_edit">Lisää + muokkaa</string>
+    <string name="widget_food_placeholder">Viivakoodi …%1$s</string>
 </resources>
