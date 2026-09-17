@@ -35,8 +35,12 @@ const RECORD_TYPES = [
   'RestingHeartRate',
 ] as const;
 
+// Added later (2026-09-17, energy estimate): asked for, but an older grant
+// without it still counts as connected and keeps importing everything else.
+const OPTIONAL_RECORD_TYPES = ['ExerciseSession'] as const;
+
 export const HEALTH_PERMISSIONS: (Permission | ReadHealthDataHistoryPermission)[] = [
-  ...RECORD_TYPES.map(recordType => ({accessType: 'read', recordType}) as Permission),
+  ...[...RECORD_TYPES, ...OPTIONAL_RECORD_TYPES].map(recordType => ({accessType: 'read', recordType}) as Permission),
   {accessType: 'read', recordType: 'ReadHealthDataHistory'},
 ];
 
@@ -76,6 +80,16 @@ export async function isHealthConnected(): Promise<boolean> {
   try {
     if (!(await initialize())) { return false; }
     return coversAllTypes(await getGrantedPermissions());
+  } catch {
+    return false;
+  }
+}
+
+/** False while the Exercise permission (added 2026-09-17) hasn't been granted. */
+export async function hasExercisePermission(): Promise<boolean> {
+  try {
+    if (!(await initialize())) { return false; }
+    return (await getGrantedPermissions()).some(p => p.accessType === 'read' && p.recordType === 'ExerciseSession');
   } catch {
     return false;
   }
@@ -126,7 +140,7 @@ type SampleType = 'Weight' | 'Height' | 'RestingHeartRate';
 
 /** Every record in the window, following page tokens (history imports of a
  *  few years can exceed one page). */
-async function readAll<T extends SampleType | 'SleepSession'>(
+async function readAll<T extends SampleType | 'SleepSession' | 'ExerciseSession'>(
   recordType: T,
   startTime: string,
   endTime: string,
@@ -169,7 +183,8 @@ export async function importHealthDays(fromDate: string, toDate: string): Promis
   const endTime = localStart(shiftDate(toDate, 1));
   // Sleep that ends on fromDate may have started the evening before.
   const sleepStart = localStart(shiftDate(fromDate, -1));
-  const [steps, distanceM, activeKcal, totalKcal, sleepRecords, weightKg, heightCm, restingHr] =
+  const canReadExercise = await hasExercisePermission();
+  const [steps, distanceM, activeKcal, totalKcal, sleepRecords, weightKg, heightCm, restingHr, exerciseRecords] =
     await Promise.all([
       dailyTotals('Steps', startTime, endTime),
       dailyTotals('Distance', startTime, endTime),
@@ -179,6 +194,9 @@ export async function importHealthDays(fromDate: string, toDate: string): Promis
       samples('Weight', startTime, endTime),
       samples('Height', startTime, endTime),
       samples('RestingHeartRate', startTime, endTime),
+      canReadExercise
+        ? (readAll('ExerciseSession', startTime, endTime) as Promise<{startTime: string; endTime: string; exerciseType: number}[]>)
+        : Promise.resolve(null),
     ]);
   const rows = buildHealthDays(
     {
@@ -190,6 +208,7 @@ export async function importHealthDays(fromDate: string, toDate: string): Promis
       weightKg,
       heightCm,
       restingHr,
+      exercise: exerciseRecords?.map(r => ({startTime: r.startTime, endTime: r.endTime, exerciseType: r.exerciseType})) ?? null,
     },
     new Date().toISOString(),
   ).filter(r => r.date >= fromDate && r.date <= toDate);

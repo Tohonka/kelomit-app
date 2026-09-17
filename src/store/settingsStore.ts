@@ -11,13 +11,17 @@ import {parseWeekdayHours, type WeekdayHours, type WeekdayOverride} from '../uti
 
 export type NavVisibility = 'always' | 'home_only';
 export type WidgetVoiceMode = 'confirm' | 'auto';
-export type Sex = 'male' | 'female';
+export type {Sex} from '../types';
+import type {Sex} from '../types';
+import type {WorkActivity} from '../utils/energyDay';
 /** Fallback body data for energy estimates when Health Connect has none (H1). */
 export interface BodyProfile {
   body_weight_kg: number | null;
   body_height_cm: number | null;
   birth_year: number | null;
   sex: Sex | null;
+  /** How physical a counted work hour is (energy estimate, 2026-09-17). */
+  work_activity: WorkActivity;
 }
 
 interface SettingsState extends Settings {
@@ -57,6 +61,7 @@ interface SettingsState extends Settings {
   body_height_cm: number | null;
   birth_year: number | null;
   sex: Sex | null;
+  work_activity: WorkActivity;
   load: () => Promise<void>;
   setGpsEnabled: (enabled: boolean) => Promise<void>;
   setGpsInterval: (ms: number) => Promise<void>;
@@ -121,6 +126,7 @@ export const useSettingsStore = create<SettingsState>(set => ({
   body_height_cm: null,
   birth_year: null,
   sex: null,
+  work_activity: 'desk',
   loaded: false,
 
   load: async () => {
@@ -169,6 +175,8 @@ export const useSettingsStore = create<SettingsState>(set => ({
     const body_height_cm = numOrNull(raw.body_height_cm);
     const birth_year = numOrNull(raw.birth_year);
     const sex: Sex | null = raw.sex === 'male' || raw.sex === 'female' ? raw.sex : null;
+    const work_activity: WorkActivity =
+      raw.work_activity === 'mixed' || raw.work_activity === 'physical' ? raw.work_activity : 'desk';
     set({
       ...settings,
       theme_mode,
@@ -193,6 +201,7 @@ export const useSettingsStore = create<SettingsState>(set => ({
       body_height_cm,
       birth_year,
       sex,
+      work_activity,
       loaded: true,
     });
   },

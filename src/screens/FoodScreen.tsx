@@ -20,6 +20,8 @@ import type {Colors} from '../theme';
 import ActionSheet from '../components/ui/ActionSheet';
 import Bounceable from '../components/ui/Bounceable';
 import Sheet from '../components/ui/Sheet';
+import EnergyCard from '../components/insights/EnergyCard';
+import {loadEnergyRange, type EnergyRange} from '../services/energy';
 import {getSetting, setSetting} from '../db/settings';
 import {getDayByDate, getOrCreateDay} from '../db/days';
 import {
@@ -193,6 +195,7 @@ export default function FoodScreen({navigation, route}: TabScreenProps<'Food'>) 
   const [sortOpen, setSortOpen] = useState(false);
   const [foodsOpen, setFoodsOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [energy, setEnergy] = useState<EnergyRange | null>(null);
   const [target, setTarget] = useState<FoodEntry | null>(null);
 
   // Read-only day lookup: browsing days must not create day rows.
@@ -204,6 +207,7 @@ export default function FoodScreen({navigation, route}: TabScreenProps<'Food'>) 
     const now = new Date();
     setEntries(rows);
     setMyFoods(rankRecents(recentRows, now.getHours() * 60 + now.getMinutes(), Infinity));
+    setEnergy(await loadEnergyRange(d, d).catch(() => null));
   }, []);
 
   useEffect(() => {
@@ -337,6 +341,13 @@ export default function FoodScreen({navigation, route}: TabScreenProps<'Food'>) 
             {withoutKcal > 0 ? ` · ${t('food.withoutKcal', {n: withoutKcal})}` : ''}
           </Text>
         )}
+
+        <EnergyCard
+          energy={energy}
+          date={date}
+          isToday={isToday}
+          onOpenProfile={() => navigation.navigate('HealthSettings')}
+        />
 
         {myFoods.length > 0 && (
           <>

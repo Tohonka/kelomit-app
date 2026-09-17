@@ -626,4 +626,12 @@ export const migrations: Migration[] = [
       'ALTER TABLE habit_matchers_new RENAME TO habit_matchers',
     ],
   },
+  {
+    version: 34,
+    up: [
+      // Energy estimate (plan 2026-09-17 T2): the day's Health Connect exercise
+      // sessions as JSON [{type, minutes}]. NULL = never imported.
+      'ALTER TABLE health_daily ADD COLUMN exercise TEXT',
+    ],
+  },
 ];

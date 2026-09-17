@@ -8,13 +8,14 @@ import {getInsightsBreakdown, getWorkSecondsByDay, type InsightsData, type Insig
 import {getSegmentsInRange} from '../db/routeHistory';
 import {getFoodKcalByDay, type FoodDayTotals} from '../db/food';
 import {getHealthDailyRange} from '../db/health';
+import {loadEnergyRange, type EnergyRange} from '../services/energy';
 import {useSettingsStore} from '../store/settingsStore';
 import {useHabitStore, effectiveDone} from '../store/habitStore';
 import {useTheme, typography, spacing, radius} from '../theme';
 import type {Colors} from '../theme';
 import {getDateFnsLocale} from '../i18n';
 import {formatHours} from '../utils/hoursUtils';
-import {formatDuration, shiftDate} from '../utils/dateUtils';
+import {datesBetween, formatDuration, todayDate} from '../utils/dateUtils';
 import {summarizeSegments, type MovementSummary} from '../utils/movementSummary';
 import {movementKcal} from '../utils/energy';
 import TargetRing from '../components/insights/TargetRing';
@@ -67,11 +68,6 @@ function rangeFor(period: Period): {start: string; end: string} {
   const back = new Date(now);
   back.setDate(now.getDate() - 29);
   return {start: localDateStr(back), end};
-}
-function datesBetween(start: string, end: string): string[] {
-  const out: string[] = [];
-  for (let d = start; d <= end; d = shiftDate(d, 1)) { out.push(d); }
-  return out;
 }
 function km(meters: number): string {
   return `${(meters / 1000).toFixed(1)} km`;
@@ -227,6 +223,7 @@ export default function InsightsScreen() {
   const [segments, setSegments] = useState<Array<{date: string; segment: DayRouteSegment}>>([]);
   const [foodByDay, setFoodByDay] = useState<Record<string, FoodDayTotals>>({});
   const [health, setHealth] = useState<HealthDaily[]>([]);
+  const [energy, setEnergy] = useState<EnergyRange | null>(null);
   const [loading, setLoading] = useState(true);
 
   const range = useMemo(() => rangeFor(period), [period]);
@@ -244,14 +241,16 @@ export default function InsightsScreen() {
       getSegmentsInRange(start, end).catch(() => []),
       getFoodKcalByDay(start, end).catch(() => ({})),
       getHealthDailyRange(start, end).catch(() => []),
+      loadEnergyRange(start, end).catch(() => null),
     ])
-      .then(([d, day, segs, food, hc]) => {
+      .then(([d, day, segs, food, hc, en]) => {
         if (cancelled) { return; }
         setData(d);
         setByDay(day);
         setSegments(segs);
         setFoodByDay(food);
         setHealth(hc);
+        setEnergy(en);
       })
       .finally(() => { if (!cancelled) { setLoading(false); } });
     return () => { cancelled = true; };
@@ -291,6 +290,23 @@ export default function InsightsScreen() {
       .filter((r): r is {id: number; title: string; done: number} => r != null);
   }, [habitState, dates]);
   const hasHabits = habitRows.length > 0;
+
+  // ── Energy: finished days only, so today's partial figure doesn't drag the average ──
+  const energyStats = useMemo(() => {
+    const today = todayDate();
+    const days = (energy?.days ?? []).filter(d => d.date < today);
+    if (days.length === 0) { return null; }
+    const used = days.reduce((s, d) => s + d.totalKcal, 0);
+    const fed = days.filter(d => d.eatenKcal != null);
+    const eaten = fed.reduce((s, d) => s + (d.eatenKcal ?? 0), 0);
+    return {
+      used,
+      usedAvg: Math.round(used / days.length / 10) * 10,
+      eaten,
+      eatenAvg: fed.length > 0 ? Math.round(eaten / fed.length / 10) * 10 : 0,
+      eatenDays: fed.length,
+    };
+  }, [energy]);
 
   // ── Food ────────────────────────────────────────────────────────────────
   const food = useMemo(() => {
@@ -535,6 +551,37 @@ export default function InsightsScreen() {
               <>
                 <Text style={styles.eyebrow}>{t('balance.dailyKcal')}</Text>
                 <DayBars days={weekBars(k => foodByDay[k]?.kcal ?? 0)} color={colors.accentAmber} />
+              </>
+            )}
+          </>
+        )}
+
+        {!loading && energy?.bmr != null && energyStats && (
+          <>
+            <Text style={styles.sectionTitle}>{t('energy.title')}</Text>
+            <View style={styles.card}>
+              <Stat label={t('energy.bmr')} value={t('energy.kcalPerDay', {kcal: energy.bmr})} styles={styles} />
+              <Stat
+                label={t('energy.used')}
+                value={t('energy.totalAndAvg', {total: energyStats.used, avg: energyStats.usedAvg})}
+                styles={styles}
+              />
+              {energyStats.eatenDays > 0 && (
+                <Stat
+                  label={t('energy.eatenOnDays', {days: energyStats.eatenDays})}
+                  value={t('energy.totalAndAvg', {total: energyStats.eaten, avg: energyStats.eatenAvg})}
+                  styles={styles}
+                />
+              )}
+              <Text style={styles.statNote}>{t('energy.estimateNote')}</Text>
+            </View>
+            {isWeek && (
+              <>
+                <Text style={styles.eyebrow}>{t('energy.dailyUsed')}</Text>
+                <DayBars
+                  days={weekBars(k => energy.days.find(d => d.date === k)?.totalKcal ?? 0)}
+                  color={colors.accentCyan}
+                />
               </>
             )}
           </>

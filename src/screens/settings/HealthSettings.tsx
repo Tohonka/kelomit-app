@@ -80,6 +80,7 @@ export default function HealthSettings(_props: Props) {
     body_height_cm,
     birth_year,
     sex,
+    work_activity: workActivity,
     setBodyProfile,
   } = useSettingsStore();
 
@@ -321,6 +322,22 @@ export default function HealthSettings(_props: Props) {
             ))}
           </View>
         </View>
+        <View style={styles.row}>
+          <Text style={styles.rowLabel}>{t('energy.workActivity')}</Text>
+          <View style={styles.segment}>
+            {(['desk', 'mixed', 'physical'] as const).map(w => (
+              <TouchableOpacity
+                key={w}
+                style={[styles.segmentBtn, workActivity === w && styles.segmentBtnActive]}
+                onPress={() => setBodyProfile({work_activity: w})}>
+                <Text style={[styles.segmentBtnText, workActivity === w && styles.segmentBtnTextActive]}>
+                  {t(`energy.work.${w}`)}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+        <Text style={local.hint}>{t('energy.workActivityHint')}</Text>
       </ScrollView>
       <ActionSheet
         visible={historyOpen}

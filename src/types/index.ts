@@ -373,6 +373,15 @@ export interface FoodEntry {
 
 /** One day of Health Connect totals (schema v31). Every metric is optional —
  *  a row exists as soon as any source reported anything for that date. */
+export type Sex = 'male' | 'female';
+
+/** One Health Connect exercise session, reduced to what the energy estimate
+ *  needs: the ExerciseType constant and its (overlap-free) length. */
+export interface ExerciseBout {
+  type: number;
+  minutes: number;
+}
+
 export interface HealthDaily {
   /** Local YYYY-MM-DD. */
   date: string;
@@ -386,6 +395,8 @@ export interface HealthDaily {
   active_kcal: number | null;
   total_kcal: number | null;
   resting_hr: number | null;
+  /** v34. Null = not imported (no permission yet), [] = a day without sessions. */
+  exercise: ExerciseBout[] | null;
   synced_at: string;
   created_at: string;
   updated_at: string;

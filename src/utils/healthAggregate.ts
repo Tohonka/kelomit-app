@@ -1,5 +1,5 @@
 import {localDateOf} from './timeFormat';
-import type {HealthDailyInput} from '../types';
+import type {ExerciseBout, HealthDailyInput} from '../types';
 
 /** A per-day total already sliced by Health Connect (period = 1 day). */
 export interface DayValue {
@@ -16,6 +16,10 @@ export interface SleepSpan {
   endTime: string;
 }
 
+export interface ExerciseSpan extends SleepSpan {
+  exerciseType: number;
+}
+
 export interface HealthImportInput {
   steps: DayValue[];
   distanceM: DayValue[];
@@ -25,6 +29,8 @@ export interface HealthImportInput {
   weightKg: Sample[];
   heightCm: Sample[];
   restingHr: Sample[];
+  /** Null when the exercise permission isn't granted — leaves stored values alone. */
+  exercise: ExerciseSpan[] | null;
 }
 
 type Draft = Omit<HealthDailyInput, 'synced_at'>;
@@ -42,6 +48,7 @@ function blank(date: string): Draft {
     active_kcal: null,
     total_kcal: null,
     resting_hr: null,
+    exercise: null,
   };
 }
 
@@ -108,6 +115,28 @@ export function buildHealthDays(input: HealthImportInput, syncedAt: string): Hea
   latest(input.weightKg, 'weight_kg');
   latest(input.heightCm, 'height_cm');
   latest(input.restingHr, 'resting_hr');
+
+  // Exercise: the same overlap problem as sleep (watch + phone recording one
+  // workout). Walk the sessions in start order and clip each to begin where
+  // the previous one ended; a session belongs to the date it started on.
+  if (input.exercise) {
+    for (const d of days.values()) { d.exercise = []; }
+    const sessions = input.exercise
+      .map(s => ({type: s.exerciseType, start: new Date(s.startTime).getTime(), end: new Date(s.endTime).getTime()}))
+      .filter(s => s.end > s.start)
+      .sort((a, b) => a.start - b.start);
+    let coveredTo = 0;
+    for (const s of sessions) {
+      const start = Math.max(s.start, coveredTo);
+      coveredTo = Math.max(coveredTo, s.end);
+      const minutes = Math.round((s.end - start) / 60000);
+      if (minutes <= 0) { continue; }
+      const d = at(localDateOf(new Date(s.start).toISOString()));
+      const bouts: ExerciseBout[] = d.exercise ?? [];
+      bouts.push({type: s.type, minutes});
+      d.exercise = bouts;
+    }
+  }
 
   return [...days.values()]
     .sort((a, b) => a.date.localeCompare(b.date))

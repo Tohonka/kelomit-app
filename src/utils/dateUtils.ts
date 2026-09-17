@@ -103,6 +103,13 @@ export function shiftDate(dateStr: string, days: number): string {
   return format(new Date(y, m - 1, d + days), 'yyyy-MM-dd');
 }
 
+/** Every local date from `start` to `end`, inclusive. */
+export function datesBetween(start: string, end: string): string[] {
+  const out: string[] = [];
+  for (let d = start; d <= end; d = shiftDate(d, 1)) { out.push(d); }
+  return out;
+}
+
 /**
  * Dates considered "next day" for upcoming to-dos. On Fridays this is both
  * Saturday and Monday (so weekend planning isn't lost); otherwise just tomorrow.

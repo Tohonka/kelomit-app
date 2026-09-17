@@ -4,7 +4,7 @@ import {buildHealthDays} from '../src/utils/healthAggregate';
 const local = (y: number, m: number, d: number, h: number, min = 0) =>
   new Date(y, m - 1, d, h, min).toISOString();
 
-const empty = {steps: [], distanceM: [], activeKcal: [], totalKcal: [], sleep: [], weightKg: [], heightCm: [], restingHr: []};
+const empty = {steps: [], distanceM: [], activeKcal: [], totalKcal: [], sleep: [], weightKg: [], heightCm: [], restingHr: [], exercise: null};
 
 describe('buildHealthDays', () => {
   it('maps day totals onto rows and stamps synced_at', () => {
@@ -65,4 +65,27 @@ it('unions overlapping sessions from several sources instead of summing them', (
   expect(rows[0].sleep_minutes).toBe(8 * 60 + 20);
   expect(rows[0].sleep_start).toBe(local(2026, 9, 15, 23, 0));
   expect(rows[0].sleep_end).toBe(local(2026, 9, 16, 7, 20));
+});
+
+describe('buildHealthDays exercise', () => {
+  it('clips overlapping exercise sessions and files them under their start date', () => {
+    const rows = buildHealthDays({
+      ...empty,
+      steps: [{date: '2026-09-15', value: 100}, {date: '2026-09-16', value: 100}],
+      exercise: [
+        {exerciseType: 79, startTime: local(2026, 9, 15, 17), endTime: local(2026, 9, 15, 18)},
+        // the phone recorded the same walk, running 10 minutes longer
+        {exerciseType: 79, startTime: local(2026, 9, 15, 17, 30), endTime: local(2026, 9, 15, 18, 10)},
+        {exerciseType: 70, startTime: local(2026, 9, 15, 20), endTime: local(2026, 9, 15, 20, 45)},
+      ],
+    }, 'now');
+    expect(rows[0].exercise).toEqual([{type: 79, minutes: 60}, {type: 79, minutes: 10}, {type: 70, minutes: 45}]);
+    // imported, nothing recorded → empty list, not null
+    expect(rows[1].exercise).toEqual([]);
+  });
+
+  it('leaves exercise null when the permission is missing', () => {
+    const rows = buildHealthDays({...empty, steps: [{date: '2026-09-15', value: 1}]}, 'now');
+    expect(rows[0].exercise).toBeNull();
+  });
 });
