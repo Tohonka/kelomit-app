@@ -1,7 +1,19 @@
-import React, {useMemo} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
-import {View, Text, ScrollView, StyleSheet} from 'react-native';
+import {View, Text, ScrollView, StyleSheet, Pressable, BackHandler, useWindowDimensions} from 'react-native';
+import {Gesture, GestureDetector} from 'react-native-gesture-handler';
+import Animated, {
+  cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 import Bounceable from '../components/ui/Bounceable';
+import {getSetting, setSetting} from '../db/settings';
+import {haptic, HAPTIC_START, HAPTIC_TAP} from '../utils/haptics';
+import {applyFeatureOrder, cellIndexAt, moveItem, parseFeatureOrder} from './featureOrder';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import type {BottomTabBarProps} from '@react-navigation/bottom-tabs';
@@ -22,7 +34,14 @@ const FEATURES: {route: string; labelKey: string; icon: string}[] = [
   {route: 'Food', labelKey: 'food.title', icon: 'silverware-fork-knife'},
 ];
 
+type Feature = (typeof FEATURES)[number];
+
 const CIRCLE = 52;
+const ORDER_SETTING = 'feature_order';
+// Order-mode grid cell: a circle + label, with the row's 18 px gap folded in.
+const CELL_W = CIRCLE + 8 + 18;
+const CELL_H = CIRCLE + 40;
+const GRID_PAD = 16;
 
 const makeStyles = (c: Colors, top: number) =>
   StyleSheet.create({
@@ -72,7 +91,109 @@ const makeStyles = (c: Colors, top: number) =>
       borderColor: c.textMuted,
     },
     soonItem: {alignItems: 'center', gap: 6, width: CIRCLE + 8, opacity: 0.45},
+    // Order mode: a full-screen scrim with every circle laid out in a grid.
+    scrim: {position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, zIndex: 50, backgroundColor: '#000000AA'},
+    panel: {
+      paddingTop: top + 8,
+      paddingBottom: 16,
+      paddingHorizontal: GRID_PAD,
+      backgroundColor: c.bgCard,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: c.glassBorder,
+    },
+    panelHead: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12},
+    panelTitle: {fontSize: typography.sizes.sm, color: c.textMuted},
+    done: {paddingHorizontal: 14, paddingVertical: 8, borderRadius: 100, backgroundColor: c.primary},
+    doneText: {fontSize: typography.sizes.sm, fontWeight: typography.weights.bold, color: c.white},
+    cell: {position: 'absolute', left: 0, top: 0, width: CELL_W, height: CELL_H, alignItems: 'center', gap: 6},
   });
+
+type Styles = ReturnType<typeof makeStyles>;
+
+interface CellProps {
+  feature: Feature;
+  index: number;
+  cols: number;
+  label: string;
+  styles: Styles;
+  iconColor: string;
+  onDragTo: (route: string, x: number, y: number) => void;
+  onDrop: () => void;
+}
+
+/** One draggable circle of the order grid. The gesture runs on the JS thread
+ *  (house pattern) — seven items don't need worklets, and it keeps the
+ *  reorder logic in plain, testable functions. */
+function SortableCell({feature, index, cols, label, styles, iconColor, onDragTo, onDrop}: CellProps) {
+  const homeX = (index % cols) * CELL_W;
+  const homeY = Math.floor(index / cols) * CELL_H;
+  const x = useSharedValue(homeX);
+  const y = useSharedValue(homeY);
+  const lift = useSharedValue(0);
+  const wiggle = useSharedValue(0);
+  const dragging = useRef(false);
+  const start = useRef({x: 0, y: 0});
+
+  useEffect(() => {
+    wiggle.value = withRepeat(withSequence(withTiming(-2, {duration: 110}), withTiming(2, {duration: 110})), -1, true);
+    return () => cancelAnimation(wiggle);
+  }, [wiggle]);
+
+  const pan = useMemo(
+    () =>
+      Gesture.Pan()
+        .runOnJS(true)
+        .onStart(() => {
+          dragging.current = true;
+          start.current = {x: x.value, y: y.value};
+          lift.value = withTiming(1, {duration: 120});
+          haptic(HAPTIC_TAP);
+        })
+        .onUpdate(e => {
+          x.value = start.current.x + e.translationX;
+          y.value = start.current.y + e.translationY;
+          onDragTo(feature.route, x.value, y.value);
+        })
+        .onFinalize(() => {
+          if (!dragging.current) { return; }
+          dragging.current = false;
+          lift.value = withTiming(0, {duration: 120});
+          onDrop();
+        }),
+    [feature.route, lift, onDragTo, onDrop, x, y],
+  );
+
+  // Neighbours slide to their new cell; the dragged one follows the finger and
+  // settles on the re-render its drop triggers. Runs every render on purpose: a
+  // drop back onto the same cell changes no prop.
+  useEffect(() => {
+    if (!dragging.current) {
+      x.value = withTiming(homeX, {duration: 160});
+      y.value = withTiming(homeY, {duration: 160});
+    }
+  });
+
+  const animated = useAnimatedStyle(() => ({
+    transform: [
+      {translateX: x.value},
+      {translateY: y.value},
+      {rotate: `${lift.value > 0 ? 0 : wiggle.value}deg`},
+      {scale: 1 + lift.value * 0.12},
+    ],
+    zIndex: lift.value > 0 ? 10 : 0,
+  }));
+
+  return (
+    <GestureDetector gesture={pan}>
+      <Animated.View style={[styles.cell, animated]} accessibilityLabel={label}>
+        <View style={styles.circle}>
+          <Icon name={feature.icon} size={24} color={iconColor} />
+        </View>
+        <Text style={styles.label} numberOfLines={1}>{label}</Text>
+      </Animated.View>
+    </GestureDetector>
+  );
+}
 
 export default function TopFeatureBar({state, navigation}: BottomTabBarProps) {
   const {t} = useTranslation();
@@ -80,6 +201,81 @@ export default function TopFeatureBar({state, navigation}: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => makeStyles(colors, insets.top), [colors, insets.top]);
   const active = state.routes[state.index].name;
+  const {width} = useWindowDimensions();
+  const [order, setOrder] = useState<string[]>(() => FEATURES.map(f => f.route));
+  const [editing, setEditing] = useState(false);
+  const orderRef = useRef(order);
+  orderRef.current = order;
+
+  useEffect(() => {
+    getSetting(ORDER_SETTING)
+      .then(raw => setOrder(applyFeatureOrder(parseFeatureOrder(raw), FEATURES.map(f => f.route))))
+      .catch(() => {});
+  }, []);
+
+  const features = useMemo(
+    () => order.map(r => FEATURES.find(f => f.route === r)).filter((f): f is Feature => f != null),
+    [order],
+  );
+  const cols = Math.max(1, Math.floor((width - GRID_PAD * 2) / CELL_W));
+  const rows = Math.ceil(features.length / cols);
+
+  const finish = useCallback(() => {
+    setEditing(false);
+    setSetting(ORDER_SETTING, JSON.stringify(orderRef.current)).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!editing) { return; }
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      finish();
+      return true;
+    });
+    return () => sub.remove();
+  }, [editing, finish]);
+
+  const onDragTo = useCallback((route: string, x: number, y: number) => {
+    const current = orderRef.current;
+    const from = current.indexOf(route);
+    const to = cellIndexAt(x, y, CELL_W, CELL_H, cols, current.length);
+    if (from >= 0 && to !== from) {
+      haptic(HAPTIC_TAP);
+      setOrder(moveItem(current, from, to));
+    }
+  }, [cols]);
+
+  // A drop needs no bookkeeping: the order already moved while dragging.
+  const onDrop = useCallback(() => setOrder(o => [...o]), []);
+
+  if (editing) {
+    return (
+      <Pressable style={styles.scrim} onPress={finish} accessibilityLabel={t('common.done')}>
+        <Pressable style={styles.panel} onPress={() => {}}>
+          <View style={styles.panelHead}>
+            <Text style={styles.panelTitle}>{t('navigation.reorderHint')}</Text>
+            <Pressable style={styles.done} onPress={finish} accessibilityRole="button">
+              <Text style={styles.doneText}>{t('common.done')}</Text>
+            </Pressable>
+          </View>
+          <View style={{height: rows * CELL_H}}>
+            {features.map((f, i) => (
+              <SortableCell
+                key={f.route}
+                feature={f}
+                index={i}
+                cols={cols}
+                label={t(f.labelKey)}
+                styles={styles}
+                iconColor={colors.textSecondary}
+                onDragTo={onDragTo}
+                onDrop={onDrop}
+              />
+            ))}
+          </View>
+        </Pressable>
+      </Pressable>
+    );
+  }
 
   return (
     <View style={styles.wrap}>
@@ -87,7 +283,7 @@ export default function TopFeatureBar({state, navigation}: BottomTabBarProps) {
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.row}>
-        {FEATURES.map(f => {
+        {features.map(f => {
           const isActive = active === f.route;
           return (
             <Bounceable
@@ -95,6 +291,11 @@ export default function TopFeatureBar({state, navigation}: BottomTabBarProps) {
               style={styles.item}
               haptic
               accessibilityLabel={t(f.labelKey)}
+              delayLongPress={450}
+              onLongPress={() => {
+                haptic(HAPTIC_START);
+                setEditing(true);
+              }}
               onPress={() => navigation.navigate(f.route)}>
               <View>
                 {isActive && <View style={styles.halo} />}
