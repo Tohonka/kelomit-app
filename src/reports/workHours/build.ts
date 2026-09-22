@@ -92,6 +92,7 @@ export function classifyReportDay(
 ): ReportHourBuckets {
   const eligibleWork = entries.filter(entry =>
     entry.activity_type === 'work' &&
+    entry.parent_id == null && // subnotes ride inside their parent
     entry.project?.type !== 'personal' &&
     (!entry.is_todo || entry.completed_at != null),
   );
@@ -327,7 +328,7 @@ function buildStatistics(
 
   for (const {entries} of days) {
     for (const entry of entries) {
-      if (entry.activity_type !== 'work' || entry.project?.type === 'personal') {
+      if (entry.activity_type !== 'work' || entry.project?.type === 'personal' || entry.parent_id != null) {
         continue;
       }
       const seconds = entryTrackedSeconds(entry);

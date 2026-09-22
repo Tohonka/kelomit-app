@@ -672,6 +672,9 @@ const en = {
     less: 'Less',
   },
   subnotes: {
+    moveParentStart: 'Parent starts at {{current}}. Move it to start at {{next}}?',
+    moveParentEnd: 'Parent ends at {{current}}. Move it to end at {{next}}?',
+    tooLong: "A subnote can't be longer than its parent ({{length}}).",
     title: 'Subnotes',
     add: 'Add subnote',
     subnoteOf: 'Subnote of',

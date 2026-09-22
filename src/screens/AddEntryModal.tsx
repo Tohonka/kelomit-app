@@ -29,10 +29,11 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import {deleteMediaFile, ensureMediaDir} from '../utils/mediaUtils';
 import {getLastKnownPosition} from '../services/gpsService';
 import {scheduleTodoReminder, requestNotificationPermission} from '../services/notificationService';
-import {getEntry, addEntryMedia, deleteEntryMedia} from '../db/entries';
+import {getEntry, addEntryMedia, deleteEntryMedia, updateEntry} from '../db/entries';
+import {checkSubnoteSpan} from '../utils/subnoteSpan';
 import {getOrCreateDay, getDayByDate} from '../db/days';
-import {spanIntersectsDayLegs} from '../utils/hoursUtils';
-import {formatDate, todayDate, hhmmToIsoOn, resolveRangeEnd} from '../utils/dateUtils';
+import {spanIntersectsDayLegs, formatHours} from '../utils/hoursUtils';
+import {formatDate, todayDate, hhmmToIsoOn, resolveRangeEnd, formatTime} from '../utils/dateUtils';
 import {usualHoursForDate} from '../utils/usualHours';
 import {haptic, HAPTIC_SAVE} from '../utils/haptics';
 import type {RootStackScreenProps} from '../navigation/navigationTypes';
@@ -257,7 +258,8 @@ export default function AddEntryModal({navigation, route}: Props) {
   const entryDate = route.params.date ?? todayDate();
   const isEdit = entryId != null;
   const prefill = isEdit ? undefined : route.params.prefill;
-  // Subnote mode (create only): inherits the parent's project + day, no to-do.
+  // Subnote mode: on create from the route param; on edit from the entry itself.
+  // Inherits the parent's project + day, no to-do, and stays inside its span.
   const parentId = isEdit ? undefined : route.params.parentId;
   const [parent, setParent] = useState<Entry | null>(null);
   const canSwitchTabs = entryId == null && leaveRangeId == null && parentId == null;
@@ -385,6 +387,11 @@ export default function AddEntryModal({navigation, route}: Props) {
     if (parentId == null) { return; }
     getEntry(parentId).then(p => {
       setParent(p);
+      // A new subnote defaults to its parent's start (from–to parents).
+      if (p?.time_from && p.duration_sec == null) {
+        setTimeMode('range');
+        setTimeFrom(p.time_from);
+      }
       setLoadingEntry(false);
     });
   }, [parentId]);
@@ -421,9 +428,21 @@ export default function AddEntryModal({navigation, route}: Props) {
         setTimeFrom(e.time_from);
         setTimeTo(e.time_to);
       }
+      if (e.parent_id != null) {
+        getEntry(e.parent_id).then(p => setParent(p));
+      }
       setLoadingEntry(false);
     });
   }, [isEdit, entryId]);
+
+  /** Alert as a yes/no promise (RN has no awaitable confirm). */
+  const confirm = (message: string) =>
+    new Promise<boolean>(resolve => {
+      Alert.alert(translate('subnotes.title'), message, [
+        {text: translate('common.cancel'), style: 'cancel', onPress: () => resolve(false)},
+        {text: translate('common.ok'), onPress: () => resolve(true)},
+      ], {cancelable: false});
+    });
 
   const addTag = async (name: string) => {
     const n = name.trim();
@@ -482,7 +501,36 @@ export default function AddEntryModal({navigation, route}: Props) {
         const now = new Date();
         finalFrom =
           durationStart ?? combineDateTime(entryDate, now.getHours(), now.getMinutes());
+        // A duration subnote whose default "now" falls outside the parent
+        // starts where the parent starts instead.
+        if (!durationStart && parent?.time_from) {
+          const n = Date.parse(finalFrom);
+          const outside = n < Date.parse(parent.time_from)
+            || (parent.time_to != null && n > Date.parse(parent.time_to));
+          if (outside) { finalFrom = parent.time_from; }
+        }
         finalTo = new Date(new Date(finalFrom).getTime() + durationSec * 1000).toISOString();
+      }
+
+      // Keep a subnote inside its parent's span (see docs/hours-model.md).
+      if (parent) {
+        const check = checkSubnoteSpan(parent, finalFrom, finalTo, durationSec);
+        if (check.tooLong != null) {
+          Alert.alert(translate('subnotes.title'), translate('subnotes.tooLong', {length: formatHours(check.tooLong)}));
+          return;
+        }
+        if (check.moveParentFrom) {
+          const ok = await confirm(translate('subnotes.moveParentStart', {
+            current: formatTime(parent.time_from!), next: formatTime(check.moveParentFrom)}));
+          if (!ok) { return; }
+          await updateEntry(parent.id, {time_from: check.moveParentFrom});
+        }
+        if (check.moveParentTo) {
+          const ok = await confirm(translate('subnotes.moveParentEnd', {
+            current: formatTime(parent.time_to!), next: formatTime(check.moveParentTo)}));
+          if (!ok) { return; }
+          await updateEntry(parent.id, {time_to: check.moveParentTo});
+        }
       }
 
       // Persist new attachments (those without an id) onto an entry.

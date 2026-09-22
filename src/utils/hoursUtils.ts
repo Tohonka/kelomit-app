@@ -229,6 +229,9 @@ export function calcDayWorkBreakdown(day: Day, entries: Entry[]): DayWorkBreakdo
 
   for (const e of entries) {
     const activity = dayWorkActivity(e);
+    // A subnote never adds: its parent's span already covers it. A personal
+    // subnote inside a work parent still deducts (merged, so never twice).
+    if (e.parent_id != null && activity !== 'personal') { continue; }
     const iv = entryInterval(e);
     if (iv) {
       if (activity === 'work') {

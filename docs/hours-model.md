@@ -110,6 +110,17 @@ work. Nothing is split or mirrored; the next day's list does not show it.
 - Day 09:00–17:00 (8h), + work note 18:00–19:00 → **9h** (after hours).
 - No day start/end, + "2h work" duration → **2h**.
 
+## Subnotes
+
+A subnote (`parent_id` set) lives inside its parent's span, so it **never adds**
+worked time in any path — split bar, no-legs sum, legs model, reports. The one
+exception is deduction: a genuinely `personal` subnote inside a work parent
+still deducts its portion inside the legs (intervals are merged, so a personal
+subnote of a personal parent is not deducted twice). The editor keeps subnotes
+inside the parent: an earlier start or later end offers to move the parent's
+from–to (from–to parents only), and a duration subnote can't be longer than
+the parent.
+
 ## Small-task notice (soft "outside the workday" warning)
 
 `spanIntersectsDayLegs(day, from, to, usualEndIso)` decides whether a small task

@@ -674,6 +674,9 @@ const fi: typeof en = {
     less: 'Vähemmän',
   },
   subnotes: {
+    moveParentStart: 'Ylämerkintä alkaa {{current}}. Siirretäänkö alkamaan {{next}}?',
+    moveParentEnd: 'Ylämerkintä päättyy {{current}}. Siirretäänkö päättymään {{next}}?',
+    tooLong: 'Alimerkintä ei voi olla ylämerkintää pidempi ({{length}}).',
     title: 'Alimerkinnät',
     add: 'Lisää alimerkintä',
     subnoteOf: 'Alimerkintä merkinnälle',

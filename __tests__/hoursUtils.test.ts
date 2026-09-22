@@ -149,6 +149,17 @@ describe('calcDayWorkBreakdown (work-day model)', () => {
     expect(b.workSeconds).toBe(2 * H); // only work entries, personal ignored
   });
 
+  it('legs path: a work subnote outside the legs never adds; a personal one inside still deducts', () => {
+    const day = makeDay({started_at: at(9), ended_at: at(17)});
+    const parent = makeEntry({id: 1, time_from: at(16), time_to: at(19)}); // 2h outside → +2h
+    const sub = makeEntry({id: 2, parent_id: 1, time_from: at(17), time_to: at(19)}); // would be +2h again
+    const personalSub = makeEntry({id: 3, parent_id: 1, activity_type: 'personal', time_from: at(16), time_to: at(16.5)});
+    const b = calcDayWorkBreakdown(day, [parent, sub, personalSub]);
+    expect(b.addedWorkSeconds).toBe(2 * H);
+    expect(b.deductedPersonalSeconds).toBe(0.5 * H);
+    expect(b.workSeconds).toBe(9.5 * H);
+  });
+
   it('no-legs fallback skips subnotes (parent already counts them)', () => {
     const entries = [
       makeEntry({id: 1, activity_type: 'work', time_from: at(9), time_to: at(11)}),
