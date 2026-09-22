@@ -11,6 +11,8 @@ import {useDayStore} from '../store/dayStore';
 export default function NavShell(props: BottomTabBarProps) {
   const {state, navigation} = props;
   const active = state.routes[state.index].name as PillRoute;
+  // The + adapts to what the user is looking at: food on the Food tab, work elsewhere.
+  const quickAddMode = state.routes[state.index].name === 'Food' ? 'food' : 'work';
   const selectedDay = useDayStore(s => s.selectedDay);
   const quickAddTarget = active === 'Home' && selectedDay
     ? {date: selectedDay.date, dayId: selectedDay.id}
@@ -35,6 +37,7 @@ export default function NavShell(props: BottomTabBarProps) {
         onSelect={select}
         onOpenProfile={() => navigation.navigate('ProfileDrawer')}
         quickAddTarget={quickAddTarget}
+        quickAddMode={quickAddMode}
       />
     </>
   );

@@ -20,6 +20,8 @@ interface Props {
   onOpenProfile: () => void;
   // Optional quick-add target day; without it the + targets today.
   quickAddTarget?: {date: string; dayId: number};
+  /** Food tab → food-flavoured + (editor / scan / my foods); else work. */
+  quickAddMode?: 'work' | 'food';
 }
 
 // The 3 everyday destinations + quick-add. Always in reach, floats over content.
@@ -55,7 +57,7 @@ const makeStyles = (c: Colors, bottom: number) =>
     avatarActive: {borderWidth: 1.5, borderColor: c.primary},
   });
 
-export default function BottomPill({active, onSelect, onOpenProfile, quickAddTarget}: Props) {
+export default function BottomPill({active, onSelect, onOpenProfile, quickAddTarget, quickAddMode = 'work'}: Props) {
   const photo = useSettingsStore(s => s.profile_photo);
   const {t} = useTranslation();
   const {colors} = useTheme();
@@ -78,7 +80,7 @@ export default function BottomPill({active, onSelect, onOpenProfile, quickAddTar
       <View style={styles.pill}>
         {tab('Home', 'navigation.home', 'home-variant')}
         {tab('Calendar', 'navigation.calendar', 'calendar-month')}
-        <QuickAddButton target={quickAddTarget} />
+        <QuickAddButton target={quickAddTarget} mode={quickAddMode} />
         <Bounceable style={styles.tab} haptic accessibilityLabel={t('profile.me')} onPress={onOpenProfile}>
           {photo ? (
             <Image source={{uri: fileUri(photo)}} style={[styles.avatar, active === 'Settings' && styles.avatarActive]} />

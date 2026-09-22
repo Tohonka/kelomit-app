@@ -27,3 +27,16 @@ export function buildQuickAddActions(
     ...(openNag ? [{key: 'nag', label: i18n.t('nags.new'), icon: 'bell-ring-outline', onPress: openNag}] : []),
   ];
 }
+
+/** Food-tab flavour of the dial: scan / my foods (the search) / a plain note. */
+export function buildFoodQuickAddActions(
+  openScan: () => void,
+  openMyFoods: () => void,
+  openNote: () => void,
+): FabAction[] {
+  return [
+    {key: 'scan', label: i18n.t('food.scan'), icon: 'barcode-scan', onPress: openScan},
+    {key: 'myfoods', label: i18n.t('food.myFoods'), icon: 'magnify', onPress: openMyFoods},
+    {key: 'note', label: i18n.t('entryType.note'), icon: 'note-plus-outline', onPress: openNote},
+  ];
+}

@@ -5,7 +5,7 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import {useNavigation} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useDayStore} from '../store/dayStore';
-import {buildQuickAddActions} from '../components/entries/quickAddActions';
+import {buildQuickAddActions, buildFoodQuickAddActions} from '../components/entries/quickAddActions';
 import {useTheme, typography, radius, spacing} from '../theme';
 import type {Colors} from '../theme';
 import type {Day, EntryType} from '../types';
@@ -13,8 +13,11 @@ import type {RootStackParamList} from './navigationTypes';
 
 // Center button of the floaty pill. Tap = full new-entry editor (AddEntryModal);
 // long-press = the quick-add speed dial (note / photo / video / voice → QuickAddModal).
-// Both target today's day, so it works from any tab.
+// Both target today's day, so it works from any tab. On the Food tab the button
+// wears the food glyph and tap/hold go to the food editor / scan / my foods
+// instead — the plain + was hit for "add food" far too often.
 const SIZE = 54;
+const GLYPH: Record<'work' | 'food', string> = {work: 'briefcase-outline', food: 'silverware-fork-knife'};
 
 export async function resolveQuickAddDay(
   target: {date: string; dayId: number} | undefined,
@@ -43,6 +46,18 @@ const makeStyles = (c: Colors) =>
       borderWidth: 6,
       borderColor: c.glassPill,
     },
+    // Small "+" as an exponent on the base glyph.
+    badge: {
+      position: 'absolute',
+      top: 6,
+      right: 6,
+      width: 16,
+      height: 16,
+      borderRadius: 8,
+      backgroundColor: c.white,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
     overlay: {flex: 1, justifyContent: 'flex-end', alignItems: 'center'},
     backdrop: {position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#000000B3'},
     dial: {alignItems: 'center', gap: spacing.md, paddingBottom: 120},
@@ -70,7 +85,7 @@ const makeStyles = (c: Colors) =>
 
 // `target` aims quick-add at a specific day (the day-detail screen passes the
 // viewed day); without it, quick-add targets today.
-export default function QuickAddButton({target}: {target?: {date: string; dayId: number}}) {
+export default function QuickAddButton({target, mode = 'work'}: {target?: {date: string; dayId: number}; mode?: 'work' | 'food'}) {
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -116,7 +131,21 @@ export default function QuickAddButton({target}: {target?: {date: string; dayId:
     setOpen(false);
     navigation.navigate('NagEditModal');
   }, [navigation]);
-  const actions = useMemo(() => buildQuickAddActions(go, goFood, goNag), [go, goFood, goNag]);
+  const goScan = React.useCallback(() => {
+    setOpen(false);
+    navigation.navigate('FoodEntryModal', {date: target?.date, scan: true});
+  }, [navigation, target]);
+  const goMyFoods = React.useCallback(() => {
+    setOpen(false);
+    navigation.navigate('MainTabs', {screen: 'Food', params: {myFoods: true}});
+  }, [navigation]);
+  const goNote = React.useCallback(() => { setOpen(false); openAdd(); }, [openAdd]);
+  const actions = useMemo(
+    () => (mode === 'food'
+      ? buildFoodQuickAddActions(goScan, goMyFoods, goNote)
+      : buildQuickAddActions(go, goFood, goNag)),
+    [mode, go, goFood, goNag, goScan, goMyFoods, goNote],
+  );
 
   return (
     <>
@@ -142,10 +171,19 @@ export default function QuickAddButton({target}: {target?: {date: string; dayId:
         activeOpacity={0.85}
         disabled={resolving}
         accessibilityRole="button"
-        onPress={() => (open ? setOpen(false) : openAdd())}
+        onPress={() => (open ? setOpen(false) : mode === 'food' ? goFood() : openAdd())}
         onLongPress={() => setOpen(true)}
         delayLongPress={250}>
-        <Icon name={open ? 'close' : 'plus'} size={26} color={colors.white} />
+        {open ? (
+          <Icon name="close" size={26} color={colors.white} />
+        ) : (
+          <>
+            <Icon name={GLYPH[mode]} size={24} color={colors.white} />
+            <View style={styles.badge}>
+              <Icon name="plus" size={12} color={colors.primary} />
+            </View>
+          </>
+        )}
       </TouchableOpacity>
     </>
   );
