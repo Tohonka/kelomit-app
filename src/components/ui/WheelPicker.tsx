@@ -11,6 +11,7 @@ import {
 import {useTheme, typography, radius} from '../../theme';
 import type {Colors} from '../../theme';
 import {haptic, HAPTIC_TAP} from '../../utils/haptics';
+import ActionSheet from './ActionSheet';
 
 export interface WheelOption {
   key: string;
@@ -65,6 +66,7 @@ export default function WheelPicker({options, value, onChange, width = 124}: Pro
   const base = Math.floor(REPEATS / 2) * n;
   const valueIdx = Math.max(0, options.findIndex(o => o.key === value));
   const [row, setRow] = useState(base + valueIdx);
+  const [listOpen, setListOpen] = useState(false);
   // Initial position only: a changing contentOffset prop makes Android scrollTo
   // immediately, which fights the snap animation.
   const initialOffset = useRef({x: 0, y: (base + valueIdx) * ITEM_H}).current;
@@ -83,9 +85,21 @@ export default function WheelPicker({options, value, onChange, width = 124}: Pro
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [valueIdx, n]);
 
+  const select = (i: number) => {
+    ref.current?.scrollTo({y: i * ITEM_H, animated: true});
+    setRow(i);
+    const o = options[((i % n) + n) % n];
+    if (o.key !== value) { onChange(o.key); }
+  };
+
   const settle = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (n === 0) { return; }
     const i = Math.round(e.nativeEvent.contentOffset.y / ITEM_H);
+    // A slow release (no fling) never gets a momentum-end on Android and the
+    // wheel would rest between rows: nudge it onto the nearest row ourselves.
+    if (Math.abs(e.nativeEvent.contentOffset.y - i * ITEM_H) > 0.5) {
+      ref.current?.scrollTo({y: i * ITEM_H, animated: true});
+    }
     const idx = ((i % n) + n) % n;
     const centred = base + idx;
     if (Math.abs(i - centred) > n * 5) {
@@ -109,10 +123,15 @@ export default function WheelPicker({options, value, onChange, width = 124}: Pro
         nestedScrollEnabled
         showsVerticalScrollIndicator={false}
         snapToInterval={ITEM_H}
+        disableIntervalMomentum
         decelerationRate="fast"
         contentOffset={initialOffset}
         onLayout={() => ref.current?.scrollTo({y: row * ITEM_H, animated: false})}
         onMomentumScrollEnd={settle}
+        onScrollEndDrag={e => {
+          const v = e.nativeEvent.velocity?.y ?? 0;
+          if (Math.abs(v) < 0.1) { settle(e); }
+        }}
         contentContainerStyle={styles.pad}>
         {items.map((o, i) => (
           <Pressable
@@ -120,16 +139,23 @@ export default function WheelPicker({options, value, onChange, width = 124}: Pro
             style={styles.item}
             accessibilityLabel={o.label}
             onPress={() => {
-              // A programmatic scroll emits no momentum-end on Android: select here.
-              ref.current?.scrollTo({y: i * ITEM_H, animated: true});
-              setRow(i);
-              if (o.key !== value) { onChange(o.key); }
+              // Centre row = quick tap → plain list; other rows scroll-select
+              // (a programmatic scroll emits no momentum-end on Android).
+              if (i === row) { setListOpen(true); } else { select(i); }
             }}>
             <Text style={i === row ? styles.textActive : styles.text} numberOfLines={1}>{o.label}</Text>
           </Pressable>
         ))}
       </ScrollView>
       <View style={styles.band} pointerEvents="none" />
+      <ActionSheet
+        visible={listOpen}
+        onClose={() => setListOpen(false)}
+        actions={options.map((o, idx) => ({
+          label: o.key === value ? `✓ ${o.label}` : o.label,
+          onPress: () => select(base + idx),
+        }))}
+      />
     </View>
   );
 }
