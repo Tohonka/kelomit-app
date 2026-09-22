@@ -477,6 +477,7 @@ const en = {
     shareFailed: 'Could not share the log.',
   },
   time: {
+    clearTime: 'Clear this time?',
     enterTime: 'Enter time',
     formatHint: '24-hour format · 00:00 – 23:59',
     noTimeTracked: 'No time tracked yet',

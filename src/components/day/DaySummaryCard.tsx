@@ -116,6 +116,7 @@ export default function DaySummaryCard({day, entries, onUpdateTimes, onOpenDetai
           baseDate={day.date}
           placeholder={t('time.start')}
           onChange={iso => onUpdateTimes({started_at: iso})}
+          onClear={() => onUpdateTimes({started_at: null})}
         />
         <Text style={styles.arrow}>→</Text>
         <TimePicker
@@ -123,6 +124,7 @@ export default function DaySummaryCard({day, entries, onUpdateTimes, onOpenDetai
           baseDate={day.date}
           placeholder={t('time.end')}
           onChange={iso => onUpdateTimes({ended_at: iso})}
+          onClear={() => onUpdateTimes({ended_at: null})}
         />
         <Text
           style={[
@@ -146,6 +148,7 @@ export default function DaySummaryCard({day, entries, onUpdateTimes, onOpenDetai
             baseDate={day.date}
             placeholder={t('time.start')}
             onChange={iso => onUpdateTimes({started_at_2: iso})}
+          onClear={() => onUpdateTimes({started_at_2: null})}
           />
           <Text style={styles.arrow}>→</Text>
           <TimePicker
@@ -153,6 +156,7 @@ export default function DaySummaryCard({day, entries, onUpdateTimes, onOpenDetai
             baseDate={day.date}
             placeholder={t('time.end')}
             onChange={iso => onUpdateTimes({ended_at_2: iso})}
+          onClear={() => onUpdateTimes({ended_at_2: null})}
           />
           <Text
             style={[

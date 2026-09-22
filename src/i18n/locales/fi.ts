@@ -479,6 +479,7 @@ const fi: typeof en = {
     shareFailed: 'Lokin jakaminen epäonnistui.',
   },
   time: {
+    clearTime: 'Tyhjennetäänkö aika?',
     enterTime: 'Syötä aika',
     formatHint: '24 tunnin muoto · 00:00–23:59',
     noTimeTracked: 'Aikaa ei ole vielä seurattu',

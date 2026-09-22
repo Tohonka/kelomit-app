@@ -1,5 +1,7 @@
 import React, {useMemo, useState} from 'react';
-import {TouchableOpacity, Text, StyleSheet, Platform} from 'react-native';
+import {TouchableOpacity, Text, StyleSheet, Platform, View, Alert} from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import {useTranslation} from 'react-i18next';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import {useTheme, typography, spacing, radius} from '../../theme';
 import type {Colors} from '../../theme';
@@ -12,6 +14,8 @@ interface Props {
   baseDate?: string;
   placeholder?: string;
   onChange: (isoString: string) => void;
+  /** When given and a value is set, a small × badge clears the time (after a confirm). */
+  onClear?: () => void;
 }
 
 const makeStyles = (c: Colors) =>
@@ -37,6 +41,20 @@ const makeStyles = (c: Colors) =>
       fontSize: typography.sizes.md,
       color: c.textMuted,
     },
+    wrap: {alignSelf: 'flex-start'},
+    clear: {
+      position: 'absolute',
+      top: -6,
+      right: -6,
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      backgroundColor: c.bgMuted,
+      borderWidth: 1,
+      borderColor: c.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
   });
 
 function dateFromLocalDay(day: string): Date {
@@ -57,7 +75,8 @@ function applyTime(targetDate: Date, hours: number, minutes: number): string {
   return next.toISOString();
 }
 
-export default function TimePicker({value, baseDate, placeholder = '–:––', onChange}: Props) {
+export default function TimePicker({value, baseDate, placeholder = '–:––', onChange, onClear}: Props) {
+  const {t} = useTranslation();
   const {colors} = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const mode = useSettingsStore(s => s.time_selector_mode);
@@ -69,13 +88,31 @@ export default function TimePicker({value, baseDate, placeholder = '–:––',
     if (mode === 'keyboard') { setShowTyped(true); } else { setShowClock(true); }
   };
 
+  const confirmClear = () => {
+    Alert.alert(t('time.clearTime'), undefined, [
+      {text: t('common.cancel'), style: 'cancel'},
+      {text: t('common.clear'), style: 'destructive', onPress: () => onClear?.()},
+    ]);
+  };
+
   return (
     <>
-      <TouchableOpacity style={styles.btn} onPress={open} activeOpacity={0.7}>
-        <Text style={value ? styles.value : styles.placeholder}>
-          {value ? formatTime(value) : placeholder}
-        </Text>
-      </TouchableOpacity>
+      <View style={styles.wrap}>
+        <TouchableOpacity style={styles.btn} onPress={open} activeOpacity={0.7}>
+          <Text style={value ? styles.value : styles.placeholder}>
+            {value ? formatTime(value) : placeholder}
+          </Text>
+        </TouchableOpacity>
+        {onClear && value ? (
+          <TouchableOpacity
+            style={styles.clear}
+            onPress={confirmClear}
+            hitSlop={8}
+            accessibilityLabel={t('common.clear')}>
+            <Icon name="close" size={12} color={colors.textSecondary} />
+          </TouchableOpacity>
+        ) : null}
+      </View>
 
       {showClock && (
         <DateTimePicker

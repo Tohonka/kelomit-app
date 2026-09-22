@@ -82,11 +82,12 @@ export const useDayStore = create<DayState>((set, get) => ({
     const existing = get().daysCache[date];
     if (!existing) { return; }
     const stamped = {...fields};
+    // Clearing drops the source stamp too, so an auto-set may happen again.
     if ('started_at' in fields) {
-      stamped.started_at_source = 'manual';
+      stamped.started_at_source = fields.started_at ? 'manual' : null;
     }
     if ('ended_at' in fields) {
-      stamped.ended_at_source = 'manual';
+      stamped.ended_at_source = fields.ended_at ? 'manual' : null;
     }
     await updateDay(existing.id, stamped);
     const updated = await getDayByDate(date);
