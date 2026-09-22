@@ -89,7 +89,9 @@ async function createNagTrigger(nag: Nag, dueAt: string, atMs: number, id: strin
  * at launch and on resume.
  */
 export async function syncNagTriggers(nowMs = Date.now()): Promise<number> {
-  const existing = (await notifee.getTriggerNotificationIds()).filter(id => id.startsWith(ID_PREFIX));
+  // Snoozes (`…-s<ms>`) are one-offs the user asked for: keep them across re-plans.
+  const existing = (await notifee.getTriggerNotificationIds())
+    .filter(id => id.startsWith(ID_PREFIX) && !/-s\d+$/.test(id));
   if (existing.length) { await notifee.cancelTriggerNotifications(existing); }
   const nags = await getNags();
   if (nags.length === 0) { pushNagWidgetState().catch(() => {}); return 0; }
