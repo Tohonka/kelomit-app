@@ -5,10 +5,12 @@ const D = 24 * H;
 /** Hard cap so a "6/hour for 12 hours" plan can't flood the alarm table. */
 export const MAX_FIRES_PER_OCCURRENCE = 40;
 
-function localAt(dateMs: number, hhmm: string): number {
+/** Local wall-clock instant on the calendar day of `dateMs` shifted by `dayOffset`
+ *  days (calendar arithmetic, so DST changes never skip or double a day). */
+function localAt(dateMs: number, hhmm: string, dayOffset = 0): number {
   const d = new Date(dateMs);
   const [h, m] = hhmm.split(':').map(Number);
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, m, 0, 0).getTime();
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + dayOffset, h, m, 0, 0).getTime();
 }
 
 /** ISO weekday 1 = Mon … 7 = Sun. */
@@ -18,9 +20,10 @@ function isoWeekday(ms: number): number {
 }
 
 /**
- * Due instants (ISO) of a schedule between `now − lookbackDays` and
- * `now + horizonDays`. The lookback keeps a just-missed occurrence visible
- * so it can still be marked done (and keeps nagging after the due time).
+ * Due instants (ISO) of a schedule up to `now + horizonDays`. Explicit dates
+ * (once / dates) are never dropped for being past — an undone one stays until
+ * it is marked done; weekly ones look back `lookbackDays` so a just-missed
+ * occurrence can still be ticked (and keeps nagging after the due time).
  */
 export function occurrences(
   schedule: NagSchedule,
@@ -31,19 +34,18 @@ export function occurrences(
   const lo = nowMs - lookbackDays * D;
   const hi = nowMs + horizonDays * D;
   if (schedule.kind === 'once') {
-    const t = Date.parse(schedule.at);
-    return t >= lo && t <= hi ? [schedule.at] : [];
+    return Date.parse(schedule.at) <= hi ? [schedule.at] : [];
   }
   if (schedule.kind === 'dates') {
     return [...schedule.at]
-      .filter(a => { const t = Date.parse(a); return t >= lo && t <= hi; })
+      .filter(a => Date.parse(a) <= hi)
       .sort((a, b) => Date.parse(a) - Date.parse(b));
   }
   const out: string[] = [];
   if (schedule.weekdays.length === 0) { return out; }
-  for (let day = lo; day <= hi + D; day += D) {
-    if (!schedule.weekdays.includes(isoWeekday(day))) { continue; }
-    const t = localAt(day, schedule.time);
+  for (let i = -lookbackDays - 1; i <= horizonDays + 1; i++) {
+    const t = localAt(nowMs, schedule.time, i);
+    if (!schedule.weekdays.includes(isoWeekday(t))) { continue; }
     if (t >= lo && t <= hi) { out.push(new Date(t).toISOString()); }
   }
   return [...new Set(out)].sort();
@@ -68,8 +70,9 @@ export function seededUnit(seed: string): number {
 export function fireTimes(nag: Pick<Nag, 'id' | 'plan'>, dueAt: string, nowMs: number): number[] {
   const due = Date.parse(dueAt);
   const plan: NagPlan = nag.plan;
-  const out = new Set<number>();
-  if (plan.dayBefore) { out.add(localAt(due - D, plan.dayBefore)); }
+  // Every occurrence fires at least at its due time; the plan adds the rest.
+  const out = new Set<number>([due]);
+  if (plan.dayBefore) { out.add(localAt(due, plan.dayBefore, -1)); }
   if (plan.onDay) { out.add(localAt(due, plan.onDay)); }
   if (plan.hoursBefore != null && plan.hoursBefore > 0) { out.add(due - plan.hoursBefore * H); }
   const r = plan.repeat;

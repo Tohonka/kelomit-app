@@ -519,17 +519,22 @@ export default function AddEntryModal({navigation, route}: Props) {
           Alert.alert(translate('subnotes.title'), translate('subnotes.tooLong', {length: formatHours(check.tooLong)}));
           return;
         }
+        // Ask everything first, write only when every move is agreed.
         if (check.moveParentFrom) {
           const ok = await confirm(translate('subnotes.moveParentStart', {
             current: formatTime(parent.time_from!), next: formatTime(check.moveParentFrom)}));
           if (!ok) { return; }
-          await updateEntry(parent.id, {time_from: check.moveParentFrom});
         }
         if (check.moveParentTo) {
           const ok = await confirm(translate('subnotes.moveParentEnd', {
             current: formatTime(parent.time_to!), next: formatTime(check.moveParentTo)}));
           if (!ok) { return; }
-          await updateEntry(parent.id, {time_to: check.moveParentTo});
+        }
+        if (check.moveParentFrom || check.moveParentTo) {
+          await updateEntry(parent.id, {
+            ...(check.moveParentFrom ? {time_from: check.moveParentFrom} : {}),
+            ...(check.moveParentTo ? {time_to: check.moveParentTo} : {}),
+          });
         }
       }
 

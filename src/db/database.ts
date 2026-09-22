@@ -22,15 +22,27 @@ export async function ensureDBReady(): Promise<void> {
   }
 }
 
+// One open+migrate at a time: a headless notifee event and App start can
+// race on a cold start; the second caller awaits the first.
+let _initPromise: Promise<void> | null = null;
+
 /** Close the DB connection (used by restore before swapping the file). */
 export function closeDB(): void {
   if (_db) {
     _db.close();
     _db = null;
   }
+  _initPromise = null;
 }
 
-export async function initDB(): Promise<void> {
+export function initDB(): Promise<void> {
+  if (!_initPromise) {
+    _initPromise = initDBOnce().catch(e => { _initPromise = null; throw e; });
+  }
+  return _initPromise;
+}
+
+async function initDBOnce(): Promise<void> {
   _db = open({name: 'kelomit.db'});
 
   // Enable WAL mode and foreign keys

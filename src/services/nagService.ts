@@ -14,6 +14,8 @@ import {getOrCreateDay} from '../db/days';
 import {fireTimes, nextOccurrence, occurrences} from '../utils/nagSchedule';
 import {formatTime, localDateOf} from '../utils/timeFormat';
 import {diag} from './diag';
+import {getSetting} from '../db/settings';
+import {resolveLanguageSetting} from '../i18n';
 import {nativeClearPendingNagDones, nativeGetPendingNagDones, nativeSetNagWidgetState} from '../native/widgetSession';
 import type {Nag} from '../types';
 
@@ -47,6 +49,12 @@ export async function ensureNagChannel(): Promise<void> {
 export async function exactAlarmsAllowed(): Promise<boolean> {
   const s = await notifee.getNotificationSettings();
   return s.android.alarm === AndroidNotificationSetting.ENABLED;
+}
+
+/** Headless JS starts with the device language; the app's setting wins. */
+async function applyLanguage(): Promise<void> {
+  const lang = resolveLanguageSetting(await getSetting('language').catch(() => null));
+  if (i18n.language !== lang) { await i18n.changeLanguage(lang); }
 }
 
 async function createNagTrigger(nag: Nag, dueAt: string, atMs: number, id: string): Promise<void> {
@@ -89,21 +97,26 @@ async function createNagTrigger(nag: Nag, dueAt: string, atMs: number, id: strin
  * at launch and on resume.
  */
 export async function syncNagTriggers(nowMs = Date.now()): Promise<number> {
-  // Snoozes (`…-s<ms>`) are one-offs the user asked for: keep them across re-plans.
-  const existing = (await notifee.getTriggerNotificationIds())
-    .filter(id => id.startsWith(ID_PREFIX) && !/-s\d+$/.test(id));
-  if (existing.length) { await notifee.cancelTriggerNotifications(existing); }
+  await applyLanguage();
   const nags = await getNags();
-  if (nags.length === 0) { pushNagWidgetState().catch(() => {}); return 0; }
-  await ensureNagChannel();
   const done = await getNagDoneMap(nags.map(n => n.id));
   const fires: {nag: Nag; dueAt: string; at: number; n: number}[] = [];
+  const live = new Set<string>();
   for (const nag of nags) {
     for (const dueAt of occurrences(nag.schedule, nowMs, HORIZON_DAYS)) {
       if (done.has(`${nag.id}|${dueAt}`)) { continue; }
+      live.add(occurrencePrefix(nag.id, dueAt));
       fireTimes(nag, dueAt, nowMs).forEach((at, n) => fires.push({nag, dueAt, at, n}));
     }
   }
+  // Drop every planned trigger; keep a snooze (`…-s<ms>`) only while its
+  // occurrence is still live — done/deleted nags must not pop up again.
+  const existing = (await notifee.getTriggerNotificationIds()).filter(id =>
+    id.startsWith(ID_PREFIX) && !(/-s\d+$/.test(id) && [...live].some(p => id.startsWith(p))),
+  );
+  if (existing.length) { await notifee.cancelTriggerNotifications(existing); }
+  if (nags.length === 0) { pushNagWidgetState().catch(() => {}); return 0; }
+  await ensureNagChannel();
   fires.sort((a, b) => a.at - b.at);
   const batch = fires.slice(0, MAX_TRIGGERS);
   for (const f of batch) {
@@ -140,6 +153,8 @@ export async function syncNagWidget(): Promise<void> {
 
 /** Mark one occurrence done (or undone) and log a small-task note on that day. */
 export async function markNagDone(nag: Nag, dueAt: string, done = true): Promise<void> {
+  // Idempotent: a widget Done drained after a notification Done must not log twice.
+  if (done && (await getNagDoneMap([nag.id])).has(`${nag.id}|${dueAt}`)) { return; }
   const doneAt = done ? new Date().toISOString() : null;
   await setNagDone(nag.id, dueAt, doneAt);
   if (doneAt) {
@@ -195,6 +210,9 @@ export async function handleNagEvent({type, detail}: Event): Promise<boolean> {
       for (const d of displayed) {
         if (d.id && d.id !== id && d.id.startsWith(prefix)) { await notifee.cancelDisplayedNotification(d.id); }
       }
+      // Refill the trigger window: with the app not foregrounded for days the
+      // 60-trigger batch would otherwise run dry.
+      await syncNagTriggers();
       return false;
     }
     if (type === EventType.ACTION_PRESS && detail.pressAction?.id === ACTION_DONE) {
