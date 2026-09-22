@@ -14,6 +14,7 @@ const TYPES: {type: EntryType; labelKey: string; icon: string}[] = [
 export function buildQuickAddActions(
   open: (entryType: EntryType) => void,
   openFood: () => void,
+  openNag?: () => void,
 ): FabAction[] {
   return [
     ...TYPES.map(t => ({
@@ -23,5 +24,6 @@ export function buildQuickAddActions(
       onPress: () => open(t.type),
     })),
     {key: 'food', label: i18n.t('food.logFood'), icon: 'silverware-fork-knife', onPress: openFood},
+    ...(openNag ? [{key: 'nag', label: i18n.t('nags.new'), icon: 'bell-ring-outline', onPress: openNag}] : []),
   ];
 }

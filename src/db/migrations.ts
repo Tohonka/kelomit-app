@@ -634,4 +634,30 @@ export const migrations: Migration[] = [
       'ALTER TABLE health_daily ADD COLUMN exercise TEXT',
     ],
   },
+  {
+    version: 35,
+    up: [
+      // NAGS (plan 2026-09-22 T4): reminders that keep nagging until done.
+      // `schedule` / `plan` are JSON (see src/utils/nagSchedule.ts); done is
+      // per occurrence (one due instant), keyed by the due ISO string.
+      `CREATE TABLE IF NOT EXISTS nags (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        note TEXT,
+        activity_type TEXT NOT NULL DEFAULT 'personal' CHECK(activity_type IN ('work','personal')),
+        schedule TEXT NOT NULL,
+        plan TEXT NOT NULL,
+        countdown INTEGER NOT NULL DEFAULT 1,
+        active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )`,
+      `CREATE TABLE IF NOT EXISTS nag_done (
+        nag_id INTEGER NOT NULL REFERENCES nags(id) ON DELETE CASCADE,
+        due_at TEXT NOT NULL,
+        done_at TEXT NOT NULL,
+        PRIMARY KEY (nag_id, due_at)
+      )`,
+    ],
+  },
 ];

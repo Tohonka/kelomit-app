@@ -53,6 +53,7 @@ export type RootStackParamList = {
   TranscriptionSettings: undefined;
   DiagnosticsSettings: undefined;
   HabitEditModal: {mode: 'category' | 'habit'; categoryId?: number; habitId?: number};
+  NagEditModal: {nagId?: number} | undefined;
 };
 
 export type TabParamList = {
@@ -66,6 +67,7 @@ export type TabParamList = {
   Food: {myFoods?: boolean} | undefined;
   Calendar: undefined;
   Settings: undefined;
+  Nags: undefined;
 };
 
 export type RootStackScreenProps<T extends keyof RootStackParamList> =

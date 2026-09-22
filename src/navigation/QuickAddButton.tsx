@@ -112,7 +112,11 @@ export default function QuickAddButton({target}: {target?: {date: string; dayId:
     setOpen(false);
     navigation.navigate('FoodEntryModal', {date: target?.date});
   }, [navigation, target]);
-  const actions = useMemo(() => buildQuickAddActions(go, goFood), [go, goFood]);
+  const goNag = React.useCallback(() => {
+    setOpen(false);
+    navigation.navigate('NagEditModal');
+  }, [navigation]);
+  const actions = useMemo(() => buildQuickAddActions(go, goFood, goNag), [go, goFood, goNag]);
 
   return (
     <>

@@ -23,6 +23,7 @@ import DayEndConfirmBanner from './DayEndConfirmBanner';
 import QuickTimerCard from './QuickTimerCard';
 import EntryList from '../entries/EntryList';
 import EntryListItem from '../entries/EntryListItem';
+import NagsTodayStrip from './NagsTodayStrip';
 import {useShellPadding} from '../../navigation/shellMetrics';
 import {useKeyboardHeight} from '../../hooks/useKeyboardHeight';
 import {getUpcomingTodos} from '../../db/entries';
@@ -287,6 +288,7 @@ export default function DayView({
             onPressEntry={onOpenEntry}
             onAddSubnote={onAddSubnote}
           />
+          {isToday && <NagsTodayStrip onChanged={() => { if (day) { loadEntriesForDay(day.id); } }} />}
           {isToday && upcoming.length > 0 && (
             <View style={styles.comingUp}>
               <Text style={styles.comingUpHeader}>{t('todo.comingUp')}</Text>

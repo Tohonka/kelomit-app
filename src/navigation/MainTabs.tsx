@@ -7,6 +7,7 @@ import InsightsScreen from '../screens/InsightsScreen';
 import GalleryScreen from '../screens/GalleryScreen';
 import HabitsScreen from '../screens/HabitsScreen';
 import FoodScreen from '../screens/FoodScreen';
+import NagsScreen from '../screens/NagsScreen';
 import CalendarScreen from '../screens/CalendarScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import type {TabParamList} from './navigationTypes';
@@ -27,6 +28,7 @@ export default function MainTabs() {
       <Tab.Screen name="Gallery" component={GalleryScreen} />
       <Tab.Screen name="Habits" component={HabitsScreen} />
       <Tab.Screen name="Food" component={FoodScreen} />
+      <Tab.Screen name="Nags" component={NagsScreen} />
       <Tab.Screen name="Calendar" component={CalendarScreen} />
       <Tab.Screen name="Settings" component={SettingsScreen} />
     </Tab.Navigator>

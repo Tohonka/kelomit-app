@@ -403,6 +403,40 @@ export interface HealthDaily {
 }
 export type HealthDailyInput = Omit<HealthDaily, 'created_at' | 'updated_at'>;
 
+/** NAGS (schema v35): a reminder that nags until its occurrence is done. */
+export type NagSchedule =
+  | {kind: 'once'; at: string}
+  | {kind: 'dates'; at: string[]}
+  /** ISO weekdays 1 = Mon … 7 = Sun, local time 'HH:MM'. */
+  | {kind: 'weekly'; weekdays: number[]; time: string};
+export interface NagPlan {
+  /** Previous day at 'HH:MM'. */
+  dayBefore?: string;
+  /** The due day at 'HH:MM'. */
+  onDay?: string;
+  hoursBefore?: number;
+  /** N times per hour from H h before until H h after the due time, until done. */
+  repeat?: {perHour: number; fromHoursBefore: number; untilHoursAfter: number; random: boolean};
+}
+export interface Nag {
+  id: number;
+  title: string;
+  note: string | null;
+  activity_type: 'work' | 'personal';
+  schedule: NagSchedule;
+  plan: NagPlan;
+  countdown: boolean;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+/** One due instant of a nag, with its done state. */
+export interface NagOccurrence {
+  nag: Nag;
+  due_at: string;
+  done_at: string | null;
+}
+
 /** One generic food from the bundled Fineli dataset (schema v32). */
 export interface FineliFood {
   id: number;

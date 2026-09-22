@@ -26,6 +26,7 @@ import WidgetEdit from '../screens/settings/WidgetEdit';
 import TranscriptionSettings from '../screens/settings/TranscriptionSettings';
 import DiagnosticsSettings from '../screens/settings/DiagnosticsSettings';
 import HabitEditModal from '../screens/HabitEditModal';
+import NagEditModal from '../screens/NagEditModal';
 import {useTheme} from '../theme';
 import type {RootStackParamList} from './navigationTypes';
 
@@ -82,6 +83,15 @@ export default function RootNavigator() {
               ? (route.params.categoryId ? 'habits.editCategory' : 'habits.newCategory')
               : (route.params.habitId ? 'habits.editHabit' : 'habits.newHabit'),
           ),
+          presentation: 'modal',
+          headerStyle: {backgroundColor: colors.bgCard},
+        })}
+      />
+      <Stack.Screen
+        name="NagEditModal"
+        component={NagEditModal}
+        options={({route}) => ({
+          title: t(route.params?.nagId ? 'nags.edit' : 'nags.new'),
           presentation: 'modal',
           headerStyle: {backgroundColor: colors.bgCard},
         })}

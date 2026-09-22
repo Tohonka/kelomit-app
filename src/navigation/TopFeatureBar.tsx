@@ -32,6 +32,7 @@ const FEATURES: {route: string; labelKey: string; icon: string}[] = [
   {route: 'SearchScreen', labelKey: 'navigation.search', icon: 'magnify'},
   {route: 'Habits', labelKey: 'habits.title', icon: 'checkbox-marked-circle-outline'},
   {route: 'Food', labelKey: 'food.title', icon: 'silverware-fork-knife'},
+  {route: 'Nags', labelKey: 'nags.title', icon: 'bell-ring-outline'},
 ];
 
 type Feature = (typeof FEATURES)[number];

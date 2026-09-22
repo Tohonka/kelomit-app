@@ -30,11 +30,16 @@ let _pending: string | null = null;
 export async function handleDeepLink(url: string | null): Promise<void> {
   const parsed = parseDeepLink(url);
   const food = parsed ? null : parseFoodLink(url);
-  if (!parsed && !food) {
+  const nags = url === 'kelomit://nags';
+  if (!parsed && !food && !nags) {
     return;
   }
   if (!navigationRef.isReady()) {
     _pending = url;
+    return;
+  }
+  if (nags) {
+    navigationRef.navigate('MainTabs', {screen: 'Nags'});
     return;
   }
   if (food) {
