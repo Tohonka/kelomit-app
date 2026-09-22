@@ -146,6 +146,18 @@
           android:resource="@xml/widget_session_toggle_info" />
       </receiver>
 
+      <!-- Nag widget (2026-09-22): next nag + count-down + Done. -->
+      <receiver
+        android:name=".widget.NagWidgetProvider"
+        android:exported="false">
+        <intent-filter>
+          <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+          <action android:name="com.kelomitapp.widget.ACTION_NAG_DONE" />
+        </intent-filter>
+        <meta-data
+          android:name="android.appwidget.provider"
+          android:resource="@xml/widget_nag_info" />
+      </receiver>
       <!-- Habit check-square widget (2026-09-07). -->
       <receiver
         android:name=".widget.HabitWidgetProvider"

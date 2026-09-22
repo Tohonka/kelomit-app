@@ -6,6 +6,11 @@
     <string name="day_end_no">Ei</string>
     <string name="widget_habits_description">Merkitse päivän tavat</string>
     <string name="widget_habits_empty">Valitse tavat: Kelomit › Asetukset › Widgetit</string>
+    <string name="widget_nag_description">Seuraava nalkutus, lähtölaskenta ja Tehty</string>
+    <string name="widget_nag_empty">Ei nalkutettavaa</string>
+    <string name="widget_nag_due_by">klo %1$s mennessä</string>
+    <string name="widget_nag_overdue">piti hoitaa %1$s</string>
+    <string name="widget_nag_done">Tehty</string>
     <string name="widget_food_description">Kirjaa usein syömäsi ruoka, hae tai skannaa viivakoodi</string>
     <string name="widget_food_title">Ruoka</string>
     <string name="widget_food_search">Hae omista ruoista</string>

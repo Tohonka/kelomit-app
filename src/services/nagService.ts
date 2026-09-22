@@ -14,6 +14,7 @@ import {getOrCreateDay} from '../db/days';
 import {fireTimes, nextOccurrence, occurrences} from '../utils/nagSchedule';
 import {formatTime, localDateOf} from '../utils/timeFormat';
 import {diag} from './diag';
+import {nativeClearPendingNagDones, nativeGetPendingNagDones, nativeSetNagWidgetState} from '../native/widgetSession';
 import type {Nag} from '../types';
 
 export const NAG_CHANNEL_ID = 'nags';
@@ -91,7 +92,7 @@ export async function syncNagTriggers(nowMs = Date.now()): Promise<number> {
   const existing = (await notifee.getTriggerNotificationIds()).filter(id => id.startsWith(ID_PREFIX));
   if (existing.length) { await notifee.cancelTriggerNotifications(existing); }
   const nags = await getNags();
-  if (nags.length === 0) { return 0; }
+  if (nags.length === 0) { pushNagWidgetState().catch(() => {}); return 0; }
   await ensureNagChannel();
   const done = await getNagDoneMap(nags.map(n => n.id));
   const fires: {nag: Nag; dueAt: string; at: number; n: number}[] = [];
@@ -106,7 +107,33 @@ export async function syncNagTriggers(nowMs = Date.now()): Promise<number> {
   for (const f of batch) {
     await createNagTrigger(f.nag, f.dueAt, f.at, triggerId(f.nag.id, f.dueAt, f.n));
   }
+  pushNagWidgetState().catch(e => diag('nag.widget.fail', String(e)));
   return batch.length;
+}
+
+/** Repaint the home-screen nag widget with the next undone occurrence. */
+export async function pushNagWidgetState(): Promise<void> {
+  const next = await nextNag();
+  await nativeSetNagWidgetState(JSON.stringify({
+    next: next
+      ? {nag_id: next.nag.id, due_at: next.dueAt, due_ms: Date.parse(next.dueAt), title: next.nag.title, countdown: next.nag.countdown}
+      : null,
+  }));
+}
+
+/** Fold widget Done taps made while we were away, then re-plan + repaint.
+ *  Call at launch and on every foreground. */
+export async function syncNagWidget(): Promise<void> {
+  const pending = await nativeGetPendingNagDones();
+  if (pending.length) {
+    await nativeClearPendingNagDones();
+    const nags = await getNags();
+    for (const p of pending as {nag_id?: number; due_at?: string}[]) {
+      const nag = nags.find(n => n.id === p.nag_id);
+      if (nag && p.due_at) { await markNagDone(nag, p.due_at); }
+    }
+  }
+  await syncNagTriggers();
 }
 
 /** Mark one occurrence done (or undone) and log a small-task note on that day. */

@@ -137,6 +137,26 @@ class WidgetSessionModule(reactContext: ReactApplicationContext) :
     promise.resolve(null)
   }
 
+  // ── Nag widget ──────────────────────────────────────────────────────────────
+
+  @ReactMethod
+  fun setNagWidgetState(json: String, promise: Promise) {
+    NagWidgetStore.setState(context, json)
+    NagWidgetProvider.updateAll(context)
+    promise.resolve(null)
+  }
+
+  @ReactMethod
+  fun getPendingNagDones(promise: Promise) {
+    promise.resolve(NagWidgetStore.getPending(context))
+  }
+
+  @ReactMethod
+  fun clearPendingNagDones(promise: Promise) {
+    NagWidgetStore.clearPending(context)
+    promise.resolve(null)
+  }
+
   @ReactMethod
   fun refreshWidgets(promise: Promise) {
     WidgetCommon.updateAll(context)
@@ -158,6 +178,7 @@ class WidgetSessionModule(reactContext: ReactApplicationContext) :
       "tracking" -> TrackingPauseWidgetProvider::class.java
       "habits" -> HabitWidgetProvider::class.java
       "food" -> FoodWidgetProvider::class.java
+      "nag" -> NagWidgetProvider::class.java
       else -> SessionWidgetProvider::class.java
     }
     val ok = mgr != null &&

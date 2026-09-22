@@ -514,6 +514,7 @@ const en = {
     typeHabits: 'Habit widget',
     addHabits: 'Add habit widget',
     addFood: 'Add food widget',
+    addNag: 'Add nag widget',
     habitsPick: 'Habits on this widget (up to 5, in order)',
     habitsShowName: 'Show habit names',
     habitsHint: 'A 1×1 widget shows one habit; make it wider for more. Tap a square to tick the habit for today.',

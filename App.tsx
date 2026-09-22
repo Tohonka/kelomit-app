@@ -35,7 +35,7 @@ import RootNavigator from './src/navigation/RootNavigator';
 import {navigationRef} from './src/navigation/navigationRef';
 import {handleDeepLink, flushPendingDeepLink} from './src/services/deepLinks';
 import notifee from '@notifee/react-native';
-import {handleNagEvent, syncNagTriggers} from './src/services/nagService';
+import {handleNagEvent, syncNagWidget} from './src/services/nagService';
 
 // Defer GPS startup off the critical launch path so location init doesn't
 // compete with the first render / DB warm-up. Foreground-resume start stays
@@ -80,7 +80,7 @@ function AppContent() {
         useSessionStore.getState().reconcile().catch(() => {});
         reconcileHabitWidgets();
         syncFoodWidget().catch(e => diag('widget.food.fail', String(e)));
-        syncNagTriggers().catch(e => diag('nag.sync.fail', String(e)));
+        syncNagWidget().catch(e => diag('nag.sync.fail', String(e)));
         // Drop raw trail points past the retention window (best-effort).
         pruneGpsTracksOlderThan().catch(() => {});
         pruneActivityEventsOlderThan().catch(() => {});
@@ -161,7 +161,7 @@ function AppContent() {
         // Food widget taps made while we were backgrounded (the GPS service
         // keeps the process alive for days, so launch alone isn't enough).
         syncFoodWidget().catch(e => diag('widget.food.fail', String(e)));
-        syncNagTriggers().catch(e => diag('nag.sync.fail', String(e)));
+        syncNagWidget().catch(e => diag('nag.sync.fail', String(e)));
         // Fire and forget — sync failures never surface here.
         maybeAutoSync().catch(() => {});
         maybeImportHealth().catch(healthError => diag('health.import.fail', String(healthError)));

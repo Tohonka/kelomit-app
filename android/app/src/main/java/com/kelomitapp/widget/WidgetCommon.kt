@@ -44,6 +44,7 @@ object WidgetCommon {
     }
     HabitWidgetProvider.updateAll(context)
     FoodWidgetProvider.updateAll(context)
+    NagWidgetProvider.updateAll(context)
   }
 
   /** PendingIntent that fires [ACTION_TOGGLE] for a specific widget. */

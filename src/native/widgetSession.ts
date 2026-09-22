@@ -27,6 +27,9 @@ interface WidgetSessionNative {
   setFoodWidgetState(json: string): Promise<void>;
   getPendingFoodAdds(): Promise<string>;
   clearPendingFoodAdds(): Promise<void>;
+  setNagWidgetState(json: string): Promise<void>;
+  getPendingNagDones(): Promise<string>;
+  clearPendingNagDones(): Promise<void>;
 }
 
 const Native = NativeModules.WidgetSession as WidgetSessionNative | undefined;
@@ -136,7 +139,7 @@ export async function nativeRefreshWidgets(): Promise<void> {
 /** Ask the launcher to place a new widget (Android pin flow). False = launcher
  *  doesn't support pinning; the caller points the user at the home-screen menu. */
 export async function nativeRequestPinWidget(
-  type: 'toggle' | 'full' | 'addnote' | 'tracking' | 'habits' | 'food',
+  type: 'toggle' | 'full' | 'addnote' | 'tracking' | 'habits' | 'food' | 'nag',
 ): Promise<boolean> {
   return (await Native?.requestPinWidget(type)) ?? false;
 }
@@ -186,4 +189,28 @@ export async function nativeGetPendingFoodAdds(): Promise<unknown[]> {
 
 export async function nativeClearPendingFoodAdds(): Promise<void> {
   await Native?.clearPendingFoodAdds();
+}
+
+// ── Nag widget ───────────────────────────────────────────────────────────────
+
+/** Push the next undone nag occurrence (or null); repaints every nag widget. */
+export async function nativeSetNagWidgetState(json: string): Promise<void> {
+  await Native?.setNagWidgetState(json);
+}
+
+/** Raw queue of widget Done taps; shape-checked by the caller. */
+export async function nativeGetPendingNagDones(): Promise<unknown[]> {
+  if (!Native) {
+    return [];
+  }
+  try {
+    const arr = JSON.parse(await Native.getPendingNagDones());
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function nativeClearPendingNagDones(): Promise<void> {
+  await Native?.clearPendingNagDones();
 }
