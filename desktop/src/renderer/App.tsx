@@ -9,6 +9,10 @@ import {ProjectsTags} from './panes/ProjectsTags.tsx';
 import {Leave} from './panes/Leave.tsx';
 import {MapView} from './panes/MapView.tsx';
 import {ReportSheet} from './panes/ReportSheet.tsx';
+import {Habits} from './panes/Habits.tsx';
+import {Nags} from './panes/Nags.tsx';
+import {FoodEditor} from './panes/Food.tsx';
+import type {FoodSelection} from './panes/Food.tsx';
 import {addDays, clock, monthOf, todayIso} from './lib/format.ts';
 import {applyPendingDay, applyPendingEntries} from './lib/pending.ts';
 import {usePhoneState} from './hooks/usePhoneState.ts';
@@ -22,13 +26,17 @@ declare global {
   }
 }
 
-type View = 'day' | 'projects' | 'leave' | 'map';
+type View = 'day' | 'projects' | 'leave' | 'map' | 'habits' | 'nags';
 const VIEWS: [View, string][] = [
   ['day', 'Day'],
+  ['map', 'Map'],
+  ['habits', 'Habits'],
+  ['nags', 'Nags'],
   ['projects', 'Projects & Tags'],
   ['leave', 'Leave'],
-  ['map', 'Map'],
 ];
+type AppSelection = Selection | FoodSelection;
+const isFood = (s: AppSelection): s is FoodSelection => s != null && (s.kind === 'food' || s.kind === 'newFood');
 
 const NO_PROJECTS: never[] = [];
 const NO_TAGS: never[] = [];
@@ -41,10 +49,11 @@ export function App() {
   const [date, setDate] = useState(() => params.get('date') ?? todayIso());
   const [view, setView] = useState<View>(() => (params.get('view') as View) || 'day');
   const [month, setMonth] = useState(monthOf(date));
-  const [selection, setSelection] = useState<Selection>(null);
+  const [selection, setSelection] = useState<AppSelection>(null);
   const phone = usePhoneState();
   const queue = useQueue();
   const detail = useQuery('dayDetail', date);
+  const food = useQuery('dayFood', date);
   const projects = useQuery('listProjects') ?? NO_PROJECTS;
   const tags = useQuery('listTags') ?? NO_TAGS;
 
@@ -74,6 +83,8 @@ export function App() {
         else if (action === 'view-projects') setView('projects');
         else if (action === 'view-leave') setView('leave');
         else if (action === 'view-map') setView('map');
+        else if (action === 'view-habits') setView('habits');
+        else if (action === 'view-nags') setView('nags');
         else if (action === 'export-report') setShowReport(true);
       }),
     [date],
@@ -139,10 +150,17 @@ export function App() {
                 entries={entries}
                 selectedEntryId={selection?.kind === 'entry' ? selection.id : null}
                 onSelectEntry={id => setSelection(id == null ? null : {kind: 'entry', id})}
+                food={food}
+                selectedFoodId={selection?.kind === 'food' ? selection.id : null}
+                onSelectFood={setSelection}
               />
             </section>
             <section className="pane">
-              <Inspector date={date} selection={selection} entries={entries} projects={projects} tags={tags} onSelect={setSelection} />
+              {isFood(selection) ? (
+                <FoodEditor date={date} selection={selection} food={food} onClose={() => setSelection(null)} />
+              ) : (
+                <Inspector date={date} selection={selection} entries={entries} projects={projects} tags={tags} onSelect={setSelection} />
+              )}
             </section>
           </>
         )}
@@ -154,6 +172,16 @@ export function App() {
         {view === 'leave' && (
           <section className="pane wide">
             <Leave year={Number(month.slice(0, 4))} />
+          </section>
+        )}
+        {view === 'habits' && (
+          <section className="pane wide">
+            <Habits month={month} onMonth={setMonth} projects={projects} tags={tags} queue={queue.items} />
+          </section>
+        )}
+        {view === 'nags' && (
+          <section className="pane wide">
+            <Nags />
           </section>
         )}
         {view === 'map' && (

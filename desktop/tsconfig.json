@@ -8,6 +8,7 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
+    "resolveJsonModule": true,
     "noEmit": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["node", "electron-vite/node"]
@@ -22,6 +23,11 @@
     "../src/theme/colors.ts",
     "../src/utils/hoursUtils.ts",
     "../src/utils/timeFormat.ts",
-    "../src/reports/**/*.ts"
+    "../src/reports/**/*.ts",
+    "../src/utils/habitMatch.ts",
+    "../src/utils/foodMath.ts",
+    "../src/utils/nagSchedule.ts",
+    "../src/utils/habitMonth.ts",
+    "../src/services/openFoodFacts.ts"
   ]
 }

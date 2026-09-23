@@ -39,7 +39,7 @@ export interface RouteStopRow {
 /** The phone pushes whole snapshots, so the server can be handed a database
  *  older than the queries written against it. A table the snapshot predates
  *  reads as empty instead of 500-ing the page. */
-function hasTable(db: Database.Database, name: string): boolean {
+export function hasTable(db: Database.Database, name: string): boolean {
   return (
     db
       .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?")

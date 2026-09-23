@@ -15,6 +15,48 @@ jest.mock('../src/db/leaveRanges', () => ({
 jest.mock('../src/db/tags', () => ({
   getOrCreateTag: jest.fn(async (name: string) => ({id: name.length, name})),
 }));
+/** jest.mock factories run when the (hoisted) import loads, before these consts
+ *  exist — so every mocked module reaches its object lazily, through a Proxy. */
+const lazy = (get: () => Record<string, unknown>) =>
+  new Proxy({}, {get: (_t, k: string) => (...a: unknown[]) => (get()[k] as (...x: unknown[]) => unknown)(...a)});
+const mockFood = {
+  createFoodEntry: jest.fn(async (p: {day_id: number}) => ({id: 31, day_id: p.day_id})),
+  updateFoodEntry: jest.fn(async () => {}),
+  deleteFoodEntry: jest.fn(async () => {}),
+  getFoodEntry: jest.fn(async (id: number) => (id === 404 ? null : {id, file_path: '/m/food.jpg'})),
+  getProductByBarcode: jest.fn(async (code: string) => (code === '6410000000000' ? {id: 8} : null)),
+  getProductBySourceRef: jest.fn(async () => null),
+  upsertProduct: jest.fn(async () => ({id: 9})),
+};
+jest.mock('../src/db/food', () => lazy(() => mockFood));
+const mockHabits = {
+  createHabit: jest.fn(async () => ({id: 4})),
+  updateHabit: jest.fn(async () => {}),
+  archiveHabit: jest.fn(async () => {}),
+  deleteHabit: jest.fn(async () => {}),
+  setMatchers: jest.fn(async () => {}),
+  setOverride: jest.fn(async () => {}),
+  createCategory: jest.fn(async () => ({id: 2})),
+  updateCategory: jest.fn(async () => {}),
+  archiveCategory: jest.fn(async () => {}),
+  deleteCategory: jest.fn(async () => {}),
+};
+jest.mock('../src/db/habits', () => lazy(() => mockHabits));
+const mockNags = {
+  getNag: jest.fn(async (id: number) => (id === 404 ? null : {id, title: 'Water'})),
+  createNag: jest.fn(async () => ({id: 6})),
+  updateNag: jest.fn(async () => {}),
+  deleteNag: jest.fn(async () => {}),
+};
+jest.mock('../src/db/nags', () => lazy(() => mockNags));
+const mockNagService = {markNagDone: jest.fn(async () => {}), syncNagTriggers: jest.fn(async () => 0)};
+jest.mock('../src/services/nagService', () => lazy(() => mockNagService));
+const mockSyncHabitWidgets = jest.fn(async () => true);
+jest.mock('../src/services/habitWidgets', () => ({syncHabitWidgets: () => mockSyncHabitWidgets()}));
+const mockDeleteMediaFile = jest.fn(async (_p: string) => {});
+jest.mock('../src/utils/mediaUtils', () => ({deleteMediaFile: (p: string) => mockDeleteMediaFile(p)}));
+const mockHabitStore = {loaded: true, load: jest.fn(async () => {})};
+jest.mock('../src/store/habitStore', () => ({useHabitStore: {getState: () => mockHabitStore}}));
 jest.mock('../src/db/settings', () => {
   const store: Record<string, string> = {};
   return {
@@ -91,5 +133,50 @@ describe('runCommand', () => {
     const again = await runCommand({id: 'dup', fn: 'tags.getOrCreate', args: ['x']});
     expect(again).toMatchObject({ok: true});
     expect(mockTagStore.getOrCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('food.create resolves the sent product to the phone\'s own row before writing', async () => {
+    const product = {barcode: '6410000000000', name: 'Milk', source: 'off', source_ref: '6410000000000'};
+    const ack = await runCommand({id: 'f1', fn: 'food.create', args: ['2026-09-23', {eaten_at: 't', name: 'Milk', product}]});
+    expect(ack).toMatchObject({ok: true, result: {id: 31, day_id: 7}});
+    expect(mockFood.upsertProduct).not.toHaveBeenCalled();
+    expect(mockFood.createFoodEntry).toHaveBeenCalledWith({eaten_at: 't', name: 'Milk', product_id: 8, day_id: 7});
+  });
+
+  it('food.create upserts an unknown product (Fineli pick) and links it', async () => {
+    const product = {barcode: null, name: 'Puuro', source: 'fineli', source_ref: '123'};
+    await runCommand({id: 'f2', fn: 'food.create', args: ['2026-09-23', {eaten_at: 't', name: 'Puuro', product}]});
+    expect(mockFood.upsertProduct).toHaveBeenCalledWith(product);
+    expect(mockFood.createFoodEntry).toHaveBeenCalledWith(expect.objectContaining({product_id: 9}));
+  });
+
+  it('food.delete removes the row and its photo file; a missing row is refused', async () => {
+    expect(await runCommand({id: 'f3', fn: 'food.delete', args: [5]})).toMatchObject({ok: true});
+    expect(mockFood.deleteFoodEntry).toHaveBeenCalledWith(5);
+    expect(mockDeleteMediaFile).toHaveBeenCalledWith('/m/food.jpg');
+    expect(await runCommand({id: 'f4', fn: 'food.delete', args: [404]})).toMatchObject({ok: false, error: 'food entry 404 not found'});
+  });
+
+  it('habits.create writes the habit and its matchers, then repaints widgets and the loaded store', async () => {
+    const matchers = [{kind: 'tag', ref_id: 3, threshold: null}];
+    const ack = await runCommand({id: 'h1', fn: 'habits.create', args: [{category_id: 1, title: 'Run'}, matchers]});
+    expect(ack).toMatchObject({ok: true, result: {id: 4}});
+    expect(mockHabits.setMatchers).toHaveBeenCalledWith(4, matchers);
+    expect(mockSyncHabitWidgets).toHaveBeenCalled();
+    expect(mockHabitStore.load).toHaveBeenCalled();
+  });
+
+  it('habits.setOverride passes null through (back to auto)', async () => {
+    await runCommand({id: 'h2', fn: 'habits.setOverride', args: [4, '2026-09-23', null]});
+    expect(mockHabits.setOverride).toHaveBeenCalledWith(4, '2026-09-23', null);
+  });
+
+  it('nags.update re-syncs alarms; nags.setDone goes through markNagDone with the nag row', async () => {
+    await runCommand({id: 'n1', fn: 'nags.update', args: [6, {active: false}]});
+    expect(mockNags.updateNag).toHaveBeenCalledWith(6, {active: false});
+    expect(mockNagService.syncNagTriggers).toHaveBeenCalledTimes(1);
+    await runCommand({id: 'n2', fn: 'nags.setDone', args: [6, '2026-09-23T07:00:00.000Z', true]});
+    expect(mockNagService.markNagDone).toHaveBeenCalledWith({id: 6, title: 'Water'}, '2026-09-23T07:00:00.000Z', true);
+    expect(await runCommand({id: 'n3', fn: 'nags.delete', args: [404]})).toMatchObject({ok: false, error: 'nag 404 not found'});
   });
 });

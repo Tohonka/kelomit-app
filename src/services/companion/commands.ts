@@ -3,13 +3,42 @@ import {getEntry, setEntryParent, updateEntry} from '../../db/entries';
 import type {CreateEntryParams} from '../../db/entries';
 import {createLeaveRange, updateLeaveRange, deleteLeaveRange} from '../../db/leaveRanges';
 import type {CreateLeaveRangeInput} from '../../db/leaveRanges';
+import {
+  createFoodEntry,
+  deleteFoodEntry,
+  getFoodEntry,
+  getProductByBarcode,
+  getProductBySourceRef,
+  updateFoodEntry,
+  upsertProduct,
+} from '../../db/food';
+import type {CreateFoodEntryParams, FoodEntryFields, ProductFields} from '../../db/food';
+import {
+  archiveCategory,
+  archiveHabit,
+  createCategory,
+  createHabit,
+  deleteCategory,
+  deleteHabit,
+  setMatchers,
+  setOverride,
+  updateCategory,
+  updateHabit,
+} from '../../db/habits';
+import type {CategoryFields, HabitFields} from '../../db/habits';
+import {createNag, deleteNag, getNag, updateNag} from '../../db/nags';
+import type {NagFields} from '../../db/nags';
+import {markNagDone, syncNagTriggers} from '../nagService';
+import {syncHabitWidgets} from '../habitWidgets';
+import {deleteMediaFile} from '../../utils/mediaUtils';
 import {getSetting, setSetting} from '../../db/settings';
 import {getOrCreateTag} from '../../db/tags';
 import {useDayStore} from '../../store/dayStore';
+import {useHabitStore} from '../../store/habitStore';
 import {useEntryStore} from '../../store/entryStore';
 import {useProjectStore} from '../../store/projectStore';
 import {useTagStore} from '../../store/tagStore';
-import type {Day, Project} from '../../types';
+import type {Day, HabitMatcher, Project} from '../../types';
 
 type EntryFields = Parameters<typeof updateEntry>[1];
 
@@ -25,6 +54,41 @@ async function resolveTags<T extends {tagIds?: number[]}>(fields: WithTagNames<T
   const tags = await Promise.all(tagNames.map(name => getOrCreateTag(name)));
   return {...rest, tagIds: tags.map(t => t.id)} as T;
 }
+
+/** Same trick for food products: the Mac sends the product it resolved (a
+ *  Fineli pick or an Open Food Facts hit) and the phone finds-or-creates the
+ *  row, so `product_id` is always the phone's own id. */
+type WithProduct<T> = T & {product?: ProductFields};
+
+async function resolveProduct<T extends {product_id?: number | null}>(fields: WithProduct<T>): Promise<T> {
+  const {product, ...rest} = fields;
+  if (!product) {
+    return rest as T;
+  }
+  const existing =
+    (product.barcode ? await getProductByBarcode(product.barcode) : null) ??
+    (product.source_ref ? await getProductBySourceRef(product.source, product.source_ref) : null);
+  const row = existing ?? (await upsertProduct(product));
+  return {...rest, product_id: row.id} as T;
+}
+
+/** Habit writes: repaint the widgets, and the Habits tab if it has loaded. */
+async function afterHabitWrite(): Promise<void> {
+  await syncHabitWidgets().catch(() => {});
+  if (useHabitStore.getState().loaded) {
+    await useHabitStore.getState().load().catch(() => {});
+  }
+}
+
+async function requireNag(id: number) {
+  const nag = await getNag(id);
+  if (!nag) {
+    throw new Error(`nag ${id} not found`);
+  }
+  return nag;
+}
+
+type Matchers = Omit<HabitMatcher, 'habit_id'>[];
 
 /**
  * Commands the desktop may send. Each one is a thin wrapper over the same
@@ -114,6 +178,85 @@ export const COMMANDS: Record<string, (...args: any[]) => Promise<unknown>> = {
   'leaveRanges.create': (input: CreateLeaveRangeInput) => createLeaveRange(input),
   'leaveRanges.update': (id: number, input: CreateLeaveRangeInput) => updateLeaveRange(id, input),
   'leaveRanges.delete': (id: number) => deleteLeaveRange(id),
+  'food.create': async (date: string, fields: WithProduct<Omit<CreateFoodEntryParams, 'day_id'>>) => {
+    const day = await getOrCreateDay(date);
+    const entry = await createFoodEntry({...(await resolveProduct(fields)), day_id: day.id});
+    return {id: entry.id, day_id: day.id};
+  },
+  'food.update': async (id: number, fields: WithProduct<FoodEntryFields>) => {
+    if (!(await getFoodEntry(id))) {
+      throw new Error(`food entry ${id} not found`);
+    }
+    await updateFoodEntry(id, await resolveProduct(fields));
+  },
+  'food.delete': async (id: number) => {
+    const entry = await getFoodEntry(id);
+    if (!entry) {
+      throw new Error(`food entry ${id} not found`);
+    }
+    await deleteFoodEntry(id);
+    await deleteMediaFile(entry.file_path);
+  },
+  'habits.setOverride': async (habitId: number, date: string, done: boolean | null) => {
+    await setOverride(habitId, date, done);
+    await afterHabitWrite();
+  },
+  'habits.create': async (fields: HabitFields & {category_id: number; title: string}, matchers: Matchers = []) => {
+    const habit = await createHabit(fields);
+    await setMatchers(habit.id, matchers);
+    await afterHabitWrite();
+    return {id: habit.id};
+  },
+  'habits.update': async (id: number, fields: HabitFields, matchers?: Matchers) => {
+    await updateHabit(id, fields);
+    if (matchers) {
+      await setMatchers(id, matchers);
+    }
+    await afterHabitWrite();
+  },
+  'habits.archive': async (id: number, archived = true) => {
+    await archiveHabit(id, archived);
+    await afterHabitWrite();
+  },
+  'habits.delete': async (id: number) => {
+    await deleteHabit(id);
+    await afterHabitWrite();
+  },
+  'habitCategories.create': async (fields: CategoryFields & {title: string}) => {
+    const cat = await createCategory(fields);
+    await afterHabitWrite();
+    return {id: cat.id};
+  },
+  'habitCategories.update': async (id: number, fields: CategoryFields) => {
+    await updateCategory(id, fields);
+    await afterHabitWrite();
+  },
+  'habitCategories.archive': async (id: number, archived = true) => {
+    await archiveCategory(id, archived);
+    await afterHabitWrite();
+  },
+  'habitCategories.delete': async (id: number) => {
+    await deleteCategory(id);
+    await afterHabitWrite();
+  },
+  'nags.create': async (fields: NagFields) => {
+    const nag = await createNag(fields);
+    await syncNagTriggers();
+    return {id: nag.id};
+  },
+  'nags.update': async (id: number, fields: Partial<NagFields> & {active?: boolean}) => {
+    await requireNag(id);
+    await updateNag(id, fields);
+    await syncNagTriggers();
+  },
+  'nags.delete': async (id: number) => {
+    await requireNag(id);
+    await deleteNag(id);
+    await syncNagTriggers();
+  },
+  'nags.setDone': async (id: number, dueAt: string, done = true) => {
+    await markNagDone(await requireNag(id), dueAt, done);
+  },
 };
 
 const LAST_CMD_KEY = 'companion_last_cmd';

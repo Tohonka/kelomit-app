@@ -11,6 +11,9 @@ import type {DayDetail} from '../../main/queries.ts';
 import type {MediaRow} from '../../../../server/src/queries.ts';
 import type {PendingEntry} from '../lib/pending.ts';
 import {Media} from './Media.tsx';
+import {FoodCard} from './Food.tsx';
+import type {FoodSelection} from './Food.tsx';
+import type {DayFood} from '../../main/life.ts';
 
 interface Props {
   date: string;
@@ -20,6 +23,9 @@ interface Props {
   entries: PendingEntry[];
   selectedEntryId: number | null;
   onSelectEntry: (id: number | null) => void;
+  food: DayFood | null | undefined;
+  selectedFoodId: number | null;
+  onSelectFood: (s: FoodSelection | null) => void;
 }
 
 type LegKey = 'started_at' | 'ended_at' | 'started_at_2' | 'ended_at_2';
@@ -158,7 +164,7 @@ function EntryRow({
   );
 }
 
-export function DayView({date, detail, day, entries, selectedEntryId, onSelectEntry}: Props) {
+export function DayView({date, detail, day, entries, selectedEntryId, onSelectEntry, food, selectedFoodId, onSelectFood}: Props) {
   const groups = useMemo(() => groupEntries(entries, 'time_asc'), [entries]);
 
   return (
@@ -191,6 +197,7 @@ export function DayView({date, detail, day, entries, selectedEntryId, onSelectEn
               </button>
             </div>
           )}
+          <FoodCard food={food} selectedId={selectedFoodId} onSelect={onSelectFood} />
           {groups.map(g => (
             <section key={g.key} className="group">
               {g.title && <h2>{g.title === 'tasks' ? 'Tasks' : g.title}</h2>}

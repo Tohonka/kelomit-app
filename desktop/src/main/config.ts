@@ -3,7 +3,8 @@ import {networkInterfaces} from 'node:os';
 import {join} from 'node:path';
 import {randomBytes} from 'node:crypto';
 
-export const PORT = 8090;
+// KELOMIT_PORT: run a dev instance beside the packaged app (which holds 8090).
+export const PORT = Number(process.env.KELOMIT_PORT) || 8090;
 
 /** Same layout as the server's /data: current.db, snapshots/, media/. */
 export function ensureDataDir(userData: string): string {

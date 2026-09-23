@@ -42,7 +42,8 @@ The Mac and the phone must be on the same network; the token is the guard
 
 ## Editing model
 
-Every edit is a command (`entries.update`, `days.update`, `projects.rename`, …)
+Every edit is a command (`entries.update`, `days.update`, `food.create`, `habits.setOverride`,
+`nags.update`, …)
 appended to `queue.json`. The queue drains in order while the phone is connected
 and waits while it is not; the header shows *N waiting* / *N failed*. A pending
 create is edited or discarded *in the queue* (no temporary ids). The phone applies
@@ -57,6 +58,7 @@ finally updates the view. Arrival order wins on conflicts.
 | `KELOMIT_VIEW=map` | open on a view (`day`, `projects`, `leave`, `map`) |
 | `KELOMIT_SCREENSHOT=/tmp/x.png` | capture the window after load and quit |
 | `KELOMIT_REPORT_PDF=/tmp/r.pdf` | print 1–16 Sep 2026's report headlessly and quit |
+| `KELOMIT_PORT=8091` | run a dev instance beside the packaged app (which holds 8090) |
 
 To develop against real data, copy a backup's `kelomit.db` to `current.db` and
 its `media/*` into `media/`.
@@ -64,4 +66,13 @@ its `media/*` into `media/`.
 ## Menu
 
 File: New Note ⌘N · Export Work Report… ⌘E. View: Day ⌘1 · Map ⌘M · Projects &
-Tags ⌘2 · Leave ⌘3. Go: Today ⌘T · Previous/Next Day ⌘[ ⌘].
+Tags ⌘2 · Leave ⌘3 · Habits ⌘4 · Nags ⌘5. Go: Today ⌘T · Previous/Next Day ⌘[ ⌘].
+
+## What can be edited
+
+Days, notes (+ subnotes, to-dos), projects, tags, leave, **food** (day card; product
+suggestions come from the pushed Fineli/products tables, barcode → Open Food Facts from
+the Mac), **habits** (month matrix, toggle = manual override like the phone; habit /
+category / matcher editing) and **nags** (schedule + plan editor, Done). Routes, media,
+health and hours are read-only. Alarms, widgets and Health Connect write-back keep
+running on the phone, because every write goes through its own store code.

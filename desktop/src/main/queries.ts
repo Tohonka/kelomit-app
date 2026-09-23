@@ -11,6 +11,7 @@ import {
 } from '../../../server/src/queries.ts';
 import type {MediaRow, RouteSegmentRow, RouteStopRow} from '../../../server/src/queries.ts';
 import {calcDayWorkSecs} from '../../../src/utils/hoursUtils.ts';
+import {dayFood, foodProduct, foodSearch, habitsMonth, listNags} from './life.ts';
 import type {Day, Entry, LeaveRange, ModeSpan, Project, RouteCoordinate, Tag} from '../../../src/types/index.ts';
 
 /**
@@ -199,6 +200,11 @@ export const QUERIES = {
   listTags,
   listLeave,
   dayRoute,
+  dayFood,
+  foodSearch,
+  foodProduct,
+  habitsMonth,
+  listNags,
 } as const;
 
 export type QueryName = keyof typeof QUERIES;

@@ -5,6 +5,7 @@ import type {QueryArgs, QueryName, QueryResult} from '../main/queries.ts';
 import type {PhoneState} from '../main/ws.ts';
 import type {QueueSnapshot} from '../main/queue.ts';
 import type {ReportParams, ReportResult} from '../main/report.ts';
+import type {ProductFields} from '../../../src/db/food.ts';
 
 /** Everything the renderer may ask the main process. Typed once, here. */
 export interface CompanionApi {
@@ -26,6 +27,8 @@ export interface CompanionApi {
   reportDefaults(): Promise<ReportParams>;
   /** Builds the work-hours PDF, asks where to save it, opens it. */
   reportPdf(params: ReportParams): Promise<ReportResult>;
+  /** Open Food Facts by barcode, from the Mac. Null = unknown code. */
+  offLookup(barcode: string): Promise<ProductFields | null>;
 }
 
 function on(channel: string, handler: (...args: any[]) => void): () => void {
@@ -51,6 +54,7 @@ const api: CompanionApi = {
   onQueueChanged: handler => on('queue-changed', handler),
   reportDefaults: () => ipcRenderer.invoke('report-defaults'),
   reportPdf: params => ipcRenderer.invoke('report-pdf', params),
+  offLookup: barcode => ipcRenderer.invoke('off-lookup', barcode),
 };
 
 contextBridge.exposeInMainWorld('kelomit', api);

@@ -2,6 +2,7 @@ import {app, BrowserWindow, ipcMain, nativeTheme, net, protocol} from 'electron'
 import {pathToFileURL} from 'node:url';
 import {isSafeMediaName, mediaPath} from '../../../server/src/media.ts';
 import {registerReportIpc} from './report.ts';
+import {registerOffIpc} from './off.ts';
 import {reportCheck} from './report-check.ts';
 import {writeFileSync} from 'node:fs';
 import {join} from 'node:path';
@@ -83,6 +84,7 @@ app.whenReady().then(() => {
     return net.fetch(pathToFileURL(mediaPath(dataDir, name)).toString());
   });
   registerReportIpc(dataDir);
+  registerOffIpc();
 
   ipcMain.handle('pair-info', () => pairInfo(token));
   ipcMain.handle('phone-state', () => phone.state);

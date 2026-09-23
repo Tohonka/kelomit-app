@@ -12,6 +12,8 @@ export type MenuAction =
   | 'view-map'
   | 'view-projects'
   | 'view-leave'
+  | 'view-habits'
+  | 'view-nags'
   | 'export-report';
 
 export function installMenu(getWindow: () => BrowserWindow | null): void {
@@ -50,6 +52,8 @@ export function installMenu(getWindow: () => BrowserWindow | null): void {
         {label: 'Map', accelerator: 'CmdOrCtrl+M', click: send('view-map')},
         {label: 'Projects & Tags', accelerator: 'CmdOrCtrl+2', click: send('view-projects')},
         {label: 'Leave', accelerator: 'CmdOrCtrl+3', click: send('view-leave')},
+        {label: 'Habits', accelerator: 'CmdOrCtrl+4', click: send('view-habits')},
+        {label: 'Nags', accelerator: 'CmdOrCtrl+5', click: send('view-nags')},
         {type: 'separator'},
         {role: 'reload'},
         {role: 'toggleDevTools'},
