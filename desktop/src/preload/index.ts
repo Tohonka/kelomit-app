@@ -2,6 +2,7 @@ import {contextBridge, ipcRenderer} from 'electron';
 import type {PairInfo} from '../main/config.ts';
 import type {MenuAction} from '../main/menu.ts';
 import type {QueryArgs, QueryName, QueryResult} from '../main/queries.ts';
+import type {PhoneState} from '../main/ws.ts';
 
 /** Everything the renderer may ask the main process. Typed once, here. */
 export interface CompanionApi {
@@ -11,6 +12,8 @@ export interface CompanionApi {
   onMenu(handler: (action: MenuAction) => void): () => void;
   /** The phone pushed a new database. */
   onDbChanged(handler: () => void): () => void;
+  phoneState(): Promise<PhoneState>;
+  onPhoneState(handler: (state: PhoneState) => void): () => void;
 }
 
 function on(channel: string, handler: (...args: any[]) => void): () => void {
@@ -26,6 +29,8 @@ const api: CompanionApi = {
   query: (name, ...args) => ipcRenderer.invoke('query', name, ...args),
   onMenu: handler => on('menu', handler),
   onDbChanged: handler => on('db-changed', handler),
+  phoneState: () => ipcRenderer.invoke('phone-state'),
+  onPhoneState: handler => on('phone-state', handler),
 };
 
 contextBridge.exposeInMainWorld('kelomit', api);

@@ -20,6 +20,7 @@ import {exportBackup, importBackup} from '../../services/backupService';
 import {runSync} from '../../services/syncService';
 import {getSyncConfig, setSyncConfig, getSyncStatus} from '../../services/syncSettings';
 import {pushToCompanion} from '../../services/companion/push';
+import {reconnectCompanion} from '../../services/companion/client';
 import {
   getCompanionConfig,
   setCompanionConfig,
@@ -198,6 +199,7 @@ export default function DataSettings(_props: Props) {
 
   const handleSaveCompanion = async () => {
     await setCompanionConfig(companionUrl, companionToken);
+    reconnectCompanion().catch(() => {});
   };
 
   const handleScanPairing = async () => {

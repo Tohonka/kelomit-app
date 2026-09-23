@@ -3,7 +3,8 @@ import {PairSheet} from './panes/PairSheet.tsx';
 import {Sidebar} from './panes/Sidebar.tsx';
 import {DayView} from './panes/DayView.tsx';
 import {Inspector} from './panes/Inspector.tsx';
-import {addDays, monthOf, todayIso} from './lib/format.ts';
+import {addDays, clock, monthOf, todayIso} from './lib/format.ts';
+import {usePhoneState} from './hooks/usePhoneState.ts';
 import type {CompanionApi} from '../preload/index.ts';
 
 declare global {
@@ -17,6 +18,7 @@ export function App() {
   const [date, setDate] = useState(() => new URLSearchParams(location.search).get('date') ?? todayIso());
   const [month, setMonth] = useState(monthOf(date));
   const [entryId, setEntryId] = useState<number | null>(null);
+  const phone = usePhoneState();
 
   const goTo = (d: string) => {
     setDate(d);
@@ -40,7 +42,17 @@ export function App() {
       <header className="titlebar">
         <strong>Kelomit</strong>
         <span className="spacer" />
-        <span className="phone-state">Phone offline</span>
+        {phone.activeSession && (
+          <span className="timer">
+            ▶ {phone.activeSession.name || phone.activeSession.title || 'Timer'} since{' '}
+            {clock(phone.activeSession.started_at)}
+          </span>
+        )}
+        <span className={`phone-state${phone.connected ? ' online' : ''}`}>
+          {phone.connected
+            ? `Phone connected${phone.appVersion ? ` · ${phone.appVersion}` : ''}`
+            : 'Phone offline'}
+        </span>
         <button className="btn" onClick={() => setPairing(true)}>
           Pair phone…
         </button>

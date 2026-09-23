@@ -39,6 +39,9 @@ interface DayState {
   loadToday: () => Promise<Day>;
   loadDay: (date: string) => Promise<Day>;
   updateDayTimes: (date: string, fields: DayTimeFields) => Promise<void>;
+  /** Fold a freshly read row into every slot that holds that date, without
+   *  changing the selection (desktop edits arrive this way). */
+  refreshDay: (day: Day) => void;
 }
 
 export const useDayStore = create<DayState>((set, get) => ({
@@ -77,6 +80,13 @@ export const useDayStore = create<DayState>((set, get) => ({
     }));
     return day;
   },
+
+  refreshDay: (day) =>
+    set(state => ({
+      daysCache: {...state.daysCache, [day.date]: day},
+      today: state.today?.date === day.date ? day : state.today,
+      selectedDay: state.selectedDay?.date === day.date ? day : state.selectedDay,
+    })),
 
   updateDayTimes: async (date, fields) => {
     const existing = get().daysCache[date];

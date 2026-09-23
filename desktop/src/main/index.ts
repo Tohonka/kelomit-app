@@ -6,6 +6,7 @@ import {startApiServer} from './server.ts';
 import {installMenu} from './menu.ts';
 import {registerQueryIpc} from './ipc.ts';
 import {watchCurrentDb} from './watch.ts';
+import {PhoneLink} from './ws.ts';
 
 app.setName('Kelomit Companion');
 
@@ -53,9 +54,12 @@ function createWindow(): void {
 app.whenReady().then(() => {
   const dataDir = ensureDataDir(app.getPath('userData'));
   const token = loadOrCreateToken(dataDir);
-  startApiServer(dataDir, token);
+  const server = startApiServer(dataDir, token);
+  const phone = new PhoneLink(server as import('node:http').Server, token);
+  phone.on('state', state => win?.webContents.send('phone-state', state));
 
   ipcMain.handle('pair-info', () => pairInfo(token));
+  ipcMain.handle('phone-state', () => phone.state);
   registerQueryIpc(dataDir);
   watchCurrentDb(dataDir, () => win?.webContents.send('db-changed'));
 

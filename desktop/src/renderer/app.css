@@ -513,3 +513,8 @@ textarea {
 .inspector dd {
   margin: 0;
 }
+
+.titlebar .timer {
+  color: var(--primary);
+  font-weight: 600;
+}
