@@ -1,8 +1,11 @@
 import {app, BrowserWindow, ipcMain, nativeTheme} from 'electron';
+import {writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {ensureDataDir, loadOrCreateToken, pairInfo} from './config.ts';
 import {startApiServer} from './server.ts';
 import {installMenu} from './menu.ts';
+import {registerQueryIpc} from './ipc.ts';
+import {watchCurrentDb} from './watch.ts';
 
 app.setName('Kelomit Companion');
 
@@ -25,10 +28,25 @@ function createWindow(): void {
   win.on('closed', () => {
     win = null;
   });
+  // Dev aids: KELOMIT_DATE opens on a given day; KELOMIT_SCREENSHOT=<png>
+  // captures the window after load and quits (headless UI check).
+  const query = process.env.KELOMIT_DATE ? {date: process.env.KELOMIT_DATE} : undefined;
   if (process.env.ELECTRON_RENDERER_URL) {
-    win.loadURL(process.env.ELECTRON_RENDERER_URL);
+    const url = new URL(process.env.ELECTRON_RENDERER_URL);
+    if (query) url.searchParams.set('date', query.date);
+    win.loadURL(url.toString());
   } else {
-    win.loadFile(join(__dirname, '../renderer/index.html'));
+    win.loadFile(join(__dirname, '../renderer/index.html'), {query});
+  }
+  const shot = process.env.KELOMIT_SCREENSHOT;
+  if (shot) {
+    win.webContents.once('did-finish-load', () => {
+      setTimeout(async () => {
+        const image = await win?.webContents.capturePage();
+        if (image) writeFileSync(shot, image.toPNG());
+        app.quit();
+      }, 1500);
+    });
   }
 }
 
@@ -38,6 +56,8 @@ app.whenReady().then(() => {
   startApiServer(dataDir, token);
 
   ipcMain.handle('pair-info', () => pairInfo(token));
+  registerQueryIpc(dataDir);
+  watchCurrentDb(dataDir, () => win?.webContents.send('db-changed'));
 
   installMenu(() => win);
   createWindow();
