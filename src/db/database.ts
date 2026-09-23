@@ -1,5 +1,6 @@
 import {open} from '@op-engineering/op-sqlite';
 import {migrations} from './migrations';
+import {installDbChangeHook} from '../services/companion/dbChangeBus';
 
 let _db: ReturnType<typeof open> | null = null;
 
@@ -80,4 +81,7 @@ async function initDBOnce(): Promise<void> {
       });
     }
   }
+
+  // After migrations, so schema work never looks like user changes.
+  installDbChangeHook(_db);
 }

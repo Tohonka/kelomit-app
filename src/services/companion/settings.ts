@@ -68,18 +68,20 @@ export async function setCompanionConfig(url: string, token: string): Promise<vo
   await setSetting('companion_token', token.trim());
 }
 
+/* Status lives in memory, not in the settings table: a push that recorded its
+ * own result in SQLite would fire the update hook and schedule the next push.
+ * ponytail: lost on app restart — the card shows "never pushed" until the next
+ * push, which the first write after launch triggers anyway. */
+let status: CompanionStatus = {lastPushAt: null, lastError: null};
+
 export async function getCompanionStatus(): Promise<CompanionStatus> {
-  return {
-    lastPushAt: (await getSetting('companion_last_push_at')) || null,
-    lastError: (await getSetting('companion_last_error')) || null,
-  };
+  return {...status};
 }
 
 export async function recordCompanionSuccess(at: string): Promise<void> {
-  await setSetting('companion_last_push_at', at);
-  await setSetting('companion_last_error', '');
+  status = {lastPushAt: at, lastError: null};
 }
 
 export async function recordCompanionError(message: string): Promise<void> {
-  await setSetting('companion_last_error', message.slice(0, MAX_ERROR_LEN));
+  status = {...status, lastError: message.slice(0, MAX_ERROR_LEN)};
 }
