@@ -4,6 +4,7 @@ import type {MenuAction} from '../main/menu.ts';
 import type {QueryArgs, QueryName, QueryResult} from '../main/queries.ts';
 import type {PhoneState} from '../main/ws.ts';
 import type {QueueSnapshot} from '../main/queue.ts';
+import type {ReportParams, ReportResult} from '../main/report.ts';
 
 /** Everything the renderer may ask the main process. Typed once, here. */
 export interface CompanionApi {
@@ -22,6 +23,9 @@ export interface CompanionApi {
   queueRemove(id: string): Promise<boolean>;
   queueDismiss(id: string): Promise<void>;
   onQueueChanged(handler: (snapshot: QueueSnapshot) => void): () => void;
+  reportDefaults(): Promise<ReportParams>;
+  /** Builds the work-hours PDF, asks where to save it, opens it. */
+  reportPdf(params: ReportParams): Promise<ReportResult>;
 }
 
 function on(channel: string, handler: (...args: any[]) => void): () => void {
@@ -45,6 +49,8 @@ const api: CompanionApi = {
   queueRemove: id => ipcRenderer.invoke('queue-remove', id),
   queueDismiss: id => ipcRenderer.invoke('queue-dismiss', id),
   onQueueChanged: handler => on('queue-changed', handler),
+  reportDefaults: () => ipcRenderer.invoke('report-defaults'),
+  reportPdf: params => ipcRenderer.invoke('report-pdf', params),
 };
 
 contextBridge.exposeInMainWorld('kelomit', api);

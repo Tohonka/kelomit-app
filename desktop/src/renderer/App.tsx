@@ -8,6 +8,7 @@ import {QueueSheet} from './panes/QueueSheet.tsx';
 import {ProjectsTags} from './panes/ProjectsTags.tsx';
 import {Leave} from './panes/Leave.tsx';
 import {MapView} from './panes/MapView.tsx';
+import {ReportSheet} from './panes/ReportSheet.tsx';
 import {addDays, clock, monthOf, todayIso} from './lib/format.ts';
 import {applyPendingDay, applyPendingEntries} from './lib/pending.ts';
 import {usePhoneState} from './hooks/usePhoneState.ts';
@@ -35,6 +36,7 @@ const NO_TAGS: never[] = [];
 export function App() {
   const [pairing, setPairing] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
+  const [showReport, setShowReport] = useState(false);
   const params = new URLSearchParams(location.search);
   const [date, setDate] = useState(() => params.get('date') ?? todayIso());
   const [view, setView] = useState<View>(() => (params.get('view') as View) || 'day');
@@ -72,6 +74,7 @@ export function App() {
         else if (action === 'view-projects') setView('projects');
         else if (action === 'view-leave') setView('leave');
         else if (action === 'view-map') setView('map');
+        else if (action === 'export-report') setShowReport(true);
       }),
     [date],
   );
@@ -115,6 +118,9 @@ export function App() {
             ? `Phone connected${phone.appVersion ? ` · ${phone.appVersion}` : ''}`
             : 'Phone offline'}
         </span>
+        <button className="btn" onClick={() => setShowReport(true)} title="⌘E">
+          Report…
+        </button>
         <button className="btn" onClick={() => setPairing(true)}>
           Pair phone…
         </button>
@@ -158,6 +164,7 @@ export function App() {
       </main>
       {pairing && <PairSheet onClose={() => setPairing(false)} />}
       {showQueue && <QueueSheet queue={queue} onClose={() => setShowQueue(false)} />}
+      {showReport && <ReportSheet onClose={() => setShowReport(false)} />}
     </div>
   );
 }

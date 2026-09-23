@@ -10,6 +10,7 @@ import type {Day} from '../../../../src/types/index.ts';
 import type {DayDetail} from '../../main/queries.ts';
 import type {MediaRow} from '../../../../server/src/queries.ts';
 import type {PendingEntry} from '../lib/pending.ts';
+import {Media} from './Media.tsx';
 
 interface Props {
   date: string;
@@ -151,12 +152,8 @@ function EntryRow({
             #{t.name}
           </span>
         ))}
-        {own.map((m, i) => (
-          <span key={i} className="chip media">
-            {m.media_type}
-          </span>
-        ))}
       </div>
+      <Media rows={own} />
     </div>
   );
 }

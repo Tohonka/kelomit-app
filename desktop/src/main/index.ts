@@ -1,4 +1,8 @@
-import {app, BrowserWindow, ipcMain, nativeTheme} from 'electron';
+import {app, BrowserWindow, ipcMain, nativeTheme, net, protocol} from 'electron';
+import {pathToFileURL} from 'node:url';
+import {isSafeMediaName, mediaPath} from '../../../server/src/media.ts';
+import {registerReportIpc} from './report.ts';
+import {reportCheck} from './report-check.ts';
 import {writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {ensureDataDir, loadOrCreateToken, pairInfo} from './config.ts';
@@ -10,6 +14,11 @@ import {PhoneLink} from './ws.ts';
 import {CommandQueue} from './queue.ts';
 
 app.setName('Kelomit Companion');
+
+// kelomit-media:///<basename> → the file the phone pushed into media/.
+protocol.registerSchemesAsPrivileged([
+  {scheme: 'kelomit-media', privileges: {secure: true, supportFetchAPI: true, stream: true}},
+]);
 
 let win: BrowserWindow | null = null;
 
@@ -66,6 +75,15 @@ app.whenReady().then(() => {
   });
   queue.on('change', snapshot => win?.webContents.send('queue-changed', snapshot));
 
+  protocol.handle('kelomit-media', request => {
+    const name = decodeURIComponent(new URL(request.url).pathname.replace(/^\/+/, ''));
+    if (!isSafeMediaName(name)) {
+      return new Response('bad name', {status: 400});
+    }
+    return net.fetch(pathToFileURL(mediaPath(dataDir, name)).toString());
+  });
+  registerReportIpc(dataDir);
+
   ipcMain.handle('pair-info', () => pairInfo(token));
   ipcMain.handle('phone-state', () => phone.state);
   ipcMain.handle('cmd', (_e, fn: string, args: unknown[], label: string) => queue.push(fn, args, label));
@@ -75,6 +93,14 @@ app.whenReady().then(() => {
   ipcMain.handle('queue-dismiss', (_e, id: string) => queue.dismissFailed(id));
   registerQueryIpc(dataDir);
   watchCurrentDb(dataDir, () => win?.webContents.send('db-changed'));
+
+  if (process.env.KELOMIT_REPORT_PDF) {
+    reportCheck(dataDir, process.env.KELOMIT_REPORT_PDF, '2026-09-01', '2026-09-16').catch(e => {
+      console.error('report check failed:', e);
+      app.exit(1);
+    });
+    return;
+  }
 
   installMenu(() => win);
   createWindow();

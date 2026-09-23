@@ -21,6 +21,7 @@ import {ensureNotificationChannel, requestNotificationPermission} from './src/se
 import {maybeAutoSync} from './src/services/syncService';
 import {startCompanionAutoPush, kickCompanionPush} from './src/services/companion/autoPush';
 import {connectCompanion} from './src/services/companion/client';
+import {startCompanionStatus} from './src/services/companion/status';
 import {
   reconcileRouteHistory,
   reconcileTrackingJournal,
@@ -140,6 +141,7 @@ function AppContent() {
     startFoodWriteBack();
     // Desktop companion: mirror every write, debounced; no-op until paired.
     startCompanionAutoPush();
+    startCompanionStatus();
     connectCompanion().catch(() => {});
     // Food widget: fold in taps made while we were away, then keep its list fresh.
     startFoodWidgetSync();

@@ -22,7 +22,6 @@
     "../src/theme/colors.ts",
     "../src/utils/hoursUtils.ts",
     "../src/utils/timeFormat.ts",
-    "../src/services/workReport.ts",
     "../src/reports/**/*.ts"
   ]
 }
