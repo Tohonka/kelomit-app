@@ -17,7 +17,8 @@ import {
   recordSyncError,
 } from '../src/services/syncSettings';
 import {getDB} from '../src/db/database';
-import {runSync, maybeAutoSync} from '../src/services/syncService';
+import {runSync, runSyncTo, maybeAutoSync} from '../src/services/syncService';
+import type {SyncTarget} from '../src/services/syncService';
 
 const mockConfig = getSyncConfig as jest.MockedFunction<typeof getSyncConfig>;
 const mockStatus = getSyncStatus as jest.MockedFunction<typeof getSyncStatus>;
@@ -201,5 +202,47 @@ describe('maybeAutoSync', () => {
     mockStatus.mockResolvedValue({lastAt: null, lastError: null});
     await maybeAutoSync();
     expect(rnfs.uploadFiles).toHaveBeenCalled();
+  });
+});
+
+describe('runSyncTo — the companion target', () => {
+  function companion(over: Partial<SyncTarget> = {}): SyncTarget {
+    return {
+      url: 'http://192.168.1.20:8090',
+      token: 'ctok',
+      includeVideo: true,
+      snapshotPath: '/mock/caches/kelomit-companion.db',
+      onSuccess: jest.fn(() => Promise.resolve()),
+      onError: jest.fn(() => Promise.resolve()),
+      ...over,
+    };
+  }
+
+  it('includes video and uses its own snapshot file', async () => {
+    rnfs.readDir.mockResolvedValue([dirEntry('clip.mp4'), dirEntry('new.jpg')]);
+    const target = companion();
+    await expect(runSyncTo(target)).resolves.toBe('done');
+    expect(execute).toHaveBeenCalledWith("VACUUM INTO '/mock/caches/kelomit-companion.db';");
+    const uploaded = rnfs.uploadFiles.mock.calls.map(c => c[0].toUrl as string);
+    expect(uploaded).toContain('http://192.168.1.20:8090/api/media/clip.mp4');
+    expect(uploaded[uploaded.length - 1]).toBe('http://192.168.1.20:8090/api/sync');
+    expect(target.onSuccess).toHaveBeenCalled();
+    expect(mockSuccess).not.toHaveBeenCalled();
+  });
+
+  it('runs alongside a server sync — different snapshot, no overlap guard hit', async () => {
+    rnfs.readDir.mockResolvedValue([dirEntry('new.jpg')]);
+    const server = runSync();
+    const desk = runSyncTo(companion());
+    await expect(desk).resolves.toBe('done');
+    await expect(server).resolves.toBe('done');
+  });
+
+  it('reports failures to the target only', async () => {
+    globalThis.fetch = jest.fn(() => Promise.reject(new Error('ECONNREFUSED'))) as unknown as typeof fetch;
+    const target = companion();
+    await expect(runSyncTo(target)).resolves.toBe('failed');
+    expect(target.onError).toHaveBeenCalledWith('ECONNREFUSED');
+    expect(mockError).not.toHaveBeenCalled();
   });
 });

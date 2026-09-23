@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The desktop companion is a LAN peer reached over plain http (plan
+     2026-09-22, D7). Release builds block cleartext by default, and Android's
+     network security config has no CIDR/private-range rule, so cleartext is
+     permitted app-wide; the companion's bearer token is the real guard and the
+     remote server URL is https-coerced in syncSettings. This attribute wins
+     over the RN gradle plugin's per-build-type usesCleartextTraffic flag. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>
