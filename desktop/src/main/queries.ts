@@ -124,6 +124,11 @@ export function listProjects(db: Database.Database): Project[] {
   }));
 }
 
+/** Leave ranges touching a calendar year. */
+export function listLeave(db: Database.Database, year: number): LeaveRange[] {
+  return getLeaveRangesInRange(db, `${year}-01-01`, `${year}-12-31`);
+}
+
 export function listTags(db: Database.Database): Tag[] {
   return db.prepare('SELECT * FROM tags ORDER BY name COLLATE NOCASE').all() as Tag[];
 }
@@ -135,6 +140,7 @@ export const QUERIES = {
   dayDetail,
   listProjects,
   listTags,
+  listLeave,
 } as const;
 
 export type QueryName = keyof typeof QUERIES;

@@ -32,10 +32,12 @@ function createWindow(): void {
   });
   // Dev aids: KELOMIT_DATE opens on a given day; KELOMIT_SCREENSHOT=<png>
   // captures the window after load and quits (headless UI check).
-  const query = process.env.KELOMIT_DATE ? {date: process.env.KELOMIT_DATE} : undefined;
+  const query: Record<string, string> = {};
+  if (process.env.KELOMIT_DATE) query.date = process.env.KELOMIT_DATE;
+  if (process.env.KELOMIT_VIEW) query.view = process.env.KELOMIT_VIEW;
   if (process.env.ELECTRON_RENDERER_URL) {
     const url = new URL(process.env.ELECTRON_RENDERER_URL);
-    if (query) url.searchParams.set('date', query.date);
+    for (const [k, v] of Object.entries(query)) url.searchParams.set(k, v);
     win.loadURL(url.toString());
   } else {
     win.loadFile(join(__dirname, '../renderer/index.html'), {query});

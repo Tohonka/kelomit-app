@@ -709,3 +709,74 @@ textarea.day-notes {
   padding: 6px 0;
   border-top: 1px solid var(--border);
 }
+
+/* ---- views ------------------------------------------------------------- */
+
+.seg.views {
+  margin: 0 0 0 8px;
+  -webkit-app-region: no-drag;
+}
+
+.pane.wide {
+  grid-column: 2 / 4;
+}
+
+.manage {
+  padding: 16px 20px 40px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  user-select: text;
+}
+
+.manage h2,
+.leave h2 {
+  font-size: 15px;
+  margin: 0 0 10px;
+}
+
+.manage table,
+.leave table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.manage td,
+.leave td {
+  padding: 5px 6px;
+  border-top: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.manage td.actions,
+.leave td.actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.manage .archived td:first-child {
+  color: var(--textMuted);
+  text-decoration: line-through;
+}
+
+.manage .add,
+.leave .add {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.manage .add input {
+  flex: 1;
+}
+
+.leave {
+  padding: 16px 20px 40px;
+  max-width: 720px;
+  user-select: text;
+}
+
+.btn.small {
+  padding: 1px 7px;
+  font-size: 11px;
+}
