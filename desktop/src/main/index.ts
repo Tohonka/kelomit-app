@@ -3,6 +3,7 @@ import {pathToFileURL} from 'node:url';
 import {isSafeMediaName, mediaPath} from '../../../server/src/media.ts';
 import {registerReportIpc} from './report.ts';
 import {registerOffIpc} from './off.ts';
+import {registerMediaIpc} from './media.ts';
 import {reportCheck} from './report-check.ts';
 import {writeFileSync} from 'node:fs';
 import {join} from 'node:path';
@@ -85,6 +86,7 @@ app.whenReady().then(() => {
   });
   registerReportIpc(dataDir);
   registerOffIpc();
+  registerMediaIpc(dataDir, () => win);
 
   ipcMain.handle('pair-info', () => pairInfo(token));
   ipcMain.handle('phone-state', () => phone.state);

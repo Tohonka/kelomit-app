@@ -1,4 +1,4 @@
-import {contextBridge, ipcRenderer} from 'electron';
+import {contextBridge, ipcRenderer, webUtils} from 'electron';
 import type {PairInfo} from '../main/config.ts';
 import type {MenuAction} from '../main/menu.ts';
 import type {QueryArgs, QueryName, QueryResult} from '../main/queries.ts';
@@ -6,6 +6,7 @@ import type {PhoneState} from '../main/ws.ts';
 import type {QueueSnapshot} from '../main/queue.ts';
 import type {ReportParams, ReportResult} from '../main/report.ts';
 import type {ProductFields} from '../../../src/db/food.ts';
+import type {StageResult} from '../main/media.ts';
 
 /** Everything the renderer may ask the main process. Typed once, here. */
 export interface CompanionApi {
@@ -29,6 +30,10 @@ export interface CompanionApi {
   reportPdf(params: ReportParams): Promise<ReportResult>;
   /** Open Food Facts by barcode, from the Mac. Null = unknown code. */
   offLookup(barcode: string): Promise<ProductFields | null>;
+  /** Copy dropped files into media/ under phone-style names (see main/media.ts). */
+  mediaStage(files: File[]): Promise<StageResult>;
+  /** Same, through an open-file dialog. */
+  mediaPick(): Promise<StageResult>;
 }
 
 function on(channel: string, handler: (...args: any[]) => void): () => void {
@@ -55,6 +60,8 @@ const api: CompanionApi = {
   reportDefaults: () => ipcRenderer.invoke('report-defaults'),
   reportPdf: params => ipcRenderer.invoke('report-pdf', params),
   offLookup: barcode => ipcRenderer.invoke('off-lookup', barcode),
+  mediaStage: files => ipcRenderer.invoke('media-stage', files.map(f => webUtils.getPathForFile(f))),
+  mediaPick: () => ipcRenderer.invoke('media-pick'),
 };
 
 contextBridge.exposeInMainWorld('kelomit', api);

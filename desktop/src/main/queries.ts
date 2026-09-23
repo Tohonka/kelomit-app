@@ -12,6 +12,7 @@ import {
 import type {MediaRow, RouteSegmentRow, RouteStopRow} from '../../../server/src/queries.ts';
 import {calcDayWorkSecs} from '../../../src/utils/hoursUtils.ts';
 import {dayFood, dayHealth, foodProduct, foodSearch, gallery, habitsMonth, listNags, listPlaces, search} from './life.ts';
+import {insights} from './insights.ts';
 import type {Day, DayRouteStop, Entry, LeaveRange, ModeSpan, Project, RouteCoordinate, Tag} from '../../../src/types/index.ts';
 
 /**
@@ -213,6 +214,7 @@ export const QUERIES = {
   dayHealth,
   gallery,
   search,
+  insights,
 } as const;
 
 export type QueryName = keyof typeof QUERIES;

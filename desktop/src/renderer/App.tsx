@@ -14,6 +14,7 @@ import {Nags} from './panes/Nags.tsx';
 import {FoodEditor} from './panes/Food.tsx';
 import {Gallery} from './panes/Gallery.tsx';
 import {Search} from './panes/Search.tsx';
+import {Insights} from './panes/Insights.tsx';
 import type {FoodSelection} from './panes/Food.tsx';
 import {addDays, clock, monthOf, todayIso} from './lib/format.ts';
 import {applyPendingDay, applyPendingEntries} from './lib/pending.ts';
@@ -28,13 +29,14 @@ declare global {
   }
 }
 
-type View = 'day' | 'projects' | 'leave' | 'map' | 'habits' | 'nags' | 'gallery' | 'search';
+type View = 'day' | 'projects' | 'leave' | 'map' | 'habits' | 'nags' | 'gallery' | 'search' | 'insights';
 const VIEWS: [View, string][] = [
   ['day', 'Day'],
   ['map', 'Map'],
   ['habits', 'Habits'],
   ['nags', 'Nags'],
   ['gallery', 'Gallery'],
+  ['insights', 'Insights'],
   ['projects', 'Projects & Tags'],
   ['leave', 'Leave'],
   ['search', 'Search'],
@@ -63,7 +65,7 @@ export function App() {
 
   const entries = useMemo(
     () => applyPendingEntries(detail?.entries ?? [], queue.items, date, projects),
-    [detail, queue.items, date, projects],
+    [detail, queue.items, date, projects]
   );
   const day = useMemo(() => applyPendingDay(detail?.day ?? null, queue.items, date), [detail, queue.items, date]);
 
@@ -96,9 +98,10 @@ export function App() {
         else if (action === 'view-nags') setView('nags');
         else if (action === 'view-gallery') setView('gallery');
         else if (action === 'view-search') setView('search');
+        else if (action === 'view-insights') setView('insights');
         else if (action === 'export-report') setShowReport(true);
       }),
-    [date],
+    [date]
   );
 
   const waiting = queue.items.length;
@@ -108,10 +111,13 @@ export function App() {
     <div className="shell">
       <header className="titlebar">
         <strong>Kelomit</strong>
-        <button className="btn" onClick={() => {
-          setView('day');
-          setSelection({kind: 'new', parentId: null});
-        }} title="⌘N">
+        <button
+          className="btn"
+          onClick={() => {
+            setView('day');
+            setSelection({kind: 'new', parentId: null});
+          }}
+          title="⌘N">
           + Note
         </button>
         <span className="seg views">
@@ -124,8 +130,7 @@ export function App() {
         <span className="spacer" />
         {phone.activeSession && (
           <span className="timer">
-            ▶ {phone.activeSession.name || phone.activeSession.title || 'Timer'} since{' '}
-            {clock(phone.activeSession.started_at)}
+            ▶ {phone.activeSession.name || phone.activeSession.title || 'Timer'} since {clock(phone.activeSession.started_at)}
           </span>
         )}
         {(waiting > 0 || failed > 0) && (
@@ -136,9 +141,7 @@ export function App() {
           </button>
         )}
         <span className={`phone-state${phone.connected ? ' online' : ''}`}>
-          {phone.connected
-            ? `Phone connected${phone.appVersion ? ` · ${phone.appVersion}` : ''}`
-            : 'Phone offline'}
+          {phone.connected ? `Phone connected${phone.appVersion ? ` · ${phone.appVersion}` : ''}` : 'Phone offline'}
         </span>
         <button className="btn" onClick={() => setShowReport(true)} title="⌘E">
           Report…
@@ -170,7 +173,15 @@ export function App() {
               {isFood(selection) ? (
                 <FoodEditor date={date} selection={selection} food={food} onClose={() => setSelection(null)} />
               ) : (
-                <Inspector date={date} selection={selection} entries={entries} projects={projects} tags={tags} onSelect={setSelection} />
+                <Inspector
+                  date={date}
+                  selection={selection}
+                  entries={entries}
+                  projects={projects}
+                  tags={tags}
+                  media={detail?.media ?? []}
+                  onSelect={setSelection}
+                />
               )}
             </section>
           </>
@@ -203,6 +214,11 @@ export function App() {
         {view === 'search' && (
           <section className="pane wide">
             <Search onOpen={openEntry} />
+          </section>
+        )}
+        {view === 'insights' && (
+          <section className="pane wide">
+            <Insights />
           </section>
         )}
         {view === 'map' && (

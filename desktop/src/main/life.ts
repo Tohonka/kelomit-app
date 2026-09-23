@@ -30,12 +30,12 @@ const STREAK_WINDOW_DAYS = 120;
 
 type Row = Record<string, unknown>;
 
-function localToday(): string {
+export function localToday(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function shiftDate(date: string, days: number): string {
+export function shiftDate(date: string, days: number): string {
   const d = new Date(`${date}T00:00:00`);
   d.setDate(d.getDate() + days);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -68,15 +68,13 @@ export function dayFood(db: Database.Database, date: string): DayFood {
   const entries = db
     .prepare(
       `SELECT f.* FROM food_entries f JOIN days d ON d.id = f.day_id
-        WHERE d.date = ? ORDER BY f.eaten_at, f.id`,
+        WHERE d.date = ? ORDER BY f.eaten_at, f.id`
     )
     .all(date) as FoodEntry[];
   const ids = [...new Set(entries.map(e => e.product_id).filter((id): id is number => id != null))];
   const products: Record<number, FoodProduct> = {};
   if (ids.length > 0) {
-    const rows = db
-      .prepare(`SELECT * FROM food_products WHERE id IN (${ids.map(() => '?').join(',')})`)
-      .all(...ids) as Row[];
+    const rows = db.prepare(`SELECT * FROM food_products WHERE id IN (${ids.map(() => '?').join(',')})`).all(...ids) as Row[];
     for (const r of rows) products[r.id as number] = product(r);
   }
   return {
@@ -108,7 +106,7 @@ export function foodSearch(db: Database.Database, query: string, lang: 'fi' | 'e
       .prepare(
         `SELECT * FROM food_products
           WHERE archived = 0 AND (name LIKE ? OR brand LIKE ?)
-          ORDER BY CASE WHEN name LIKE ? THEN 0 ELSE 1 END, name LIMIT 6`,
+          ORDER BY CASE WHEN name LIKE ? THEN 0 ELSE 1 END, name LIMIT 6`
       )
       .all(`%${q}%`, `%${q}%`, `${q}%`) as Row[]
   ).map(product);
@@ -120,7 +118,7 @@ export function foodSearch(db: Database.Database, query: string, lang: 'fi' | 'e
           .prepare(
             `SELECT * FROM fineli_foods
               WHERE name_fi LIKE ? OR name_en LIKE ?
-              ORDER BY CASE WHEN ${col} LIKE ? THEN 0 WHEN name_fi LIKE ? THEN 1 ELSE 2 END, length(${col}) LIMIT 8`,
+              ORDER BY CASE WHEN ${col} LIKE ? THEN 0 WHEN name_fi LIKE ? THEN 1 ELSE 2 END, length(${col}) LIMIT 8`
           )
           .all(`%${q}%`, `%${q}%`, `${q}%`, `${q}%`) as FineliFood[]
       )
@@ -138,7 +136,9 @@ export interface ProductPortions {
 
 /** A product with what the amount picker needs (Fineli household units). */
 export function foodProduct(db: Database.Database, id: number): ProductPortions {
-  const row = hasTable(db, 'food_products') ? (db.prepare('SELECT * FROM food_products WHERE id = ?').get(id) as Row | undefined) : undefined;
+  const row = hasTable(db, 'food_products')
+    ? (db.prepare('SELECT * FROM food_products WHERE id = ?').get(id) as Row | undefined)
+    : undefined;
   const p = row ? product(row) : null;
   const units = p?.source === 'fineli' && p.source_ref && hasTable(db, 'fineli_units') ? fineliUnits(db, Number(p.source_ref)) : [];
   return {product: p, units, unitLabels: FINELI_UNIT_LABELS};
@@ -161,16 +161,27 @@ export interface HabitsMonth {
   today: string;
 }
 
-/** habitStore.deriveAuto + streakOf, over the pushed database. */
-export function habitsMonth(db: Database.Database, month: string): HabitsMonth {
-  const today = localToday();
-  const empty: HabitsMonth = {
-    month, categories: [], habits: [], matchers: [], triggers: [], overrides: {}, auto: {}, streaks: {}, today,
-  };
+/** Everything needed to answer "was habit h done on date d" over [from, to]:
+ *  the phone's stored overrides plus the auto state derived with its own
+ *  `habitDayProgress`. Shared by the Habits matrix and Insights. */
+export interface HabitStates {
+  categories: HabitCategory[];
+  habits: Habit[];
+  matchers: HabitMatcher[];
+  triggers: Trigger[];
+  /** habit id → date → stored override */
+  overrides: Record<number, Record<string, boolean>>;
+  /** habit id → date → derived state (only dates with any progress) */
+  auto: Record<number, Record<string, HabitDayProgress>>;
+}
+
+export function habitStates(db: Database.Database, from: string, to: string): HabitStates {
+  const empty: HabitStates = {categories: [], habits: [], matchers: [], triggers: [], overrides: {}, auto: {}};
   if (!hasTable(db, 'habits')) return empty;
-  const categories = (db.prepare('SELECT * FROM habit_categories ORDER BY archived, id').all() as Row[]).map(
-    r => ({...(r as unknown as HabitCategory), archived: Boolean(r.archived)}),
-  );
+  const categories = (db.prepare('SELECT * FROM habit_categories ORDER BY archived, id').all() as Row[]).map(r => ({
+    ...(r as unknown as HabitCategory),
+    archived: Boolean(r.archived),
+  }));
   const habits = (db.prepare('SELECT * FROM habits ORDER BY archived, id').all() as Row[]).map(r => ({
     ...(r as unknown as Habit),
     archived: Boolean(r.archived),
@@ -178,15 +189,12 @@ export function habitsMonth(db: Database.Database, month: string): HabitsMonth {
   const matchers = db.prepare('SELECT habit_id, kind, ref_id, threshold FROM habit_matchers').all() as HabitMatcher[];
   const triggers = hasTable(db, 'triggers') ? (db.prepare('SELECT * FROM triggers ORDER BY name').all() as Trigger[]) : [];
 
-  const [mFrom, mTo] = monthBounds(month);
-  const back = shiftDate(today, -STREAK_WINDOW_DAYS);
-  const from = mFrom < back ? mFrom : back;
-  const to = mTo > today ? mTo : today;
-
   const overrides: Record<number, Record<string, boolean>> = {};
-  for (const r of db
-    .prepare('SELECT habit_id, date, done FROM habit_day_overrides WHERE date BETWEEN ? AND ?')
-    .all(from, to) as {habit_id: number; date: string; done: number}[]) {
+  for (const r of db.prepare('SELECT habit_id, date, done FROM habit_day_overrides WHERE date BETWEEN ? AND ?').all(from, to) as {
+    habit_id: number;
+    date: string;
+    done: number;
+  }[]) {
     (overrides[r.habit_id] ??= {})[r.date] = Boolean(r.done);
   }
 
@@ -206,7 +214,7 @@ export function habitsMonth(db: Database.Database, month: string): HabitsMonth {
         .prepare(
           `SELECT et.entry_id, et.trigger_id FROM entry_triggers et
              JOIN entries e ON e.id = et.entry_id JOIN days d ON d.id = e.day_id
-            WHERE d.date BETWEEN ? AND ?`,
+            WHERE d.date BETWEEN ? AND ?`
         )
         .all(from, to) as {entry_id: number; trigger_id: number}[]) {
         triggerIds.set(r.entry_id, [...(triggerIds.get(r.entry_id) ?? []), r.trigger_id]);
@@ -214,9 +222,11 @@ export function habitsMonth(db: Database.Database, month: string): HabitsMonth {
     }
     const health = new Map<string, {steps: number | null; sleep_minutes: number | null}>();
     if (hasTable(db, 'health_daily')) {
-      for (const r of db
-        .prepare('SELECT date, steps, sleep_minutes FROM health_daily WHERE date BETWEEN ? AND ?')
-        .all(from, to) as {date: string; steps: number | null; sleep_minutes: number | null}[]) {
+      for (const r of db.prepare('SELECT date, steps, sleep_minutes FROM health_daily WHERE date BETWEEN ? AND ?').all(from, to) as {
+        date: string;
+        steps: number | null;
+        sleep_minutes: number | null;
+      }[]) {
         health.set(r.date, r);
       }
     }
@@ -226,7 +236,7 @@ export function habitsMonth(db: Database.Database, month: string): HabitsMonth {
         .prepare(
           `SELECT d.date AS date, COALESCE(SUM(f.kcal), 0) AS kcal, COUNT(*) AS entries
              FROM food_entries f JOIN days d ON d.id = f.day_id
-            WHERE d.date BETWEEN ? AND ? GROUP BY d.date`,
+            WHERE d.date BETWEEN ? AND ? GROUP BY d.date`
         )
         .all(from, to) as {date: string; kcal: number; entries: number}[]) {
         food.set(r.date, r);
@@ -245,18 +255,31 @@ export function habitsMonth(db: Database.Database, month: string): HabitsMonth {
       auto[h.id] = inner;
     }
   }
+  return {categories, habits, matchers, triggers, overrides, auto};
+}
+
+/** override ?? auto — the phone's `effectiveDone`. */
+export function habitDone(s: Pick<HabitStates, 'overrides' | 'auto'>, habitId: number, date: string): boolean {
+  return s.overrides[habitId]?.[date] ?? s.auto[habitId]?.[date]?.done ?? false;
+}
+
+export function habitsMonth(db: Database.Database, month: string): HabitsMonth {
+  const today = localToday();
+  const [mFrom, mTo] = monthBounds(month);
+  const back = shiftDate(today, -STREAK_WINDOW_DAYS);
+  const states = habitStates(db, mFrom < back ? mFrom : back, mTo > today ? mTo : today);
 
   const streaks: Record<number, number> = {};
-  for (const c of categories) {
-    const ids = habits.filter(h => h.category_id === c.id && !h.archived).map(h => h.id);
+  for (const c of states.categories) {
+    const ids = states.habits.filter(h => h.category_id === c.id && !h.archived).map(h => h.id);
     const byDate = new Map<string, boolean>();
     for (let i = 0; i <= STREAK_WINDOW_DAYS; i++) {
       const d = shiftDate(today, -i);
-      if (ids.some(id => overrides[id]?.[d] ?? auto[id]?.[d]?.done ?? false)) byDate.set(d, true);
+      if (ids.some(id => habitDone(states, id, d))) byDate.set(d, true);
     }
     streaks[c.id] = categoryStreak(byDate, today);
   }
-  return {month, categories, habits, matchers, triggers, overrides, auto, streaks, today};
+  return {month, ...states, streaks, today};
 }
 
 // ---- nags ----
@@ -269,15 +292,13 @@ export interface NagList {
 
 export function listNags(db: Database.Database): NagList {
   if (!hasTable(db, 'nags')) return {nags: [], done: {}};
-  const nags = (db.prepare('SELECT * FROM nags ORDER BY active DESC, title COLLATE NOCASE').all() as Row[]).map(
-    r => ({
-      ...(r as unknown as Nag),
-      schedule: JSON.parse(r.schedule as string),
-      plan: JSON.parse(r.plan as string),
-      countdown: Boolean(r.countdown),
-      active: Boolean(r.active),
-    }),
-  );
+  const nags = (db.prepare('SELECT * FROM nags ORDER BY active DESC, title COLLATE NOCASE').all() as Row[]).map(r => ({
+    ...(r as unknown as Nag),
+    schedule: JSON.parse(r.schedule as string),
+    plan: JSON.parse(r.plan as string),
+    countdown: Boolean(r.countdown),
+    active: Boolean(r.active),
+  }));
   const done: Record<string, string> = {};
   for (const r of db.prepare('SELECT nag_id, due_at, done_at FROM nag_done').all() as {
     nag_id: number;
@@ -304,7 +325,7 @@ export function listPlaces(db: Database.Database): PlaceList {
     ? (db
         .prepare(
           `SELECT p.*, ${stops ? '(SELECT COUNT(*) FROM day_route_stops s WHERE s.named_place_id = p.id)' : '0'} AS uses
-             FROM named_places p ORDER BY p.name COLLATE NOCASE`,
+             FROM named_places p ORDER BY p.name COLLATE NOCASE`
         )
         .all() as (NamedPlace & {uses: number})[])
     : [];
@@ -312,7 +333,7 @@ export function listPlaces(db: Database.Database): PlaceList {
     ? (db
         .prepare(
           `SELECT l.*, ${stops ? '(SELECT COUNT(*) FROM day_route_stops s WHERE s.saved_location_id = l.id)' : '0'} AS uses
-             FROM locations l ORDER BY l.created_at`,
+             FROM locations l ORDER BY l.created_at`
         )
         .all() as (SavedLocation & {uses: number})[])
     : [];
@@ -359,7 +380,7 @@ export function gallery(db: Database.Database, month: string): GalleryItem[] {
          JOIN entries e ON e.id = em.entry_id
          JOIN days d ON d.id = e.day_id
         WHERE em.media_type IN ('photo', 'video') AND d.date BETWEEN ? AND ?
-        ORDER BY d.date DESC, e.created_at DESC, em.position`,
+        ORDER BY d.date DESC, e.created_at DESC, em.position`
     )
     .all(from, to) as GalleryItem[];
 }
@@ -386,11 +407,17 @@ export function search(db: Database.Database, query: string, limit = 60): Search
          LEFT JOIN tags t ON t.id = et.tag_id
         WHERE e.title LIKE ? OR e.body LIKE ? OR p.name LIKE ? OR t.name LIKE ?
         ORDER BY d.date DESC, e.created_at DESC
-        LIMIT ?`,
+        LIMIT ?`
     )
     .all(like, like, like, like, limit) as {id: number; date: string}[];
   if (rows.length === 0) return [];
-  const byId = new Map(loadEntries(db, `e.id IN (${rows.map(() => '?').join(',')})`, rows.map(r => r.id)).map(e => [e.id, e]));
+  const byId = new Map(
+    loadEntries(
+      db,
+      `e.id IN (${rows.map(() => '?').join(',')})`,
+      rows.map(r => r.id)
+    ).map(e => [e.id, e])
+  );
   return rows.flatMap(r => {
     const entry = byId.get(r.id);
     return entry ? [{entry, date: r.date}] : [];

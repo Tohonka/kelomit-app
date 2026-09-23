@@ -5,6 +5,7 @@ import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import Database from 'better-sqlite3';
 import {dayFood, dayHealth, foodSearch, gallery, habitsMonth, listNags, listPlaces, search} from '../src/main/life.ts';
+import {insights, rangeFor} from '../src/main/insights.ts';
 
 let dir: string;
 let db: Database.Database;
@@ -37,13 +38,15 @@ function seed(): Database.Database {
     CREATE TABLE named_places (id INTEGER PRIMARY KEY, name TEXT, latitude REAL, longitude REAL, radius_m REAL, created_at TEXT, updated_at TEXT);
     CREATE TABLE locations (id INTEGER PRIMARY KEY, name TEXT, kind TEXT, latitude REAL, longitude REAL, radius_m REAL, created_at TEXT, updated_at TEXT);
     CREATE TABLE day_route_stops (id INTEGER PRIMARY KEY, day_id INTEGER, start_ts TEXT, end_ts TEXT, latitude REAL, longitude REAL, saved_location_id INTEGER, named_place_id INTEGER, google_place_id TEXT, display_name TEXT, name_source TEXT, user_edited INTEGER, created_at TEXT, updated_at TEXT);
-    CREATE TABLE entry_media (entry_id INTEGER, media_type TEXT, file_path TEXT, thumbnail_path TEXT, duration_sec INTEGER, transcript TEXT, position INTEGER);
+    CREATE TABLE entry_media (id INTEGER PRIMARY KEY, entry_id INTEGER, media_type TEXT, file_path TEXT, thumbnail_path TEXT, duration_sec INTEGER, transcript TEXT, position INTEGER);
     CREATE TABLE food_products (id INTEGER PRIMARY KEY, barcode TEXT, name TEXT, brand TEXT, kcal_per_100 REAL, kcal_per_serving REAL, protein_per_100 REAL, carbs_per_100 REAL, fat_per_100 REAL, serving_g REAL, serving_label TEXT, source TEXT, source_ref TEXT, image_url TEXT, archived INTEGER DEFAULT 0, created_at TEXT, updated_at TEXT);
     CREATE TABLE food_entries (id INTEGER PRIMARY KEY, day_id INTEGER, eaten_at TEXT, name TEXT, kcal INTEGER, product_id INTEGER, quantity REAL, unit TEXT, note TEXT, file_path TEXT, thumbnail_path TEXT, latitude REAL, longitude REAL, location_label TEXT, created_at TEXT, updated_at TEXT);
     CREATE TABLE fineli_foods (id INTEGER PRIMARY KEY, name_fi TEXT, name_en TEXT, name_sv TEXT, kcal_per_100 REAL, protein_per_100 REAL, carbs_per_100 REAL, fat_per_100 REAL);
     CREATE TABLE fineli_units (food_id INTEGER, code TEXT, grams REAL);
     CREATE TABLE nags (id INTEGER PRIMARY KEY, title TEXT, note TEXT, activity_type TEXT, schedule TEXT, plan TEXT, countdown INTEGER DEFAULT 1, active INTEGER DEFAULT 1, created_at TEXT, updated_at TEXT);
     CREATE TABLE nag_done (nag_id INTEGER, due_at TEXT, done_at TEXT);
+    CREATE TABLE day_route_segments (id INTEGER PRIMARY KEY, day_id INTEGER, sequence INTEGER, start_ts TEXT, end_ts TEXT, coordinates_json TEXT, mode_spans_json TEXT, still_seconds REAL, distance_m REAL, duration_sec REAL, average_speed_mps REAL);
+    CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);
 
     INSERT INTO days (id, date) VALUES (1, '${yesterday}'), (2, '${today}');
     INSERT INTO tags (id, name) VALUES (1, 'run');
@@ -76,6 +79,12 @@ function seed(): Database.Database {
       (1, 'Water', 'personal', '{"kind":"weekly","weekdays":[1,2,3,4,5,6,7],"time":"09:00"}', '{}', 1),
       (2, 'Old', 'work', '{"kind":"once","at":"2026-01-01T07:00:00.000Z"}', '{"hoursBefore":1}', 0);
     INSERT INTO nag_done VALUES (2, '2026-01-01T07:00:00.000Z', '2026-01-01T07:05:00.000Z');
+
+    INSERT INTO day_route_segments (day_id, sequence, start_ts, end_ts, coordinates_json, mode_spans_json, still_seconds, distance_m, duration_sec, average_speed_mps) VALUES
+      (1, 0, '${yesterday}T06:00:00.000Z', '${yesterday}T06:20:00.000Z',
+       '[{"latitude":60.4500,"longitude":22.2700,"t":${Date.parse(`${yesterday}T06:00:00.000Z`)}},{"latitude":60.4590,"longitude":22.2700,"t":${Date.parse(`${yesterday}T06:20:00.000Z`)}}]',
+       '[{"mode":"foot","startTs":"${yesterday}T06:00:00.000Z","endTs":"${yesterday}T06:20:00.000Z"}]', 0, 1000, 1200, 0.83);
+    INSERT INTO settings VALUES ('body_weight_kg', '80'), ('body_height_cm', '180'), ('birth_year', '1985'), ('sex', 'male'), ('weekly_target_hours', '37.5');
   `);
   return d;
 }
@@ -169,4 +178,35 @@ test('search matches tag names too and returns full entries with their date', ()
   assert.deepEqual(hits[0].entry.tags?.map(t => t.name), ['run']);
   assert.deepEqual(search(db, 'zzz'), []);
   assert.deepEqual(search(db, '  '), []);
+});
+
+test('insights: work breakdown by tag, movement from mode spans, food/health totals, energy from the profile, habit days', () => {
+  const d = insights(db, 'last30', 'all');
+  assert.equal(d.weeklyTargetHours, 37.5);
+  assert.equal(d.work.totalSeconds, 2400);
+  assert.deepEqual(d.work.byTag.map(s => [s.label, s.seconds]), [['run', 2400]]);
+  assert.equal(d.work.byProject[0].label, 'No project');
+  assert.equal(d.movement.footSec, 1200);
+  assert.ok(d.movement.footM > 900 && d.movement.footM < 1100, `foot metres ${d.movement.footM}`);
+  assert.equal(d.movement.footSecByDay[yesterday], 1200);
+  assert.deepEqual([d.food.kcal, d.food.entries, d.food.noKcal, d.food.days], [180, 2, 1, 1]);
+  assert.equal(d.health.steps, 9000);
+  assert.equal(d.health.sleep, 400);
+  // Mifflin-St Jeor: 10·80 + 6.25·180 − 5·age + 5
+  assert.equal(d.energy.bmr, 800 + 1125 - 5 * (new Date().getFullYear() - 1985) + 5);
+  assert.ok(d.energy.usedByDay[yesterday] > d.energy.bmr!, 'a day with a walk uses more than the basal rate');
+  assert.equal(d.energy.days, Object.keys(d.energy.usedByDay).length - 1, 'today is not a finished day');
+  // Body: Run tagged yesterday (auto) + override today
+  assert.deepEqual(d.habits.map(h => [h.title, h.done]), [['Body', 2]]);
+  assert.equal(d.patterns.list.length, 0);
+  assert.ok(d.patterns.days <= 2);
+});
+
+test('insights: the personal scope hides work time, and the week range starts on Monday', () => {
+  const d = insights(db, 'week', 'personal');
+  assert.equal(d.work.totalSeconds, 0);
+  const {start, end} = rangeFor('week', '2026-09-23');
+  assert.deepEqual([start, end], ['2026-09-21', '2026-09-23']);
+  assert.deepEqual(rangeFor('last30', '2026-09-23'), {start: '2026-08-25', end: '2026-09-23'});
+  assert.deepEqual(rangeFor('month', '2026-09-23'), {start: '2026-09-01', end: '2026-09-23'});
 });

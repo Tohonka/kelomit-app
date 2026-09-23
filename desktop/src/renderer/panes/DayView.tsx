@@ -12,6 +12,7 @@ import type {FoodSelection} from './Food.tsx';
 import type {DayFood} from '../../main/life.ts';
 import {HealthCard} from './Health.tsx';
 import {useQuery} from '../hooks/useQuery.ts';
+import {attachFiles, droppedFiles, hasFiles} from '../lib/media.ts';
 
 interface Props {
   date: string;
@@ -128,10 +129,29 @@ function EntryRow({
       ? formatHours(entry.duration_sec)
       : '';
   const own = media.filter(m => m.entry_id === entry.id);
+  const [over, setOver] = useState(false);
+  // Files dropped on a saved note attach to it; a pending create has no id yet.
+  const canDrop = entry.id > 0 && !entry.pending;
   return (
     <div
-      className={`entry ${entry.activity_type}${selected ? ' selected' : ''}${sub ? ' sub' : ''}${entry.pending ? ' pending' : ''}`}
-      onClick={onSelect}>
+      className={`entry ${entry.activity_type}${selected ? ' selected' : ''}${sub ? ' sub' : ''}${entry.pending ? ' pending' : ''}${
+        over ? ' over' : ''
+      }`}
+      onClick={onSelect}
+      onDragOver={e => {
+        if (!canDrop || !hasFiles(e)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        setOver(true);
+      }}
+      onDragLeave={() => setOver(false)}
+      onDrop={e => {
+        if (!canDrop) return;
+        e.preventDefault();
+        e.stopPropagation();
+        setOver(false);
+        attachFiles({entryId: entry.id}, droppedFiles(e), `Note ${entry.title ? `“${entry.title}”` : ''}`.trim()).catch(() => {});
+      }}>
       <div className="entry-head">
         <span className="title">
           {Boolean(entry.is_todo) && <span className={`todo${entry.completed_at ? ' done' : ''}`}>{entry.completed_at ? '☑' : '☐'}</span>}
@@ -165,8 +185,24 @@ export function DayView({date, detail, day, entries, selectedEntryId, onSelectEn
   const shown = selectedFoodId != null ? 'food' : tab === 'health' && !health ? 'work' : tab;
   const foodLabel = food && food.entries.length > 0 ? `Food · ${food.kcal} kcal` : 'Food';
 
+  const [over, setOver] = useState(false);
+  // Files dropped anywhere else on the day become a new note with them attached.
+  const dropOnDay = {
+    onDragOver: (e: React.DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      setOver(true);
+    },
+    onDragLeave: () => setOver(false),
+    onDrop: (e: React.DragEvent) => {
+      e.preventDefault();
+      setOver(false);
+      attachFiles({date}, droppedFiles(e), `New note ${date}`).catch(() => {});
+    },
+  };
+
   return (
-    <div className="dayview">
+    <div className={`dayview${over ? ' over' : ''}`} {...dropOnDay}>
       <div className="day-head">
         <h1>{dayLabel(date)}</h1>
         <span className="seg">
@@ -219,6 +255,7 @@ export function DayView({date, detail, day, entries, selectedEntryId, onSelectEn
                   </button>
                 </div>
               )}
+              {groups.length === 0 && <p className="muted drop-hint">Drop photos, videos or audio here to add a note.</p>}
               {groups.map(g => (
                 <section key={g.key} className="group">
                   {g.title && <h2>{g.title === 'tasks' ? 'Tasks' : g.title}</h2>}

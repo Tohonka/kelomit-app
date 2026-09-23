@@ -9,12 +9,19 @@ export function mediaUrl(filePath: string | null | undefined): string | null {
   return name ? `kelomit-media:///${encodeURIComponent(name)}` : null;
 }
 
-/** Photos as a thumbnail grid (click → lightbox), voice with transcript, video inline. */
-export function Media({rows}: {rows: MediaRow[]}) {
+/** Photos as a thumbnail grid (click → lightbox), voice with transcript, video
+ *  inline. With `onDelete` every item gets a remove button (the inspector). */
+export function Media({rows, onDelete}: {rows: MediaRow[]; onDelete?: (m: MediaRow) => void}) {
   const [open, setOpen] = useState<string | null>(null);
   if (rows.length === 0) return null;
   const photos = rows.filter(m => m.media_type === 'photo');
   const rest = rows.filter(m => m.media_type !== 'photo');
+  const del = (m: MediaRow) =>
+    onDelete && (
+      <button className="btn small danger del" title="Remove from the note" onClick={() => onDelete(m)}>
+        ×
+      </button>
+    );
   return (
     <div className="media" onClick={e => e.stopPropagation()}>
       {photos.length > 0 && (
@@ -23,7 +30,10 @@ export function Media({rows}: {rows: MediaRow[]}) {
             const full = mediaUrl(m.file_path);
             const thumb = mediaUrl(m.thumbnail_path) ?? full;
             return thumb ? (
-              <img key={i} src={thumb} alt="" loading="lazy" onClick={() => full && setOpen(full)} />
+              <figure key={i}>
+                <img src={thumb} alt="" loading="lazy" onClick={() => full && setOpen(full)} />
+                {del(m)}
+              </figure>
             ) : null;
           })}
         </div>
@@ -36,11 +46,17 @@ export function Media({rows}: {rows: MediaRow[]}) {
             <div key={i} className="voice">
               <audio controls preload="none" src={src} />
               {m.duration_sec != null && <span className="muted">{formatHours(m.duration_sec) || `${m.duration_sec}s`}</span>}
+              {del(m)}
               {m.transcript && <p className="transcript">{m.transcript}</p>}
             </div>
           );
         }
-        return <video key={i} controls preload="metadata" src={src} />;
+        return (
+          <div key={i} className="clip">
+            <video controls preload="metadata" src={src} />
+            {del(m)}
+          </div>
+        );
       })}
       {open && (
         <div className="lightbox" onClick={() => setOpen(null)}>

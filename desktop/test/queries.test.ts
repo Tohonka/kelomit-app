@@ -44,7 +44,7 @@ function seed(): Database.Database {
       scheduled_date TEXT, completed_at TEXT, reminder_at TEXT,
       created_at TEXT, updated_at TEXT
     );
-    CREATE TABLE entry_media (entry_id INTEGER, media_type TEXT, file_path TEXT, thumbnail_path TEXT, duration_sec INTEGER, transcript TEXT, position INTEGER);
+    CREATE TABLE entry_media (id INTEGER PRIMARY KEY, entry_id INTEGER, media_type TEXT, file_path TEXT, thumbnail_path TEXT, duration_sec INTEGER, transcript TEXT, position INTEGER);
     CREATE TABLE day_route_segments (day_id INTEGER, sequence INTEGER, start_ts TEXT, end_ts TEXT, coordinates_json TEXT, distance_m REAL, duration_sec INTEGER, average_speed_mps REAL);
     CREATE TABLE day_route_stops (day_id INTEGER, start_ts TEXT, end_ts TEXT, latitude REAL, longitude REAL, display_name TEXT);
     INSERT INTO projects (id, name, type) VALUES (1, 'Hobby', 'personal');

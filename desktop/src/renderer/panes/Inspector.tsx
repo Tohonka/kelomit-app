@@ -3,6 +3,9 @@ import {ACTIVITY_LABEL, formatHours, hhmm, isoOn, nowOn} from '../lib/format.ts'
 import {checkSubnoteSpan} from '../../../../src/utils/subnoteSpan.ts';
 import type {ActivityType, Project, Tag} from '../../../../src/types/index.ts';
 import type {PendingEntry} from '../lib/pending.ts';
+import type {MediaRow} from '../../../../server/src/queries.ts';
+import {Media} from './Media.tsx';
+import {attachFiles, droppedFiles, hasFiles} from '../lib/media.ts';
 
 export type Selection = {kind: 'entry'; id: number} | {kind: 'new'; parentId: number | null} | null;
 
@@ -12,7 +15,44 @@ interface Props {
   entries: PendingEntry[];
   projects: Project[];
   tags: Tag[];
+  /** The day's attachments; the entry's own are shown under the form. */
+  media: MediaRow[];
   onSelect: (s: Selection) => void;
+}
+
+/** The note's photos / clips, plus a drop zone for more from the Mac. */
+function Attachments({entry, media}: {entry: PendingEntry; media: MediaRow[]}) {
+  const [over, setOver] = useState(false);
+  const own = media.filter(m => m.entry_id === entry.id);
+  const label = `Note ${entry.title ? `“${entry.title}”` : ''}`.trim();
+  const remove = (m: MediaRow) => {
+    if (!confirm(`Remove this ${m.media_type} from the note? The file is deleted on the phone.`)) return;
+    window.kelomit.cmd('media.delete', [entry.id, m.id], `${label}: remove ${m.media_type}`).catch(() => {});
+  };
+  return (
+    <label>
+      <span>Attachments</span>
+      <Media rows={own} onDelete={remove} />
+      <div
+        className={`dropzone${over ? ' over' : ''}`}
+        onDragOver={e => {
+          if (!hasFiles(e)) return;
+          e.preventDefault();
+          setOver(true);
+        }}
+        onDragLeave={() => setOver(false)}
+        onDrop={e => {
+          e.preventDefault();
+          setOver(false);
+          attachFiles({entryId: entry.id}, droppedFiles(e), label).catch(() => {});
+        }}>
+        Drop photos, videos or audio here, or{' '}
+        <button className="link" onClick={() => attachFiles({entryId: entry.id}, null, label).catch(() => {})}>
+          choose files…
+        </button>
+      </div>
+    </label>
+  );
 }
 
 type TimeMode = 'range' | 'duration';
@@ -73,9 +113,9 @@ function resolveTimes(f: Form, date: string): {from: string | null; to: string |
   return {from, to, durationSec};
 }
 
-export function Inspector({date, selection, entries, projects, tags, onSelect}: Props) {
+export function Inspector({date, selection, entries, projects, tags, media, onSelect}: Props) {
   const entry = selection?.kind === 'entry' ? entries.find(e => e.id === selection.id) : undefined;
-  const parentId = selection?.kind === 'new' ? selection.parentId : (entry?.parent_id ?? null);
+  const parentId = selection?.kind === 'new' ? selection.parentId : entry?.parent_id ?? null;
   const parent = parentId != null ? entries.find(e => e.id === parentId) : undefined;
   const isNew = selection?.kind === 'new';
   const [form, setForm] = useState<Form>(() => formFrom(entry, parent));
@@ -112,8 +152,14 @@ export function Inspector({date, selection, entries, projects, tags, onSelect}: 
       if ((check.moveParentFrom || check.moveParentTo) && parent.id > 0) {
         await window.kelomit.cmd(
           'entries.update',
-          [parent.id, {...(check.moveParentFrom ? {time_from: check.moveParentFrom} : {}), ...(check.moveParentTo ? {time_to: check.moveParentTo} : {})}],
-          `Move parent “${parent.title ?? ''}”`,
+          [
+            parent.id,
+            {
+              ...(check.moveParentFrom ? {time_from: check.moveParentFrom} : {}),
+              ...(check.moveParentTo ? {time_to: check.moveParentTo} : {}),
+            },
+          ],
+          `Move parent “${parent.title ?? ''}”`
         );
       }
     }
@@ -132,12 +178,34 @@ export function Inspector({date, selection, entries, projects, tags, onSelect}: 
     if (isNew) {
       await window.kelomit.cmd(
         'entries.create',
-        [date, {entry_type: 'note', ...fields, parent_id: parentId, is_todo: form.todo && !parent, scheduled_date: form.todo && !parent ? date : null}],
-        label('New'),
+        [
+          date,
+          {
+            entry_type: 'note',
+            ...fields,
+            parent_id: parentId,
+            is_todo: form.todo && !parent,
+            scheduled_date: form.todo && !parent ? date : null,
+          },
+        ],
+        label('New')
       );
       onSelect(null);
     } else if (entry!.queueId) {
-      await window.kelomit.queueUpdate(entry!.queueId, [date, {entry_type: 'note', ...fields, parent_id: entry!.parent_id, is_todo: entry!.is_todo, scheduled_date: entry!.is_todo ? date : null}], label('New'));
+      await window.kelomit.queueUpdate(
+        entry!.queueId,
+        [
+          date,
+          {
+            entry_type: 'note',
+            ...fields,
+            parent_id: entry!.parent_id,
+            is_todo: entry!.is_todo,
+            scheduled_date: entry!.is_todo ? date : null,
+          },
+        ],
+        label('New')
+      );
     } else {
       await window.kelomit.cmd('entries.update', [entry!.id, fields], label('Edit'));
     }
@@ -167,9 +235,7 @@ export function Inspector({date, selection, entries, projects, tags, onSelect}: 
 
   return (
     <div className="inspector">
-      <h2>
-        {isNew ? (parent ? `New subnote of “${parent.title ?? ''}”` : 'New note') : entry?.pending ? 'Pending note' : 'Edit note'}
-      </h2>
+      <h2>{isNew ? (parent ? `New subnote of “${parent.title ?? ''}”` : 'New note') : entry?.pending ? 'Pending note' : 'Edit note'}</h2>
       <label>
         <span>Title</span>
         <input value={form.title} onChange={e => set('title', e.target.value)} autoFocus />
@@ -207,7 +273,16 @@ export function Inspector({date, selection, entries, projects, tags, onSelect}: 
         <span>Tags</span>
         <div className="tags">
           {form.tagNames.map(t => (
-            <button key={t} className="chip" onClick={() => set('tagNames', form.tagNames.filter(x => x !== t))} title="Remove">
+            <button
+              key={t}
+              className="chip"
+              onClick={() =>
+                set(
+                  'tagNames',
+                  form.tagNames.filter(x => x !== t)
+                )
+              }
+              title="Remove">
               #{t} ×
             </button>
           ))}
@@ -262,6 +337,7 @@ export function Inspector({date, selection, entries, projects, tags, onSelect}: 
           </label>
         </div>
       )}
+      {entry && entry.id > 0 && <Attachments entry={entry} media={media} />}
       <div className="checks">
         {form.activity === 'work' && (
           <label>

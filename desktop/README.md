@@ -50,12 +50,30 @@ create is edited or discarded *in the queue* (no temporary ids). The phone appli
 commands through its own store actions and re-pushes the database, which is what
 finally updates the view. Arrival order wins on conflicts.
 
+## Media from the Mac
+
+Drop photos (jpg/png), videos (mp4) or audio (m4a/wav) on a note, on the
+inspector's drop zone, or anywhere on the day (→ a new note). The Mac copies the
+file into `media/` under a phone-style name and queues `media.add`; the phone
+downloads it over the paired link (`GET /api/media/:name`, same token), keeps the
+basename and registers the attachment — so its next push finds the file in the
+manifest and never re-uploads it. HEIC is not accepted (the phone's viewers
+expect jpg/png); export as JPEG first. The × on an attachment in the inspector
+deletes it on the phone (`media.delete`).
+
+## Insights (⌘7)
+
+The phone's Insights/Balance screen over the pushed database: work breakdowns,
+movement, habits, food, energy (factorial estimate from the body profile set on
+the phone), health and the 90-day patterns. Read-only; same pure utils as the
+phone (`energyDay`, `patterns`, `movementSummary`).
+
 ## Dev aids
 
 | Env | Effect |
 |---|---|
 | `KELOMIT_DATE=2026-09-16` | open on that day |
-| `KELOMIT_VIEW=map` | open on a view (`day`, `projects`, `leave`, `map`) |
+| `KELOMIT_VIEW=map` | open on a view (`day`, `map`, `habits`, `nags`, `gallery`, `insights`, `projects`, `leave`, `search`) |
 | `KELOMIT_SCREENSHOT=/tmp/x.png` | capture the window after load and quit |
 | `KELOMIT_REPORT_PDF=/tmp/r.pdf` | print 1–16 Sep 2026's report headlessly and quit |
 | `KELOMIT_PORT=8091` | run a dev instance beside the packaged app (which holds 8090) |

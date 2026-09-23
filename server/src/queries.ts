@@ -10,6 +10,7 @@ export interface DaySummary {
 }
 
 export interface MediaRow {
+  id: number;
   entry_id: number;
   media_type: string;
   file_path: string;
@@ -270,7 +271,7 @@ export function getSetting(db: Database.Database, key: string): string | null {
 export function getEntryMedia(db: Database.Database, dayId: number): MediaRow[] {
   return db
     .prepare(
-      `SELECT m.entry_id, m.media_type, m.file_path, m.thumbnail_path,
+      `SELECT m.id, m.entry_id, m.media_type, m.file_path, m.thumbnail_path,
               m.duration_sec, m.transcript
          FROM entry_media m
          JOIN entries e ON e.id = m.entry_id

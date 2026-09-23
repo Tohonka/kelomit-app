@@ -3,9 +3,16 @@ jest.mock('../src/db/days', () => ({
   getDayByDate: jest.fn(async (date: string) => ({id: 7, date, started_at: 'x', started_at_source: 'manual'})),
   updateDay: jest.fn(async () => {}),
 }));
-jest.mock('../src/db/entries', () => ({
+const mockEntriesDb = {
   getEntry: jest.fn(async (id: number) => (id === 404 ? null : {id, day_id: 7})),
   setEntryParent: jest.fn(async () => {}),
+  addEntryMedia: jest.fn(async (entryId: number, p: {file_path: string}) => ({id: 51, entry_id: entryId, ...p})),
+  getEntryMedia: jest.fn(async () => [{id: 51, file_path: '/mock/docs/kelomit/media/photo_1.jpg', thumbnail_path: '/mock/docs/kelomit/media/photo_1.jpg'}]),
+  deleteEntryMedia: jest.fn(async () => {}),
+};
+jest.mock('../src/db/entries', () => lazy(() => mockEntriesDb));
+jest.mock('../src/services/companion/settings', () => ({
+  getCompanionConfig: jest.fn(async () => ({url: 'http://192.168.1.10:8090', token: 'tok'})),
 }));
 jest.mock('../src/db/leaveRanges', () => ({
   createLeaveRange: jest.fn(async () => ({id: 1})),
@@ -54,7 +61,11 @@ jest.mock('../src/services/nagService', () => lazy(() => mockNagService));
 const mockSyncHabitWidgets = jest.fn(async () => true);
 jest.mock('../src/services/habitWidgets', () => ({syncHabitWidgets: () => mockSyncHabitWidgets()}));
 const mockDeleteMediaFile = jest.fn(async (_p: string) => {});
-jest.mock('../src/utils/mediaUtils', () => ({deleteMediaFile: (p: string) => mockDeleteMediaFile(p)}));
+jest.mock('../src/utils/mediaUtils', () => ({
+  deleteMediaFile: (p: string) => mockDeleteMediaFile(p),
+  ensureMediaDir: async () => {},
+  mediaPathFor: (name: string) => `/mock/docs/kelomit/media/${name}`,
+}));
 const mockHabitStore = {loaded: true, load: jest.fn(async () => {})};
 const mockRoutes = {
   setDayStopName: jest.fn(async () => {}),
@@ -92,6 +103,7 @@ jest.mock('../src/store/dayStore', () => ({useDayStore: {getState: () => mockDay
 jest.mock('../src/store/projectStore', () => ({useProjectStore: {getState: () => mockProjectStore}}));
 jest.mock('../src/store/tagStore', () => ({useTagStore: {getState: () => mockTagStore}}));
 
+import RNFS from 'react-native-fs';
 import {runCommand} from '../src/services/companion/commands';
 import {updateDay} from '../src/db/days';
 
@@ -204,5 +216,58 @@ describe('runCommand', () => {
     expect(mockLocationStore.setRadius).toHaveBeenCalledWith(3, 80);
     await runCommand({id: 'l2', fn: 'places.rename', args: [4, 'Työ']});
     expect(mockRoutes.renameNamedPlace).toHaveBeenCalledWith(4, 'Työ');
+  });
+
+  describe('media from the Mac', () => {
+    it('pulls the staged file over the paired link, keeps its basename and attaches it', async () => {
+      (RNFS.exists as jest.Mock).mockResolvedValueOnce(false);
+      const ack = await runCommand({id: 'm1', fn: 'media.add', args: [{entryId: 12}, {name: 'photo_1_ab.jpg', media_type: 'photo', duration_sec: null}]});
+      expect(ack).toMatchObject({ok: true, result: {entry_id: 12, media_id: 51}});
+      expect(RNFS.downloadFile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fromUrl: 'http://192.168.1.10:8090/api/media/photo_1_ab.jpg',
+          toFile: '/mock/docs/kelomit/media/photo_1_ab.jpg.download',
+          headers: {Authorization: 'Bearer tok'},
+        }),
+      );
+      expect(RNFS.moveFile).toHaveBeenCalledWith('/mock/docs/kelomit/media/photo_1_ab.jpg.download', '/mock/docs/kelomit/media/photo_1_ab.jpg');
+      expect(mockEntriesDb.addEntryMedia).toHaveBeenCalledWith(12, {
+        media_type: 'photo',
+        file_path: '/mock/docs/kelomit/media/photo_1_ab.jpg',
+        thumbnail_path: '/mock/docs/kelomit/media/photo_1_ab.jpg',
+        duration_sec: null,
+      });
+      expect(mockEntryStore.loadEntriesForDay).toHaveBeenCalledWith(7);
+    });
+
+    it('creates a note on the day when dropped on a date; a video has no thumbnail', async () => {
+      const ack = await runCommand({id: 'm2', fn: 'media.add', args: [{date: '2026-09-23'}, {name: 'video_2_cd.mp4', media_type: 'video', duration_sec: 12}]});
+      expect(ack).toMatchObject({ok: true, result: {entry_id: 99}});
+      expect(mockEntryStore.addEntry).toHaveBeenCalledWith({day_id: 7, entry_type: 'note'});
+      expect(mockEntriesDb.addEntryMedia).toHaveBeenCalledWith(99, expect.objectContaining({media_type: 'video', thumbnail_path: null, duration_sec: 12}));
+    });
+
+    it('refuses a name that could escape the media folder', async () => {
+      const ack = await runCommand({id: 'm3', fn: 'media.add', args: [{entryId: 12}, {name: '../kelomit.db', media_type: 'photo'}]});
+      expect(ack).toMatchObject({ok: false, error: 'bad media name'});
+      expect(RNFS.downloadFile).not.toHaveBeenCalled();
+    });
+
+    it('fails without leaving a half file when the download is refused', async () => {
+      (RNFS.exists as jest.Mock).mockResolvedValueOnce(false);
+      (RNFS.downloadFile as jest.Mock).mockReturnValueOnce({promise: Promise.resolve({statusCode: 404})});
+      const ack = await runCommand({id: 'm4', fn: 'media.add', args: [{entryId: 12}, {name: 'photo_9.jpg', media_type: 'photo'}]});
+      expect(ack).toMatchObject({ok: false, error: 'media download failed (HTTP 404)'});
+      expect(RNFS.unlink).toHaveBeenCalledWith('/mock/docs/kelomit/media/photo_9.jpg.download');
+      expect(mockEntriesDb.addEntryMedia).not.toHaveBeenCalled();
+    });
+
+    it('deletes the row and the file (thumbnail once when it is the same file)', async () => {
+      const ack = await runCommand({id: 'm5', fn: 'media.delete', args: [12, 51]});
+      expect(ack).toMatchObject({ok: true});
+      expect(mockEntriesDb.deleteEntryMedia).toHaveBeenCalledWith(51);
+      expect(mockDeleteMediaFile).toHaveBeenCalledTimes(1);
+      expect(mockDeleteMediaFile).toHaveBeenCalledWith('/mock/docs/kelomit/media/photo_1.jpg');
+    });
   });
 });

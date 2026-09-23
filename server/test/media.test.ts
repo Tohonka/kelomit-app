@@ -30,7 +30,7 @@ test('rejects traversal and separators', () => {
 });
 
 test('rejects extensions we do not sync', () => {
-  assert.ok(!isSafeMediaName('clip.mp4'));
+  assert.ok(isSafeMediaName('clip.mp4'), 'mp4 is synced to the desktop companion');
   assert.ok(!isSafeMediaName('shell.sh'));
   assert.ok(!isSafeMediaName('noextension'));
 });

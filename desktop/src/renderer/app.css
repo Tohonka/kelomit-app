@@ -1457,3 +1457,222 @@ label.check {
 .search .entry {
   max-width: 720px;
 }
+
+/* ---- media from the Mac ---- */
+
+.dropzone {
+  border: 1.5px dashed var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: var(--textMuted);
+  font-size: 12px;
+  text-align: center;
+  margin-top: 6px;
+}
+
+.dropzone.over,
+.entry.over,
+.dayview.over > .day-head {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+.dropzone .link {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--primary);
+  cursor: pointer;
+  font: inherit;
+}
+
+.drop-hint {
+  text-align: center;
+  padding: 24px 0;
+}
+
+.shots figure {
+  position: relative;
+  margin: 0;
+}
+
+.media .del {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  line-height: 1;
+  padding: 2px 7px;
+}
+
+.media .clip {
+  position: relative;
+}
+
+.media .voice .del {
+  position: static;
+}
+
+/* ---- insights ---- */
+
+.insights {
+  padding: 16px 20px 40px;
+  max-width: 760px;
+}
+
+.insights > .row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.insights section {
+  margin-top: 22px;
+}
+
+.insights h2 {
+  font-size: 15px;
+  margin: 0 0 8px;
+}
+
+.insights .eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--textMuted);
+  margin: 14px 4px 6px;
+}
+
+.insights .card + .card {
+  margin-top: 8px;
+}
+
+.insights .ring {
+  display: flex;
+  gap: 22px;
+  align-items: center;
+}
+
+.insights .ring .pct {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  border: 6px solid var(--primary);
+  flex: none;
+}
+
+.insights .ring .pct strong {
+  font-size: 18px;
+}
+
+.insights .ring .pct .muted,
+.insights .ring > div > .muted {
+  font-size: 11px;
+}
+
+.insights .ring .big {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 2px 0;
+}
+
+.insights .ring .track {
+  margin-top: 8px;
+  width: 220px;
+}
+
+.insights .track {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--bgMuted);
+  overflow: hidden;
+}
+
+.insights .fill {
+  height: 100%;
+  border-radius: 4px;
+}
+
+.insights .break + .break {
+  margin-top: 12px;
+}
+
+.insights .break .top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 5px;
+  font-size: 13px;
+}
+
+.insights .break .lbl {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.insights .stat {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+  font-size: 13px;
+}
+
+.insights .note {
+  font-size: 12px;
+  margin: 8px 0 0;
+}
+
+.insights .pattern {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.insights .bars {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 14px 16px 10px;
+}
+
+.insights .bars .col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+
+.insights .bars .track {
+  height: 100px;
+  width: 22px;
+  background: none;
+  border-radius: 0;
+  display: flex;
+  align-items: flex-end;
+  overflow: visible;
+}
+
+.insights .bars .bar {
+  width: 100%;
+  border-radius: 5px;
+}
+
+.insights .bars .lbl {
+  font-size: 11px;
+  color: var(--textMuted);
+}
+
+.insights .bars .lbl.today {
+  color: var(--primary);
+  font-weight: 700;
+}

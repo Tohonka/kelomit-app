@@ -1,6 +1,8 @@
 import {getOrCreateDay, getDayByDate, updateDay} from '../../db/days';
-import {getEntry, setEntryParent, updateEntry} from '../../db/entries';
+import RNFS from 'react-native-fs';
+import {addEntryMedia, deleteEntryMedia, getEntry, getEntryMedia, setEntryParent, updateEntry} from '../../db/entries';
 import type {CreateEntryParams} from '../../db/entries';
+import {getCompanionConfig} from './settings';
 import {createLeaveRange, updateLeaveRange, deleteLeaveRange} from '../../db/leaveRanges';
 import type {CreateLeaveRangeInput} from '../../db/leaveRanges';
 import {
@@ -30,7 +32,7 @@ import {createNag, deleteNag, getNag, updateNag} from '../../db/nags';
 import type {NagFields} from '../../db/nags';
 import {markNagDone, syncNagTriggers} from '../nagService';
 import {syncHabitWidgets} from '../habitWidgets';
-import {deleteMediaFile} from '../../utils/mediaUtils';
+import {deleteMediaFile, ensureMediaDir, mediaPathFor} from '../../utils/mediaUtils';
 import {
   createNamedPlaceForStop,
   deleteNamedPlace,
@@ -47,7 +49,7 @@ import {useHabitStore} from '../../store/habitStore';
 import {useEntryStore} from '../../store/entryStore';
 import {useProjectStore} from '../../store/projectStore';
 import {useTagStore} from '../../store/tagStore';
-import type {Day, HabitMatcher, Project} from '../../types';
+import type {Day, HabitMatcher, MediaType, Project} from '../../types';
 
 type EntryFields = Parameters<typeof updateEntry>[1];
 
@@ -140,6 +142,44 @@ async function updateDayFromDesktop(date: string, fields: DayTimeFields): Promis
   return updated;
 }
 
+/** A file the Mac staged in its own media/ folder under a phone-style name. */
+interface DesktopFile {
+  name: string;
+  media_type: MediaType;
+  duration_sec?: number | null;
+}
+
+const SAFE_MEDIA_NAME = /^[A-Za-z0-9._-]{1,200}$/;
+
+/** Pull a staged file over the paired link and keep its basename, so the
+ *  next push finds it in the desktop's manifest and never re-uploads it. */
+async function pullMediaFile(file: DesktopFile): Promise<string> {
+  if (!SAFE_MEDIA_NAME.test(file.name) || file.name.includes('..')) {
+    throw new Error('bad media name');
+  }
+  const config = await getCompanionConfig();
+  if (!config) {
+    throw new Error('companion not paired');
+  }
+  await ensureMediaDir();
+  const dest = mediaPathFor(file.name);
+  if (await RNFS.exists(dest)) {
+    return dest;
+  }
+  const tmp = `${dest}.download`;
+  const res = await RNFS.downloadFile({
+    fromUrl: `${config.url}/api/media/${encodeURIComponent(file.name)}`,
+    toFile: tmp,
+    headers: {Authorization: `Bearer ${config.token}`},
+  }).promise;
+  if (res.statusCode !== 200) {
+    await RNFS.unlink(tmp).catch(() => {});
+    throw new Error(`media download failed (HTTP ${res.statusCode})`);
+  }
+  await RNFS.moveFile(tmp, dest);
+  return dest;
+}
+
 async function requireEntry(id: number) {
   const entry = await getEntry(id);
   if (!entry) {
@@ -174,6 +214,39 @@ export const COMMANDS: Record<string, (...args: any[]) => Promise<unknown>> = {
     await useEntryStore.getState().loadEntriesForDay(entry.day_id);
   },
   'days.update': (date: string, fields: DayTimeFields) => updateDayFromDesktop(date, fields),
+  /** Attach a Mac file to a note, or to a new note on the day. Same rows the
+   *  phone's own capture flow writes (a photo is its own thumbnail). */
+  'media.add': async (target: {entryId: number} | {date: string}, file: DesktopFile) => {
+    let entry;
+    if ('entryId' in target) {
+      entry = await requireEntry(target.entryId);
+    } else {
+      const day = await getOrCreateDay(target.date);
+      entry = await useEntryStore.getState().addEntry({day_id: day.id, entry_type: 'note'});
+    }
+    const path = await pullMediaFile(file);
+    const media = await addEntryMedia(entry.id, {
+      media_type: file.media_type,
+      file_path: path,
+      thumbnail_path: file.media_type === 'photo' ? path : null,
+      duration_sec: file.duration_sec ?? null,
+    });
+    await useEntryStore.getState().loadEntriesForDay(entry.day_id);
+    return {entry_id: entry.id, media_id: media.id};
+  },
+  'media.delete': async (entryId: number, mediaId: number) => {
+    const entry = await requireEntry(entryId);
+    const media = (await getEntryMedia(entryId)).find(m => m.id === mediaId);
+    if (!media) {
+      throw new Error(`media ${mediaId} not found`);
+    }
+    await deleteEntryMedia(mediaId);
+    await deleteMediaFile(media.file_path);
+    if (media.thumbnail_path && media.thumbnail_path !== media.file_path) {
+      await deleteMediaFile(media.thumbnail_path);
+    }
+    await useEntryStore.getState().loadEntriesForDay(entry.day_id);
+  },
   'projects.create': (name: string, type: Project['type']) => useProjectStore.getState().add(name, type),
   'projects.rename': (id: number, name: string) => useProjectStore.getState().rename(id, name),
   'projects.archive': (id: number) => useProjectStore.getState().archive(id),
