@@ -1,7 +1,9 @@
 import {existsSync, mkdirSync, readdirSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 
-const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'wav', 'm4a'];
+// mp4 is accepted for the desktop companion (LAN); the phone still filters it
+// out for the remote server target.
+const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'wav', 'm4a', 'mp4'];
 const SAFE_NAME = /^[A-Za-z0-9._-]+$/;
 
 /** Hostile input gate: the filename arrives straight off the wire. */
