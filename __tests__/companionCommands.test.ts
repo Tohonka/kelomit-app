@@ -56,6 +56,16 @@ jest.mock('../src/services/habitWidgets', () => ({syncHabitWidgets: () => mockSy
 const mockDeleteMediaFile = jest.fn(async (_p: string) => {});
 jest.mock('../src/utils/mediaUtils', () => ({deleteMediaFile: (p: string) => mockDeleteMediaFile(p)}));
 const mockHabitStore = {loaded: true, load: jest.fn(async () => {})};
+const mockRoutes = {
+  setDayStopName: jest.fn(async () => {}),
+  createNamedPlaceForStop: jest.fn(async () => {}),
+  renameNamedPlace: jest.fn(async () => {}),
+  updateNamedPlaceRadius: jest.fn(async () => {}),
+  deleteNamedPlace: jest.fn(async () => {}),
+};
+jest.mock('../src/db/routeHistory', () => lazy(() => mockRoutes));
+const mockLocationStore = {rename: jest.fn(async () => {}), setRadius: jest.fn(async () => {}), remove: jest.fn(async () => {})};
+jest.mock('../src/store/locationStore', () => ({useLocationStore: {getState: () => mockLocationStore}}));
 jest.mock('../src/store/habitStore', () => ({useHabitStore: {getState: () => mockHabitStore}}));
 jest.mock('../src/db/settings', () => {
   const store: Record<string, string> = {};
@@ -178,5 +188,21 @@ describe('runCommand', () => {
     await runCommand({id: 'n2', fn: 'nags.setDone', args: [6, '2026-09-23T07:00:00.000Z', true]});
     expect(mockNagService.markNagDone).toHaveBeenCalledWith({id: 6, title: 'Water'}, '2026-09-23T07:00:00.000Z', true);
     expect(await runCommand({id: 'n3', fn: 'nags.delete', args: [404]})).toMatchObject({ok: false, error: 'nag 404 not found'});
+  });
+
+  it('stops.setName applies saved/reusable/day choices and refuses google ones', async () => {
+    await runCommand({id: 's1', fn: 'stops.setName', args: [12, {type: 'day', name: 'Kahvila'}]});
+    expect(mockRoutes.setDayStopName).toHaveBeenCalledWith(12, {type: 'day', name: 'Kahvila'});
+    const ack = await runCommand({id: 's2', fn: 'stops.setName', args: [12, {type: 'google', placeId: 'x', name: 'y'}]});
+    expect(ack).toMatchObject({ok: false, error: 'google stop names are picked on the phone'});
+    await runCommand({id: 's3', fn: 'stops.createPlace', args: [12, 'Koti']});
+    expect(mockRoutes.createNamedPlaceForStop).toHaveBeenCalledWith(12, 'Koti');
+  });
+
+  it('locations.* go through the location store so geofences re-register', async () => {
+    await runCommand({id: 'l1', fn: 'locations.setRadius', args: [3, 80]});
+    expect(mockLocationStore.setRadius).toHaveBeenCalledWith(3, 80);
+    await runCommand({id: 'l2', fn: 'places.rename', args: [4, 'Työ']});
+    expect(mockRoutes.renameNamedPlace).toHaveBeenCalledWith(4, 'Työ');
   });
 });

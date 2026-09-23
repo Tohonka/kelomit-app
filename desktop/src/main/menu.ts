@@ -14,6 +14,8 @@ export type MenuAction =
   | 'view-leave'
   | 'view-habits'
   | 'view-nags'
+  | 'view-gallery'
+  | 'view-search'
   | 'export-report';
 
 export function installMenu(getWindow: () => BrowserWindow | null): void {
@@ -54,6 +56,8 @@ export function installMenu(getWindow: () => BrowserWindow | null): void {
         {label: 'Leave', accelerator: 'CmdOrCtrl+3', click: send('view-leave')},
         {label: 'Habits', accelerator: 'CmdOrCtrl+4', click: send('view-habits')},
         {label: 'Nags', accelerator: 'CmdOrCtrl+5', click: send('view-nags')},
+        {label: 'Gallery', accelerator: 'CmdOrCtrl+6', click: send('view-gallery')},
+        {label: 'Search', accelerator: 'CmdOrCtrl+F', click: send('view-search')},
         {type: 'separator'},
         {role: 'reload'},
         {role: 'toggleDevTools'},

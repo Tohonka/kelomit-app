@@ -66,13 +66,15 @@ its `media/*` into `media/`.
 ## Menu
 
 File: New Note ⌘N · Export Work Report… ⌘E. View: Day ⌘1 · Map ⌘M · Projects &
-Tags ⌘2 · Leave ⌘3 · Habits ⌘4 · Nags ⌘5. Go: Today ⌘T · Previous/Next Day ⌘[ ⌘].
+Tags ⌘2 · Leave ⌘3 · Habits ⌘4 · Nags ⌘5 · Gallery ⌘6 · Search ⌘F. Go: Today ⌘T · Previous/Next Day ⌘[ ⌘].
 
 ## What can be edited
 
 Days, notes (+ subnotes, to-dos), projects, tags, leave, **food** (day card; product
 suggestions come from the pushed Fineli/products tables, barcode → Open Food Facts from
 the Mac), **habits** (month matrix, toggle = manual override like the phone; habit /
-category / matcher editing) and **nags** (schedule + plan editor, Done). Routes, media,
-health and hours are read-only. Alarms, widgets and Health Connect write-back keep
+category / matcher editing), **nags** (schedule + plan editor, Done), **stop names** on the
+map (nearby saved / named places suggested, "Save as place") and **places** (named places and
+saved geofence locations: rename, radius, delete). Routes, media files, the day's Health tab
+and hours are read-only; Gallery and Search open a note on its day. Alarms, widgets and Health Connect write-back keep
 running on the phone, because every write goes through its own store code.

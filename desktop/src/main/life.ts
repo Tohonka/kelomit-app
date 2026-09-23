@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3';
 import fineliJson from '../../../src/assets/fineli.json';
-import {getDaysInRange, getEntriesInRange, hasTable} from '../../../server/src/queries.ts';
+import {getDaysInRange, getEntriesInRange, hasTable, loadEntries} from '../../../server/src/queries.ts';
 import {categoryStreak, habitDayProgress} from '../../../src/utils/habitMatch.ts';
 import type {DayContext, HabitDayProgress} from '../../../src/utils/habitMatch.ts';
 import type {
@@ -12,7 +12,10 @@ import type {
   Habit,
   HabitCategory,
   HabitMatcher,
+  HealthDaily,
   Nag,
+  NamedPlace,
+  SavedLocation,
   Trigger,
 } from '../../../src/types/index.ts';
 
@@ -284,4 +287,112 @@ export function listNags(db: Database.Database): NagList {
     done[`${r.nag_id}|${r.due_at}`] = r.done_at;
   }
   return {nags, done};
+}
+
+// ---- places ----
+
+export interface PlaceList {
+  named: (NamedPlace & {uses: number})[];
+  saved: (SavedLocation & {uses: number})[];
+}
+
+/** Named (reusable) places and saved geofence locations, with how many route
+ *  stops point at each. */
+export function listPlaces(db: Database.Database): PlaceList {
+  const stops = hasTable(db, 'day_route_stops');
+  const named = hasTable(db, 'named_places')
+    ? (db
+        .prepare(
+          `SELECT p.*, ${stops ? '(SELECT COUNT(*) FROM day_route_stops s WHERE s.named_place_id = p.id)' : '0'} AS uses
+             FROM named_places p ORDER BY p.name COLLATE NOCASE`,
+        )
+        .all() as (NamedPlace & {uses: number})[])
+    : [];
+  const saved = hasTable(db, 'locations')
+    ? (db
+        .prepare(
+          `SELECT l.*, ${stops ? '(SELECT COUNT(*) FROM day_route_stops s WHERE s.saved_location_id = l.id)' : '0'} AS uses
+             FROM locations l ORDER BY l.created_at`,
+        )
+        .all() as (SavedLocation & {uses: number})[])
+    : [];
+  return {named, saved};
+}
+
+// ---- health ----
+
+export function dayHealth(db: Database.Database, date: string): HealthDaily | null {
+  if (!hasTable(db, 'health_daily')) return null;
+  const row = db.prepare('SELECT * FROM health_daily WHERE date = ?').get(date) as (Row & {exercise?: string | null}) | undefined;
+  if (!row) return null;
+  let exercise: HealthDaily['exercise'] = null;
+  if (typeof row.exercise === 'string') {
+    try {
+      exercise = JSON.parse(row.exercise);
+    } catch {
+      exercise = null;
+    }
+  }
+  return {...(row as unknown as HealthDaily), exercise};
+}
+
+// ---- gallery ----
+
+export interface GalleryItem {
+  entry_id: number;
+  media_type: string;
+  file_path: string;
+  thumbnail_path: string | null;
+  date: string;
+  created_at: string;
+  title: string | null;
+}
+
+/** Photo / video attachments of a month, newest first — the phone's gallery query, scoped. */
+export function gallery(db: Database.Database, month: string): GalleryItem[] {
+  if (!hasTable(db, 'entry_media')) return [];
+  const [from, to] = monthBounds(month);
+  return db
+    .prepare(
+      `SELECT em.entry_id, em.media_type, em.file_path, em.thumbnail_path, d.date, e.created_at, e.title
+         FROM entry_media em
+         JOIN entries e ON e.id = em.entry_id
+         JOIN days d ON d.id = e.day_id
+        WHERE em.media_type IN ('photo', 'video') AND d.date BETWEEN ? AND ?
+        ORDER BY d.date DESC, e.created_at DESC, em.position`,
+    )
+    .all(from, to) as GalleryItem[];
+}
+
+// ---- search ----
+
+export interface SearchHit {
+  entry: Entry;
+  date: string;
+}
+
+/** The phone's searchEntries: title, body, project and tag names. */
+export function search(db: Database.Database, query: string, limit = 60): SearchHit[] {
+  const q = query.trim();
+  if (!q) return [];
+  const like = `%${q}%`;
+  const rows = db
+    .prepare(
+      `SELECT DISTINCT e.id, d.date
+         FROM entries e
+         JOIN days d ON d.id = e.day_id
+         LEFT JOIN projects p ON p.id = e.project_id
+         LEFT JOIN entry_tags et ON et.entry_id = e.id
+         LEFT JOIN tags t ON t.id = et.tag_id
+        WHERE e.title LIKE ? OR e.body LIKE ? OR p.name LIKE ? OR t.name LIKE ?
+        ORDER BY d.date DESC, e.created_at DESC
+        LIMIT ?`,
+    )
+    .all(like, like, like, like, limit) as {id: number; date: string}[];
+  if (rows.length === 0) return [];
+  const byId = new Map(loadEntries(db, `e.id IN (${rows.map(() => '?').join(',')})`, rows.map(r => r.id)).map(e => [e.id, e]));
+  return rows.flatMap(r => {
+    const entry = byId.get(r.id);
+    return entry ? [{entry, date: r.date}] : [];
+  });
 }

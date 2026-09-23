@@ -12,6 +12,8 @@ import {ReportSheet} from './panes/ReportSheet.tsx';
 import {Habits} from './panes/Habits.tsx';
 import {Nags} from './panes/Nags.tsx';
 import {FoodEditor} from './panes/Food.tsx';
+import {Gallery} from './panes/Gallery.tsx';
+import {Search} from './panes/Search.tsx';
 import type {FoodSelection} from './panes/Food.tsx';
 import {addDays, clock, monthOf, todayIso} from './lib/format.ts';
 import {applyPendingDay, applyPendingEntries} from './lib/pending.ts';
@@ -26,14 +28,16 @@ declare global {
   }
 }
 
-type View = 'day' | 'projects' | 'leave' | 'map' | 'habits' | 'nags';
+type View = 'day' | 'projects' | 'leave' | 'map' | 'habits' | 'nags' | 'gallery' | 'search';
 const VIEWS: [View, string][] = [
   ['day', 'Day'],
   ['map', 'Map'],
   ['habits', 'Habits'],
   ['nags', 'Nags'],
+  ['gallery', 'Gallery'],
   ['projects', 'Projects & Tags'],
   ['leave', 'Leave'],
+  ['search', 'Search'],
 ];
 type AppSelection = Selection | FoodSelection;
 const isFood = (s: AppSelection): s is FoodSelection => s != null && (s.kind === 'food' || s.kind === 'newFood');
@@ -68,6 +72,11 @@ export function App() {
     setMonth(monthOf(d));
     setSelection(null);
   };
+  const openEntry = (d: string, id: number) => {
+    goTo(d);
+    setSelection({kind: 'entry', id});
+    setView('day');
+  };
 
   useEffect(
     () =>
@@ -85,6 +94,8 @@ export function App() {
         else if (action === 'view-map') setView('map');
         else if (action === 'view-habits') setView('habits');
         else if (action === 'view-nags') setView('nags');
+        else if (action === 'view-gallery') setView('gallery');
+        else if (action === 'view-search') setView('search');
         else if (action === 'export-report') setShowReport(true);
       }),
     [date],
@@ -182,6 +193,16 @@ export function App() {
         {view === 'nags' && (
           <section className="pane wide">
             <Nags />
+          </section>
+        )}
+        {view === 'gallery' && (
+          <section className="pane wide">
+            <Gallery month={month} onMonth={setMonth} onOpen={openEntry} />
+          </section>
+        )}
+        {view === 'search' && (
+          <section className="pane wide">
+            <Search onOpen={openEntry} />
           </section>
         )}
         {view === 'map' && (

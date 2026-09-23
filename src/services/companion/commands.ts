@@ -31,6 +31,15 @@ import type {NagFields} from '../../db/nags';
 import {markNagDone, syncNagTriggers} from '../nagService';
 import {syncHabitWidgets} from '../habitWidgets';
 import {deleteMediaFile} from '../../utils/mediaUtils';
+import {
+  createNamedPlaceForStop,
+  deleteNamedPlace,
+  renameNamedPlace,
+  setDayStopName,
+  updateNamedPlaceRadius,
+} from '../../db/routeHistory';
+import type {StopNameChoice} from '../../db/routeHistory';
+import {useLocationStore} from '../../store/locationStore';
 import {getSetting, setSetting} from '../../db/settings';
 import {getOrCreateTag} from '../../db/tags';
 import {useDayStore} from '../../store/dayStore';
@@ -257,6 +266,21 @@ export const COMMANDS: Record<string, (...args: any[]) => Promise<unknown>> = {
   'nags.setDone': async (id: number, dueAt: string, done = true) => {
     await markNagDone(await requireNag(id), dueAt, done);
   },
+  // Same functions MapTab / PlacesSettings / LocationSettings call. Google
+  // choices need the phone's Places lookup, so only saved / reusable / day.
+  'stops.setName': async (stopId: number, choice: StopNameChoice) => {
+    if (choice.type === 'google') {
+      throw new Error('google stop names are picked on the phone');
+    }
+    await setDayStopName(stopId, choice);
+  },
+  'stops.createPlace': (stopId: number, name: string) => createNamedPlaceForStop(stopId, name),
+  'places.rename': (id: number, name: string) => renameNamedPlace(id, name),
+  'places.setRadius': (id: number, radiusM: number) => updateNamedPlaceRadius(id, radiusM),
+  'places.delete': (id: number) => deleteNamedPlace(id),
+  'locations.rename': (id: number, name: string) => useLocationStore.getState().rename(id, name),
+  'locations.setRadius': (id: number, radiusM: number) => useLocationStore.getState().setRadius(id, radiusM),
+  'locations.delete': (id: number) => useLocationStore.getState().remove(id),
 };
 
 const LAST_CMD_KEY = 'companion_last_cmd';

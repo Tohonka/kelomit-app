@@ -786,7 +786,82 @@ textarea.day-notes {
 .mapview {
   display: grid;
   grid-template-rows: auto 1fr;
+  grid-template-columns: 1fr 340px;
   height: 100%;
+}
+
+.map-side {
+  grid-row: 1 / 3;
+  grid-column: 2;
+  border-left: 1px solid var(--border);
+  overflow: auto;
+  padding: 10px 12px 30px;
+  user-select: text;
+}
+
+.map-side .seg {
+  margin-bottom: 10px;
+}
+
+.stop {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  background: var(--bgCard);
+}
+
+.stop.active {
+  border-color: var(--primary);
+}
+
+.stop-head {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  color: var(--textSecondary);
+  margin-bottom: 4px;
+}
+
+.stop .row {
+  display: flex;
+  gap: 6px;
+}
+
+.stop .row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.places h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--textMuted);
+  margin: 12px 0 4px;
+}
+
+.places table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.places td {
+  padding: 4px 3px;
+  border-top: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.places td input:not([type]) {
+  width: 100%;
+}
+
+.places td input[type='number'] {
+  width: 62px;
+}
+
+.places td.actions {
+  text-align: right;
 }
 
 .map-summary {
@@ -1272,4 +1347,113 @@ label.check {
 
 .food-card {
   margin-top: 0;
+}
+
+/* ---- health ------------------------------------------------------------ */
+
+.health-card dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 20px;
+}
+
+.health-card dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.health-card dt {
+  color: var(--textMuted);
+}
+
+.health-card dd {
+  margin: 0;
+}
+
+.health-card p {
+  margin: 10px 0 0;
+  font-size: 12px;
+}
+
+/* ---- gallery / search -------------------------------------------------- */
+
+.gallery,
+.search {
+  padding: 16px 20px 40px;
+  user-select: text;
+}
+
+.gallery .month-nav {
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.gallery h2 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--textMuted);
+  margin: 16px 0 6px;
+}
+
+.gallery .shots {
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+
+.gallery figure {
+  position: relative;
+  margin: 0;
+}
+
+.gallery figure img,
+.gallery .video-tile {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  object-fit: cover;
+  cursor: default;
+}
+
+.gallery .video-tile {
+  display: grid;
+  place-items: center;
+  background: var(--bgMuted);
+  font-size: 28px;
+  color: var(--textSecondary);
+}
+
+.gallery .badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  border-radius: 999px;
+  padding: 0 6px;
+  font-size: 11px;
+}
+
+.gallery figcaption {
+  font-size: 11px;
+  color: var(--textSecondary);
+  margin-top: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.search > input {
+  width: 100%;
+  max-width: 720px;
+  font-size: 15px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+}
+
+.search .entry {
+  max-width: 720px;
 }

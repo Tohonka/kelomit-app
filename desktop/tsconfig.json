@@ -28,6 +28,8 @@
     "../src/utils/foodMath.ts",
     "../src/utils/nagSchedule.ts",
     "../src/utils/habitMonth.ts",
-    "../src/services/openFoodFacts.ts"
+    "../src/services/openFoodFacts.ts",
+    "../src/services/locationUtils.ts",
+    "../src/utils/geofence.ts"
   ]
 }

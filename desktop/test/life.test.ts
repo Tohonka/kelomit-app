@@ -4,7 +4,7 @@ import {mkdtempSync, rmSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import Database from 'better-sqlite3';
-import {dayFood, foodSearch, habitsMonth, listNags} from '../src/main/life.ts';
+import {dayFood, dayHealth, foodSearch, gallery, habitsMonth, listNags, listPlaces, search} from '../src/main/life.ts';
 
 let dir: string;
 let db: Database.Database;
@@ -33,7 +33,11 @@ function seed(): Database.Database {
     CREATE TABLE habits (id INTEGER PRIMARY KEY, category_id INTEGER, title TEXT, description TEXT, icon TEXT, color TEXT, goal_kind TEXT, goal_value INTEGER, archived INTEGER DEFAULT 0, created_at TEXT, updated_at TEXT);
     CREATE TABLE habit_matchers (habit_id INTEGER, kind TEXT, ref_id INTEGER DEFAULT 0, threshold REAL);
     CREATE TABLE habit_day_overrides (habit_id INTEGER, date TEXT, done INTEGER, created_at TEXT);
-    CREATE TABLE health_daily (date TEXT PRIMARY KEY, steps INTEGER, sleep_minutes INTEGER);
+    CREATE TABLE health_daily (date TEXT PRIMARY KEY, steps INTEGER, distance_m REAL, sleep_minutes INTEGER, sleep_start TEXT, sleep_end TEXT, weight_kg REAL, height_cm REAL, active_kcal REAL, total_kcal REAL, resting_hr INTEGER, exercise TEXT, synced_at TEXT, created_at TEXT, updated_at TEXT);
+    CREATE TABLE named_places (id INTEGER PRIMARY KEY, name TEXT, latitude REAL, longitude REAL, radius_m REAL, created_at TEXT, updated_at TEXT);
+    CREATE TABLE locations (id INTEGER PRIMARY KEY, name TEXT, kind TEXT, latitude REAL, longitude REAL, radius_m REAL, created_at TEXT, updated_at TEXT);
+    CREATE TABLE day_route_stops (id INTEGER PRIMARY KEY, day_id INTEGER, start_ts TEXT, end_ts TEXT, latitude REAL, longitude REAL, saved_location_id INTEGER, named_place_id INTEGER, google_place_id TEXT, display_name TEXT, name_source TEXT, user_edited INTEGER, created_at TEXT, updated_at TEXT);
+    CREATE TABLE entry_media (entry_id INTEGER, media_type TEXT, file_path TEXT, thumbnail_path TEXT, duration_sec INTEGER, transcript TEXT, position INTEGER);
     CREATE TABLE food_products (id INTEGER PRIMARY KEY, barcode TEXT, name TEXT, brand TEXT, kcal_per_100 REAL, kcal_per_serving REAL, protein_per_100 REAL, carbs_per_100 REAL, fat_per_100 REAL, serving_g REAL, serving_label TEXT, source TEXT, source_ref TEXT, image_url TEXT, archived INTEGER DEFAULT 0, created_at TEXT, updated_at TEXT);
     CREATE TABLE food_entries (id INTEGER PRIMARY KEY, day_id INTEGER, eaten_at TEXT, name TEXT, kcal INTEGER, product_id INTEGER, quantity REAL, unit TEXT, note TEXT, file_path TEXT, thumbnail_path TEXT, latitude REAL, longitude REAL, location_label TEXT, created_at TEXT, updated_at TEXT);
     CREATE TABLE fineli_foods (id INTEGER PRIMARY KEY, name_fi TEXT, name_en TEXT, name_sv TEXT, kcal_per_100 REAL, protein_per_100 REAL, carbs_per_100 REAL, fat_per_100 REAL);
@@ -52,7 +56,11 @@ function seed(): Database.Database {
       (2, 1, 'Steps', 'walk', NULL, NULL),
       (3, 1, 'No matchers', 'x', NULL, NULL);
     INSERT INTO habit_matchers VALUES (1, 'tag', 1, NULL), (2, 'steps', 0, 8000);
-    INSERT INTO health_daily VALUES ('${today}', 9000, 400);
+    INSERT INTO health_daily (date, steps, sleep_minutes, exercise, synced_at) VALUES ('${today}', 9000, 400, '[{"type":8,"minutes":32}]', 'x');
+    INSERT INTO named_places (id, name, latitude, longitude, radius_m) VALUES (1, 'Koti', 60.45, 22.27, 150);
+    INSERT INTO locations (id, name, kind, latitude, longitude, radius_m) VALUES (1, 'Työ', 'work', 60.46, 22.28, 100);
+    INSERT INTO day_route_stops (day_id, start_ts, end_ts, latitude, longitude, named_place_id, display_name, name_source, user_edited) VALUES (1, 'a', 'b', 60.45, 22.27, 1, 'Koti', 'reusable', 0), (2, 'a', 'b', 60.45, 22.27, 1, 'Koti', 'reusable', 0);
+    INSERT INTO entry_media (entry_id, media_type, file_path, thumbnail_path, position) VALUES (1, 'photo', '/m/a.jpg', '/m/a_t.jpg', 0), (1, 'voice', '/m/v.m4a', NULL, 1);
     INSERT INTO habit_day_overrides (habit_id, date, done) VALUES (1, '${today}', 1);
 
     INSERT INTO food_products (id, barcode, name, brand, kcal_per_100, source, source_ref) VALUES
@@ -128,4 +136,37 @@ test('life reads on a database that predates the tables are empty, not errors', 
   assert.deepEqual(dayFood(old, today).entries, []);
   assert.deepEqual(habitsMonth(old, '2026-09').habits, []);
   assert.deepEqual(listNags(old).nags, []);
+});
+
+test('listPlaces counts the stops pointing at each place', () => {
+  const p = listPlaces(db);
+  assert.equal(p.named[0].name, 'Koti');
+  assert.equal(p.named[0].uses, 2);
+  assert.equal(p.saved[0].kind, 'work');
+  assert.equal(p.saved[0].uses, 0);
+});
+
+test('dayHealth parses the exercise JSON and is null on a day without a row', () => {
+  const h = dayHealth(db, today);
+  assert.equal(h?.steps, 9000);
+  assert.deepEqual(h?.exercise, [{type: 8, minutes: 32}]);
+  assert.equal(dayHealth(db, '2020-01-01'), null);
+});
+
+test('gallery lists only photos/videos of the month with their entry title and date', () => {
+  const g = gallery(db, yesterday.slice(0, 7));
+  assert.equal(g.length, 1);
+  assert.equal(g[0].media_type, 'photo');
+  assert.equal(g[0].title, 'Morning run');
+  assert.equal(g[0].date, yesterday);
+  assert.deepEqual(gallery(db, '2020-01'), []);
+});
+
+test('search matches tag names too and returns full entries with their date', () => {
+  const hits = search(db, 'run');
+  assert.equal(hits.length, 1);
+  assert.equal(hits[0].date, yesterday);
+  assert.deepEqual(hits[0].entry.tags?.map(t => t.name), ['run']);
+  assert.deepEqual(search(db, 'zzz'), []);
+  assert.deepEqual(search(db, '  '), []);
 });

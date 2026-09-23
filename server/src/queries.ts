@@ -167,7 +167,7 @@ function tagsByEntry(
 /** Entries with their project and tags attached, exactly as the app builds them
  *  — `hoursUtils` reclassifies by `project.type`, so bare rows give wrong hours.
  *  `scope` is a fixed WHERE fragment chosen by the caller; values are bound. */
-function loadEntries(
+export function loadEntries(
   db: Database.Database,
   scope: string,
   params: unknown[],

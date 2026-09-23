@@ -11,8 +11,8 @@ import {
 } from '../../../server/src/queries.ts';
 import type {MediaRow, RouteSegmentRow, RouteStopRow} from '../../../server/src/queries.ts';
 import {calcDayWorkSecs} from '../../../src/utils/hoursUtils.ts';
-import {dayFood, foodProduct, foodSearch, habitsMonth, listNags} from './life.ts';
-import type {Day, Entry, LeaveRange, ModeSpan, Project, RouteCoordinate, Tag} from '../../../src/types/index.ts';
+import {dayFood, dayHealth, foodProduct, foodSearch, gallery, habitsMonth, listNags, listPlaces, search} from './life.ts';
+import type {Day, DayRouteStop, Entry, LeaveRange, ModeSpan, Project, RouteCoordinate, Tag} from '../../../src/types/index.ts';
 
 /**
  * Read model for the renderer. Everything here is a synchronous read of the
@@ -137,7 +137,8 @@ export interface RouteTrip {
 
 export interface DayRoute {
   trips: RouteTrip[];
-  stops: RouteStopRow[];
+  /** Full rows: the Mac renames stops, so it needs ids and name sources. */
+  stops: DayRouteStop[];
 }
 
 /** The day's derived route (segments + stops), coordinates parsed. */
@@ -178,7 +179,10 @@ export function dayRoute(db: Database.Database, date: string): DayRoute {
       distance_m: r.distance_m,
       duration_sec: r.duration_sec,
     })),
-    stops: getRouteStops(db, day.id),
+    stops: (db.prepare('SELECT * FROM day_route_stops WHERE day_id = ? ORDER BY start_ts').all(day.id) as DayRouteStop[]).map(s => ({
+      ...s,
+      user_edited: Boolean(s.user_edited),
+    })),
   };
 }
 
@@ -205,6 +209,10 @@ export const QUERIES = {
   foodProduct,
   habitsMonth,
   listNags,
+  listPlaces,
+  dayHealth,
+  gallery,
+  search,
 } as const;
 
 export type QueryName = keyof typeof QUERIES;
