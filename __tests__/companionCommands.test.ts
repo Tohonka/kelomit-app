@@ -12,6 +12,9 @@ jest.mock('../src/db/leaveRanges', () => ({
   updateLeaveRange: jest.fn(async () => ({id: 1})),
   deleteLeaveRange: jest.fn(async () => {}),
 }));
+jest.mock('../src/db/tags', () => ({
+  getOrCreateTag: jest.fn(async (name: string) => ({id: name.length, name})),
+}));
 jest.mock('../src/db/settings', () => {
   const store: Record<string, string> = {};
   return {
@@ -54,6 +57,11 @@ describe('runCommand', () => {
     const ack = await runCommand({id: 'b', fn: 'entries.create', args: ['2026-09-23', {entry_type: 'note', title: 'x'}]});
     expect(ack).toMatchObject({ok: true, result: {id: 99, day_id: 7}});
     expect(mockEntryStore.addEntry).toHaveBeenCalledWith({entry_type: 'note', title: 'x', day_id: 7});
+  });
+
+  it('resolves tagNames to ids on the phone before creating', async () => {
+    await runCommand({id: 'b2', fn: 'entries.create', args: ['2026-09-23', {entry_type: 'note', tagNames: ['ab', 'cde']}]});
+    expect(mockEntryStore.addEntry).toHaveBeenCalledWith({entry_type: 'note', tagIds: [2, 3], day_id: 7});
   });
 
   it('edits through the store with the entry’s own day id', async () => {

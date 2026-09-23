@@ -67,3 +67,27 @@ export const LEAVE_LABEL: Record<string, string> = {
   vacation: 'Vacation',
   sick: 'Sick',
 };
+
+/** `HH:MM` (local) of a stored instant, for `<input type="time">`. */
+export function hhmm(ts: string | null | undefined): string {
+  if (!ts) return '';
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return '';
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+/** Local `date` + `HH:MM` → ISO instant (UTC, as the phone stores it). */
+export function isoOn(date: string, time: string): string | null {
+  const m = /^(\d{2}):(\d{2})$/.exec(time);
+  if (!m) return null;
+  const [y, mo, d] = date.split('-').map(Number);
+  return new Date(y, mo - 1, d, Number(m[1]), Number(m[2])).toISOString();
+}
+
+/** "Now" on the given day — the phone's default start for a duration note. */
+export function nowOn(date: string): string {
+  const now = new Date();
+  const [y, mo, d] = date.split('-').map(Number);
+  return new Date(y, mo - 1, d, now.getHours(), now.getMinutes()).toISOString();
+}

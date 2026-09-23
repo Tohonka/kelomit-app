@@ -1,53 +1,71 @@
 import {useMemo} from 'react';
-import {useQuery} from '../hooks/useQuery.ts';
-import {ACTIVITY_LABEL, LEAVE_LABEL, clock, dayLabel, formatHours} from '../lib/format.ts';
+import {ACTIVITY_LABEL, LEAVE_LABEL, clock, dayLabel, formatHours, hhmm, isoOn} from '../lib/format.ts';
 import {
   calcDayWorkBreakdown,
   calcHourBreakdown,
   segmentWorkSecs,
 } from '../../../../src/utils/hoursUtils.ts';
 import {groupEntries} from '../../../../src/utils/entrySort.ts';
-import type {Day, Entry} from '../../../../src/types/index.ts';
+import type {Day} from '../../../../src/types/index.ts';
+import type {DayDetail} from '../../main/queries.ts';
 import type {MediaRow} from '../../../../server/src/queries.ts';
+import type {PendingEntry} from '../lib/pending.ts';
 
 interface Props {
   date: string;
+  /** undefined = loading, null = nothing pushed yet */
+  detail: DayDetail | null | undefined;
+  day: (Day & {pending?: boolean}) | null;
+  entries: PendingEntry[];
   selectedEntryId: number | null;
   onSelectEntry: (id: number | null) => void;
 }
 
-function Leg({start, end}: {start: string | null; end: string | null}) {
-  if (!start && !end) return null;
-  const secs = segmentWorkSecs(start, end);
+type LegKey = 'started_at' | 'ended_at' | 'started_at_2' | 'ended_at_2';
+
+function TimeField({date, value, onChange}: {date: string; value: string | null; onChange: (iso: string | null) => void}) {
+  return (
+    <span className="timefield">
+      <input type="time" value={hhmm(value)} onChange={e => onChange(e.target.value ? isoOn(date, e.target.value) : null)} />
+      {value && (
+        <button className="clear" title="Clear" onClick={() => onChange(null)}>
+          ×
+        </button>
+      )}
+    </span>
+  );
+}
+
+function Leg({date, day, start, end, onChange}: {date: string; day: Day; start: LegKey; end: LegKey; onChange: (f: Partial<Day>) => void}) {
+  const s = day[start];
+  const e = day[end];
+  const secs = segmentWorkSecs(s, e);
   return (
     <div className="leg">
-      <span className="num">
-        {clock(start) || '?'} → {clock(end) || '?'}
-      </span>
+      <TimeField date={date} value={s} onChange={v => onChange({[start]: v})} />
+      <span className="arrow">→</span>
+      <TimeField date={date} value={e} onChange={v => onChange({[end]: v})} />
       <span className="hours">{secs > 0 ? formatHours(secs) : '—'}</span>
     </div>
   );
 }
 
-function DayCard({day, entries}: {day: Day; entries: Entry[]}) {
+function DayCard({date, day, entries}: {date: string; day: Day & {pending?: boolean}; entries: PendingEntry[]}) {
   const work = calcDayWorkBreakdown(day, entries);
   const split = calcHourBreakdown(entries);
   const adjustments = [
     ...(work.addedWorkSeconds > 0 ? [`+${formatHours(work.addedWorkSeconds)} after hours`] : []),
     ...(work.deductedPersonalSeconds > 0 ? [`−${formatHours(work.deductedPersonalSeconds)} personal`] : []),
   ];
-  const hasLegs = day.started_at || day.ended_at || day.started_at_2 || day.ended_at_2;
   const pct = (n: number) => (split.totalTrackedSeconds ? (n / split.totalTrackedSeconds) * 100 : 0);
+  const update = (fields: Partial<Day>) => {
+    window.kelomit.cmd('days.update', [date, fields], `Day ${date}`).catch(() => {});
+  };
+  const showLeg2 = Boolean(day.started_at_2 || day.ended_at_2 || (day.started_at && day.ended_at));
   return (
-    <div className="card day-card">
-      {hasLegs ? (
-        <>
-          <Leg start={day.started_at} end={day.ended_at} />
-          <Leg start={day.started_at_2} end={day.ended_at_2} />
-        </>
-      ) : (
-        <p className="muted">Start &amp; end not set.</p>
-      )}
+    <div className={`card day-card${day.pending ? ' pending' : ''}`}>
+      <Leg date={date} day={day} start="started_at" end="ended_at" onChange={update} />
+      {showLeg2 && <Leg date={date} day={day} start="started_at_2" end="ended_at_2" onChange={update} />}
       {(work.hasDayLegs ? adjustments.length > 0 : work.workSeconds > 0) && (
         <div className="worked">
           <span>Worked</span>
@@ -77,7 +95,16 @@ function DayCard({day, entries}: {day: Day; entries: Entry[]}) {
           </div>
         </div>
       )}
-      {day.notes && <p className="day-notes">{day.notes}</p>}
+      <textarea
+        className="day-notes"
+        placeholder="Day notes"
+        defaultValue={day.notes ?? ''}
+        key={day.notes ?? ''}
+        onBlur={e => {
+          const notes = e.target.value.trim() || null;
+          if (notes !== (day.notes ?? null)) update({notes});
+        }}
+      />
     </div>
   );
 }
@@ -89,7 +116,7 @@ function EntryRow({
   onSelect,
   sub,
 }: {
-  entry: Entry;
+  entry: PendingEntry;
   media: MediaRow[];
   selected: boolean;
   onSelect: () => void;
@@ -104,13 +131,14 @@ function EntryRow({
   const own = media.filter(m => m.entry_id === entry.id);
   return (
     <div
-      className={`entry ${entry.activity_type}${selected ? ' selected' : ''}${sub ? ' sub' : ''}`}
+      className={`entry ${entry.activity_type}${selected ? ' selected' : ''}${sub ? ' sub' : ''}${entry.pending ? ' pending' : ''}`}
       onClick={onSelect}>
       <div className="entry-head">
         <span className="title">
-          {Boolean(entry.is_todo) && <span className={`todo${entry.completed_at ? ' done' : ''}`}>☐</span>}
+          {Boolean(entry.is_todo) && <span className={`todo${entry.completed_at ? ' done' : ''}`}>{entry.completed_at ? '☑' : '☐'}</span>}
           {entry.title || entry.entry_type}
         </span>
+        {entry.pending && <span className="chip pending-chip">pending</span>}
         <span className="time num">{time}</span>
       </div>
       {entry.body && <p className="body">{entry.body}</p>}
@@ -133,20 +161,19 @@ function EntryRow({
   );
 }
 
-export function DayView({date, selectedEntryId, onSelectEntry}: Props) {
-  const detail = useQuery('dayDetail', date);
-  const groups = useMemo(() => groupEntries(detail?.entries ?? [], 'time_asc'), [detail]);
+export function DayView({date, detail, day, entries, selectedEntryId, onSelectEntry}: Props) {
+  const groups = useMemo(() => groupEntries(entries, 'time_asc'), [entries]);
 
   return (
     <div className="dayview">
       <h1>{dayLabel(date)}</h1>
       {detail === undefined ? (
         <p className="muted">…</p>
-      ) : detail === null ? (
+      ) : detail === null && !day ? (
         <p className="muted">No data yet — pair the phone and it will push its database here.</p>
       ) : (
         <>
-          {detail.leaves.length > 0 && (
+          {detail && detail.leaves.length > 0 && (
             <div className="chips">
               {detail.leaves.map(l => (
                 <span key={l.id} className="chip">
@@ -155,10 +182,17 @@ export function DayView({date, selectedEntryId, onSelectEntry}: Props) {
               ))}
             </div>
           )}
-          {detail.day && detail.day.id >= 0 ? (
-            <DayCard day={detail.day} entries={detail.entries} />
+          {day && day.id !== -1 ? (
+            <DayCard date={date} day={day} entries={entries} />
           ) : (
-            !detail.leaves.length && <p className="muted">Nothing recorded on this day.</p>
+            <div className="card day-card">
+              <p className="muted">Nothing recorded on this day.</p>
+              <button
+                className="btn"
+                onClick={() => window.kelomit.cmd('days.update', [date, {}], `Day ${date}`).catch(() => {})}>
+                Start this day
+              </button>
+            </div>
           )}
           {groups.map(g => (
             <section key={g.key} className="group">
@@ -167,7 +201,7 @@ export function DayView({date, selectedEntryId, onSelectEntry}: Props) {
                 <div key={entry.id}>
                   <EntryRow
                     entry={entry}
-                    media={detail.media}
+                    media={detail?.media ?? []}
                     selected={entry.id === selectedEntryId}
                     onSelect={() => onSelectEntry(entry.id)}
                   />
@@ -175,7 +209,7 @@ export function DayView({date, selectedEntryId, onSelectEntry}: Props) {
                     <EntryRow
                       key={s.id}
                       entry={s}
-                      media={detail.media}
+                      media={detail?.media ?? []}
                       selected={s.id === selectedEntryId}
                       onSelect={() => onSelectEntry(s.id)}
                       sub

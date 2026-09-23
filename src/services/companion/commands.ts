@@ -4,6 +4,7 @@ import type {CreateEntryParams} from '../../db/entries';
 import {createLeaveRange, updateLeaveRange, deleteLeaveRange} from '../../db/leaveRanges';
 import type {CreateLeaveRangeInput} from '../../db/leaveRanges';
 import {getSetting, setSetting} from '../../db/settings';
+import {getOrCreateTag} from '../../db/tags';
 import {useDayStore} from '../../store/dayStore';
 import {useEntryStore} from '../../store/entryStore';
 import {useProjectStore} from '../../store/projectStore';
@@ -11,6 +12,19 @@ import {useTagStore} from '../../store/tagStore';
 import type {Day, Project} from '../../types';
 
 type EntryFields = Parameters<typeof updateEntry>[1];
+
+/** The desktop can't know a tag's id before the phone creates it, so entry
+ *  commands carry `tagNames`; resolved here to `tagIds` like the phone editor. */
+type WithTagNames<T> = T & {tagNames?: string[]};
+
+async function resolveTags<T extends {tagIds?: number[]}>(fields: WithTagNames<T>): Promise<T> {
+  const {tagNames, ...rest} = fields;
+  if (!tagNames) {
+    return rest as T;
+  }
+  const tags = await Promise.all(tagNames.map(name => getOrCreateTag(name)));
+  return {...rest, tagIds: tags.map(t => t.id)} as T;
+}
 
 /**
  * Commands the desktop may send. Each one is a thin wrapper over the same
@@ -62,14 +76,15 @@ async function requireEntry(id: number) {
 }
 
 export const COMMANDS: Record<string, (...args: any[]) => Promise<unknown>> = {
-  'entries.create': async (date: string, params: Omit<CreateEntryParams, 'day_id'>) => {
+  'entries.create': async (date: string, params: WithTagNames<Omit<CreateEntryParams, 'day_id'>>) => {
     const day = await getOrCreateDay(date);
-    const entry = await useEntryStore.getState().addEntry({...params, day_id: day.id});
+    const resolved = await resolveTags(params);
+    const entry = await useEntryStore.getState().addEntry({...resolved, day_id: day.id});
     return {id: entry.id, day_id: day.id};
   },
-  'entries.update': async (id: number, fields: EntryFields) => {
+  'entries.update': async (id: number, fields: WithTagNames<EntryFields>) => {
     const entry = await requireEntry(id);
-    await useEntryStore.getState().editEntry(id, fields, entry.day_id);
+    await useEntryStore.getState().editEntry(id, await resolveTags(fields), entry.day_id);
   },
   'entries.delete': async (id: number) => {
     const entry = await requireEntry(id);

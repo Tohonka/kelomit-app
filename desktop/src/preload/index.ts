@@ -3,6 +3,7 @@ import type {PairInfo} from '../main/config.ts';
 import type {MenuAction} from '../main/menu.ts';
 import type {QueryArgs, QueryName, QueryResult} from '../main/queries.ts';
 import type {PhoneState} from '../main/ws.ts';
+import type {QueueSnapshot} from '../main/queue.ts';
 
 /** Everything the renderer may ask the main process. Typed once, here. */
 export interface CompanionApi {
@@ -14,6 +15,13 @@ export interface CompanionApi {
   onDbChanged(handler: () => void): () => void;
   phoneState(): Promise<PhoneState>;
   onPhoneState(handler: (state: PhoneState) => void): () => void;
+  /** Queue a command for the phone; resolves to the queue item id. */
+  cmd(fn: string, args: unknown[], label: string): Promise<string>;
+  queue(): Promise<QueueSnapshot>;
+  queueUpdate(id: string, args: unknown[], label?: string): Promise<boolean>;
+  queueRemove(id: string): Promise<boolean>;
+  queueDismiss(id: string): Promise<void>;
+  onQueueChanged(handler: (snapshot: QueueSnapshot) => void): () => void;
 }
 
 function on(channel: string, handler: (...args: any[]) => void): () => void {
@@ -31,6 +39,12 @@ const api: CompanionApi = {
   onDbChanged: handler => on('db-changed', handler),
   phoneState: () => ipcRenderer.invoke('phone-state'),
   onPhoneState: handler => on('phone-state', handler),
+  cmd: (fn, args, label) => ipcRenderer.invoke('cmd', fn, args, label),
+  queue: () => ipcRenderer.invoke('queue'),
+  queueUpdate: (id, args, label) => ipcRenderer.invoke('queue-update', id, args, label),
+  queueRemove: id => ipcRenderer.invoke('queue-remove', id),
+  queueDismiss: id => ipcRenderer.invoke('queue-dismiss', id),
+  onQueueChanged: handler => on('queue-changed', handler),
 };
 
 contextBridge.exposeInMainWorld('kelomit', api);

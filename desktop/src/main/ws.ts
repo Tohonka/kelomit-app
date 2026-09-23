@@ -109,7 +109,7 @@ export class PhoneLink extends EventEmitter {
 
   /** Send one command and wait for its ack. Rejects with PhoneOfflineError
    *  when no phone is connected — the queue decides what to do then. */
-  send(fn: string, args: unknown[], id = randomUUID()): Promise<Ack> {
+  send(fn: string, args: unknown[], id: string = randomUUID()): Promise<Ack> {
     const socket = this.socket;
     if (!socket || socket.readyState !== WebSocket.OPEN) {
       return Promise.reject(new PhoneOfflineError());

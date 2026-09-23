@@ -518,3 +518,194 @@ textarea {
   color: var(--primary);
   font-weight: 600;
 }
+
+/* ---- editing ----------------------------------------------------------- */
+
+input[type='text'],
+input:not([type]),
+input[type='number'],
+input[type='time'],
+select,
+textarea {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 6px;
+  color: var(--textPrimary);
+  color-scheme: dark light;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 1px solid var(--primary);
+  border-color: var(--primary);
+}
+
+.inspector label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 10px;
+}
+
+.inspector label > span {
+  font-size: 11px;
+  color: var(--textMuted);
+}
+
+.inspector .row {
+  display: flex;
+  gap: 10px;
+}
+
+.inspector .row label {
+  flex: 1;
+}
+
+.inspector textarea {
+  resize: vertical;
+}
+
+.inspector .tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.inspector .tags .chip {
+  border: 0;
+}
+
+.inspector .tags input {
+  flex: 1;
+  min-width: 80px;
+}
+
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.seg button {
+  border: 0;
+  background: transparent;
+  padding: 4px 10px;
+}
+
+.seg button.on {
+  background: var(--bgMuted);
+  color: var(--textPrimary);
+}
+
+.checks {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.checks label {
+  flex-direction: row;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+}
+
+.inspector .actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.inspector .actions .spacer {
+  flex: 1;
+}
+
+.btn.danger {
+  color: var(--error);
+}
+
+.btn.queue {
+  color: var(--accentAmber);
+}
+
+.btn.queue.failed {
+  color: var(--error);
+}
+
+.pending-chip {
+  color: var(--accentAmber);
+  border: 1px solid currentColor;
+  background: transparent;
+}
+
+.entry.pending,
+.day-card.pending {
+  border-style: dashed;
+}
+
+.day-card .leg {
+  gap: 6px;
+}
+
+.day-card .arrow {
+  color: var(--textMuted);
+}
+
+.timefield {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.timefield .clear {
+  border: 0;
+  background: transparent;
+  color: var(--textMuted);
+  padding: 0 4px;
+}
+
+.timefield .clear:hover {
+  color: var(--error);
+}
+
+textarea.day-notes {
+  width: 100%;
+  margin-top: 10px;
+  min-height: 34px;
+  resize: vertical;
+}
+
+.queue-sheet {
+  min-width: 460px;
+  max-height: 70vh;
+  overflow: auto;
+}
+
+.queue-sheet h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--textMuted);
+  margin: 12px 0 4px;
+}
+
+.queue-sheet ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.queue-sheet li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+}

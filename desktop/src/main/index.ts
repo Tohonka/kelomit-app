@@ -7,6 +7,7 @@ import {installMenu} from './menu.ts';
 import {registerQueryIpc} from './ipc.ts';
 import {watchCurrentDb} from './watch.ts';
 import {PhoneLink} from './ws.ts';
+import {CommandQueue} from './queue.ts';
 
 app.setName('Kelomit Companion');
 
@@ -56,10 +57,20 @@ app.whenReady().then(() => {
   const token = loadOrCreateToken(dataDir);
   const server = startApiServer(dataDir, token);
   const phone = new PhoneLink(server as import('node:http').Server, token);
-  phone.on('state', state => win?.webContents.send('phone-state', state));
+  const queue = new CommandQueue(join(dataDir, 'queue.json'), phone);
+  phone.on('state', state => {
+    win?.webContents.send('phone-state', state);
+    if (state.connected) queue.drain();
+  });
+  queue.on('change', snapshot => win?.webContents.send('queue-changed', snapshot));
 
   ipcMain.handle('pair-info', () => pairInfo(token));
   ipcMain.handle('phone-state', () => phone.state);
+  ipcMain.handle('cmd', (_e, fn: string, args: unknown[], label: string) => queue.push(fn, args, label));
+  ipcMain.handle('queue', () => queue.snapshot());
+  ipcMain.handle('queue-update', (_e, id: string, args: unknown[], label?: string) => queue.update(id, args, label));
+  ipcMain.handle('queue-remove', (_e, id: string) => queue.remove(id));
+  ipcMain.handle('queue-dismiss', (_e, id: string) => queue.dismissFailed(id));
   registerQueryIpc(dataDir);
   watchCurrentDb(dataDir, () => win?.webContents.send('db-changed'));
 

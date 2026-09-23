@@ -11,7 +11,7 @@ import {
 } from '../../../server/src/queries.ts';
 import type {MediaRow, RouteSegmentRow, RouteStopRow} from '../../../server/src/queries.ts';
 import {calcDayWorkSecs} from '../../../src/utils/hoursUtils.ts';
-import type {Day, Entry, LeaveRange} from '../../../src/types/index.ts';
+import type {Day, Entry, LeaveRange, Project, Tag} from '../../../src/types/index.ts';
 
 /**
  * Read model for the renderer. Everything here is a synchronous read of the
@@ -117,11 +117,24 @@ export function dayDetail(db: Database.Database, date: string): DayDetail {
   };
 }
 
+export function listProjects(db: Database.Database): Project[] {
+  return (db.prepare('SELECT * FROM projects ORDER BY archived, name COLLATE NOCASE').all() as Project[]).map(p => ({
+    ...p,
+    archived: Boolean(p.archived),
+  }));
+}
+
+export function listTags(db: Database.Database): Tag[] {
+  return db.prepare('SELECT * FROM tags ORDER BY name COLLATE NOCASE').all() as Tag[];
+}
+
 /** Every query the renderer may call, by name. The IPC layer looks them up
  *  here, so a typo is a thrown error rather than arbitrary SQL. */
 export const QUERIES = {
   monthSummary,
   dayDetail,
+  listProjects,
+  listTags,
 } as const;
 
 export type QueryName = keyof typeof QUERIES;
