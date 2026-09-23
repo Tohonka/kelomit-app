@@ -11,7 +11,7 @@ import {
 } from '../../../server/src/queries.ts';
 import type {MediaRow, RouteSegmentRow, RouteStopRow} from '../../../server/src/queries.ts';
 import {calcDayWorkSecs} from '../../../src/utils/hoursUtils.ts';
-import type {Day, Entry, LeaveRange, Project, Tag} from '../../../src/types/index.ts';
+import type {Day, Entry, LeaveRange, ModeSpan, Project, RouteCoordinate, Tag} from '../../../src/types/index.ts';
 
 /**
  * Read model for the renderer. Everything here is a synchronous read of the
@@ -124,6 +124,63 @@ export function listProjects(db: Database.Database): Project[] {
   }));
 }
 
+export interface RouteTrip {
+  sequence: number;
+  start_ts: string;
+  end_ts: string;
+  coordinates: RouteCoordinate[];
+  mode_spans: ModeSpan[] | null;
+  distance_m: number;
+  duration_sec: number;
+}
+
+export interface DayRoute {
+  trips: RouteTrip[];
+  stops: RouteStopRow[];
+}
+
+/** The day's derived route (segments + stops), coordinates parsed. */
+export function dayRoute(db: Database.Database, date: string): DayRoute {
+  const day = getDay(db, date);
+  if (!day || day.id < 0) {
+    return {trips: [], stops: []};
+  }
+  const rows = db
+    .prepare(
+      `SELECT sequence, start_ts, end_ts, coordinates_json, mode_spans_json, distance_m, duration_sec
+         FROM day_route_segments WHERE day_id = ? ORDER BY sequence`,
+    )
+    .all(day.id) as {
+    sequence: number;
+    start_ts: string;
+    end_ts: string;
+    coordinates_json: string;
+    mode_spans_json: string | null;
+    distance_m: number;
+    duration_sec: number;
+  }[];
+  const parse = <T,>(json: string | null, fallback: T): T => {
+    if (!json) return fallback;
+    try {
+      return JSON.parse(json) as T;
+    } catch {
+      return fallback;
+    }
+  };
+  return {
+    trips: rows.map(r => ({
+      sequence: r.sequence,
+      start_ts: r.start_ts,
+      end_ts: r.end_ts,
+      coordinates: parse<RouteCoordinate[]>(r.coordinates_json, []),
+      mode_spans: parse<ModeSpan[] | null>(r.mode_spans_json, null),
+      distance_m: r.distance_m,
+      duration_sec: r.duration_sec,
+    })),
+    stops: getRouteStops(db, day.id),
+  };
+}
+
 /** Leave ranges touching a calendar year. */
 export function listLeave(db: Database.Database, year: number): LeaveRange[] {
   return getLeaveRangesInRange(db, `${year}-01-01`, `${year}-12-31`);
@@ -141,6 +198,7 @@ export const QUERIES = {
   listProjects,
   listTags,
   listLeave,
+  dayRoute,
 } as const;
 
 export type QueryName = keyof typeof QUERIES;

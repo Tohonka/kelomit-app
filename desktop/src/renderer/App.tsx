@@ -7,6 +7,7 @@ import type {Selection} from './panes/Inspector.tsx';
 import {QueueSheet} from './panes/QueueSheet.tsx';
 import {ProjectsTags} from './panes/ProjectsTags.tsx';
 import {Leave} from './panes/Leave.tsx';
+import {MapView} from './panes/MapView.tsx';
 import {addDays, clock, monthOf, todayIso} from './lib/format.ts';
 import {applyPendingDay, applyPendingEntries} from './lib/pending.ts';
 import {usePhoneState} from './hooks/usePhoneState.ts';
@@ -151,7 +152,7 @@ export function App() {
         )}
         {view === 'map' && (
           <section className="pane wide">
-            <div className="empty">Map — coming in T8</div>
+            <MapView date={date} />
           </section>
         )}
       </main>
