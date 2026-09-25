@@ -31,13 +31,17 @@ export class PhoneOfflineError extends Error {
 }
 
 const ACK_TIMEOUT_MS = 20_000;
+const PING_MS = 15_000;
+const MISSED_PINGS_LIMIT = 2;
 
 export class PhoneLink extends EventEmitter {
   private socket: WebSocket | null = null;
   private pending = new Map<string, {resolve: (a: Ack) => void; timer: ReturnType<typeof setTimeout>}>();
+  private pingTimer: ReturnType<typeof setInterval> | null = null;
+  private missedPings = 0;
   state: PhoneState = {connected: false, lastSeenAt: null, appVersion: null, activeSession: null};
 
-  constructor(server: Server, private readonly token: string) {
+  constructor(server: Server, private readonly token: string, private readonly pingMs = PING_MS) {
     super();
     const wss = new WebSocketServer({server, path: '/ws'});
     wss.on('connection', (socket, req) => {
@@ -48,18 +52,55 @@ export class PhoneLink extends EventEmitter {
       this.socket?.close(4000, 'replaced');
       this.socket = socket;
       this.update({connected: true, lastSeenAt: new Date().toISOString()});
+      this.startHeartbeat(socket);
       socket.on('message', data => this.onMessage(String(data)));
       socket.on('close', () => {
         if (this.socket === socket) {
           this.socket = null;
           this.update({connected: false, activeSession: null});
           this.failPending('phone disconnected');
+          this.stopHeartbeat();
         }
       });
       socket.on('error', () => {
         /* close follows */
       });
     });
+  }
+
+  /** JSON ping every pingMs; two unanswered pings = the phone is gone.
+   *  JSON (not a ws control frame) so the phone's JS sees it too and can
+   *  run its own staleness watchdog off the same traffic. */
+  private startHeartbeat(socket: WebSocket): void {
+    this.stopHeartbeat();
+    this.missedPings = 0;
+    this.pingTimer = setInterval(() => {
+      if (this.missedPings >= MISSED_PINGS_LIMIT) {
+        // ponytail: ws's own 'close' event lags this decision by a tick or
+        // more (it waits on the receiver stream to finish), which raced the
+        // "dead socket stops showing as connected" goal this task exists
+        // for. Declare it dead now; terminate() just tears down the pipe.
+        // The close handler's `this.socket === socket` guard makes its own
+        // (now redundant) cleanup a no-op when this already ran.
+        if (this.socket === socket) {
+          this.socket = null;
+          this.update({connected: false, activeSession: null});
+          this.failPending('phone disconnected');
+        }
+        this.stopHeartbeat();
+        socket.terminate();
+        return;
+      }
+      this.missedPings++;
+      socket.send(JSON.stringify({type: 'ping'}));
+    }, this.pingMs);
+  }
+
+  private stopHeartbeat(): void {
+    if (this.pingTimer) {
+      clearInterval(this.pingTimer);
+      this.pingTimer = null;
+    }
   }
 
   private update(patch: Partial<PhoneState>): void {
@@ -74,6 +115,7 @@ export class PhoneLink extends EventEmitter {
     } catch {
       return;
     }
+    this.missedPings = 0;
     const patch: Partial<PhoneState> = {lastSeenAt: new Date().toISOString()};
     if (msg.type === 'hello') {
       patch.appVersion = typeof msg.app_version === 'string' ? msg.app_version : null;

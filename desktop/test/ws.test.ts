@@ -69,3 +69,37 @@ test('a pending command fails when the phone drops', async () => {
   assert.equal(ack.ok, false);
   assert.equal(ack.error, 'phone disconnected');
 });
+
+test('drops a phone that misses two pings; keeps one that pongs', async () => {
+  const srv = createServer();
+  const fast = new PhoneLink(srv, 'secret', 30);
+  srv.listen(0, '127.0.0.1');
+  await once(srv, 'listening');
+  const a = srv.address();
+  const fastUrl = `ws://127.0.0.1:${typeof a === 'object' && a ? a.port : 0}/ws`;
+  const dial = () => new WebSocket(fastUrl, {headers: {Authorization: 'Bearer secret'}});
+  try {
+    const silent = dial();
+    await once(silent, 'open');
+    const [code] = (await once(silent, 'close')) as [number];
+    assert.equal(code, 1006);
+    assert.equal(fast.state.connected, false);
+
+    const chatty = dial();
+    await once(chatty, 'open');
+    let pings = 0;
+    chatty.on('message', data => {
+      if (JSON.parse(String(data)).type === 'ping') {
+        pings++;
+        chatty.send(JSON.stringify({type: 'pong'}));
+      }
+    });
+    await new Promise(r => setTimeout(r, 200));
+    assert.ok(pings >= 4, `expected pings, got ${pings}`);
+    assert.equal(chatty.readyState, WebSocket.OPEN);
+    assert.equal(fast.state.connected, true);
+    chatty.close();
+  } finally {
+    srv.close();
+  }
+});
