@@ -6,6 +6,7 @@ import com.facebook.react.ReactApplication
 import com.facebook.react.ReactHost
 import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
+import com.kelomitapp.companion.CompanionPackage
 import com.kelomitapp.food.FoodPackage
 import com.kelomitapp.location.BackgroundLocationPackage
 import com.kelomitapp.reporting.WorkReportPackage
@@ -26,6 +27,8 @@ class MainApplication : Application(), ReactApplication {
           add(WorkReportPackage())
           // Google code-scanner bridge for the food log — not autolinked.
           add(FoodPackage())
+          // Desktop-companion LAN beacon listener — not autolinked.
+          add(CompanionPackage())
         },
     )
   }
