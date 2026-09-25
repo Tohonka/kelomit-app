@@ -7,8 +7,9 @@ import {registerMediaIpc} from './media.ts';
 import {reportCheck} from './report-check.ts';
 import {writeFileSync} from 'node:fs';
 import {join} from 'node:path';
-import {ensureDataDir, loadOrCreateToken, pairInfo} from './config.ts';
+import {ensureDataDir, loadOrCreateId, loadOrCreateToken, pairInfo, PORT} from './config.ts';
 import {startApiServer} from './server.ts';
+import {startBeacon} from './beacon.ts';
 import {installMenu} from './menu.ts';
 import {registerQueryIpc} from './ipc.ts';
 import {watchCurrentDb} from './watch.ts';
@@ -72,7 +73,10 @@ function createWindow(): void {
 app.whenReady().then(() => {
   const dataDir = ensureDataDir(app.getPath('userData'));
   const token = loadOrCreateToken(dataDir);
+  const id = loadOrCreateId(dataDir);
   const server = startApiServer(dataDir, token);
+  const stopBeacon = startBeacon(id, PORT);
+  app.on('will-quit', stopBeacon);
   const phone = new PhoneLink(server as import('node:http').Server, token);
   const queue = new CommandQueue(join(dataDir, 'queue.json'), phone);
   phone.on('state', state => {
@@ -92,7 +96,7 @@ app.whenReady().then(() => {
   registerOffIpc();
   registerMediaIpc(dataDir, () => win);
 
-  ipcMain.handle('pair-info', () => pairInfo(token));
+  ipcMain.handle('pair-info', () => pairInfo(token, id));
   ipcMain.handle('phone-state', () => phone.state);
   ipcMain.handle('cmd', (_e, fn: string, args: unknown[], label: string) => queue.push(fn, args, label));
   ipcMain.handle('queue', () => queue.snapshot());

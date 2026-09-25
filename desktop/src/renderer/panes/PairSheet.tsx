@@ -27,7 +27,7 @@ export function PairSheet({onClose}: {onClose: () => void}) {
         <h2>Pair phone</h2>
         {info?.url ? (
           <>
-            <p>On the phone: Settings → Data → Companion → Scan QR.</p>
+            <p>On the phone: Settings → Data → Companion → Scan QR. Once is enough: after that the phone finds this Mac by itself.</p>
             {qr && <img className="qr" src={qr} alt="pairing QR" />}
             <p>
               Or type it in: <code>{info.url}</code>

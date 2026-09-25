@@ -13,15 +13,25 @@ export function ensureDataDir(userData: string): string {
   return userData;
 }
 
-/** The pairing secret, generated once per install. */
-export function loadOrCreateToken(dataDir: string): string {
-  const path = join(dataDir, 'token');
+function loadOrCreateSecret(dataDir: string, name: string, bytes: number): string {
+  const path = join(dataDir, name);
   if (existsSync(path)) {
     return readFileSync(path, 'utf8').trim();
   }
-  const token = randomBytes(24).toString('base64url');
-  writeFileSync(path, token, {mode: 0o600});
-  return token;
+  const value = randomBytes(bytes).toString('base64url');
+  writeFileSync(path, value, {mode: 0o600});
+  return value;
+}
+
+/** The pairing secret, generated once per install. */
+export function loadOrCreateToken(dataDir: string): string {
+  return loadOrCreateSecret(dataDir, 'token', 24);
+}
+
+/** Public per-install id: rides in the QR and in every beacon so the phone
+ *  can tell this desktop from a dev instance on the same LAN. */
+export function loadOrCreateId(dataDir: string): string {
+  return loadOrCreateSecret(dataDir, 'id', 8);
 }
 
 /** First non-internal IPv4 — what the phone must dial on the LAN. */
@@ -39,15 +49,16 @@ export function lanAddress(): string | null {
 export interface PairInfo {
   url: string | null;
   token: string;
+  id: string;
   /** What the QR encodes; the phone's scanner parses this. */
   payload: string | null;
 }
 
-export function pairInfo(token: string): PairInfo {
+export function pairInfo(token: string, id: string): PairInfo {
   const ip = lanAddress();
   const url = ip ? `http://${ip}:${PORT}` : null;
   const payload = url
-    ? `kelomit://pair?url=${encodeURIComponent(url)}&token=${encodeURIComponent(token)}`
+    ? `kelomit://pair?url=${encodeURIComponent(url)}&token=${encodeURIComponent(token)}&id=${encodeURIComponent(id)}`
     : null;
-  return {url, token, payload};
+  return {url, token, id, payload};
 }
