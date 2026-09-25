@@ -22,6 +22,7 @@ import {maybeAutoSync} from './src/services/syncService';
 import {startCompanionAutoPush, kickCompanionPush} from './src/services/companion/autoPush';
 import {connectCompanion} from './src/services/companion/client';
 import {startCompanionStatus} from './src/services/companion/status';
+import {startCompanionDiscovery, stopCompanionDiscovery} from './src/services/companion/discovery';
 import {
   reconcileRouteHistory,
   reconcileTrackingJournal,
@@ -143,6 +144,7 @@ function AppContent() {
     startCompanionAutoPush();
     startCompanionStatus();
     connectCompanion().catch(() => {});
+    startCompanionDiscovery();
     // Food widget: fold in taps made while we were away, then keep its list fresh.
     startFoodWidgetSync();
     maybeImportHealth().catch(healthError => diag('health.import.fail', String(healthError)));
@@ -173,6 +175,7 @@ function AppContent() {
         maybeAutoSync().catch(() => {});
         kickCompanionPush();
         connectCompanion().catch(() => {});
+        startCompanionDiscovery();
         maybeImportHealth().catch(healthError => diag('health.import.fail', String(healthError)));
       } else if (
         appState.current === 'active' &&
@@ -182,6 +185,8 @@ function AppContent() {
         syncHabitWidgets().catch(() => {});
         // Re-rank the widget's list for the time of day it is left at.
         syncFoodWidget().catch(() => {});
+        // Discovery holds a multicast lock; only worth it while on screen.
+        stopCompanionDiscovery();
         const {gps_enabled, background_tracking} = useSettingsStore.getState();
         // With background tracking on, keep the watch alive (the foreground
         // service is already running). Otherwise stop tracking as before.

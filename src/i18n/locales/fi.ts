@@ -296,6 +296,8 @@ const fi: typeof en = {
     companionFailed: 'Lähetys epäonnistui: {{error}}',
     companionNotConfigured: 'Parita ensin työpöytäsovelluksen kanssa',
     companionDone: 'Lähetys valmis',
+    companionFound: 'Työpöytäsovellus löytyi: {{name}} ({{ip}})',
+    companionSearching: 'Etsitään työpöytäsovellusta…',
     pausedUntil: 'Seuranta tauolla klo {{time}} asti',
     pausedIndefinitely: 'Seuranta tauolla',
     resume: 'Jatka',

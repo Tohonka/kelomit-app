@@ -27,7 +27,9 @@ import {
   getCompanionStatus,
   parsePairPayload,
 } from '../../services/companion/settings';
+import {getFoundDesktop, onFoundDesktop} from '../../services/companion/discovery';
 import {isBarcodeScannerAvailable, scanBarcode} from '../../native/barcodeScanner';
+import {isCompanionBeaconAvailable} from '../../native/companionBeacon';
 import {useTheme, typography, spacing, radius} from '../../theme';
 import {getDateFnsLocale} from '../../i18n';
 import {useSettingsStore} from '../../store/settingsStore';
@@ -144,6 +146,15 @@ export default function DataSettings(_props: Props) {
   const [companionToken, setCompanionToken] = useState('');
   const [companionBusy, setCompanionBusy] = useState(false);
   const [companionStatusText, setCompanionStatusText] = useState('');
+  const [foundDesktop, setFoundDesktop] = useState(getFoundDesktop());
+  useEffect(() => {
+    const unsub = onFoundDesktop(() => setFoundDesktop(getFoundDesktop()));
+    const tick = setInterval(() => setFoundDesktop(getFoundDesktop()), 5000);
+    return () => {
+      unsub();
+      clearInterval(tick);
+    };
+  }, []);
 
   const refreshCompanionStatus = async () => {
     const {lastPushAt, lastError} = await getCompanionStatus();
@@ -443,6 +454,14 @@ export default function DataSettings(_props: Props) {
         </TouchableOpacity>
 
         <Text style={styles.sectionHeader}>{t('settings.companionSection')}</Text>
+
+        {isCompanionBeaconAvailable() && (
+          <Text style={local.syncStatus}>
+            {foundDesktop
+              ? t('settings.companionFound', {name: foundDesktop.name, ip: foundDesktop.ip})
+              : t('settings.companionSearching')}
+          </Text>
+        )}
 
         {isBarcodeScannerAvailable() && (
           <TouchableOpacity style={styles.row} onPress={handleScanPairing} disabled={companionBusy}>

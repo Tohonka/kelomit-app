@@ -294,6 +294,8 @@ const en = {
     companionFailed: 'Last push failed: {{error}}',
     companionNotConfigured: 'Pair with the desktop app first',
     companionDone: 'Push complete',
+    companionFound: 'Desktop found: {{name}} ({{ip}})',
+    companionSearching: 'Looking for the desktop app…',
     pausedUntil: 'Tracking paused until {{time}}',
     pausedIndefinitely: 'Tracking paused',
     resume: 'Resume',
