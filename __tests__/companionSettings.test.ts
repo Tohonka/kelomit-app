@@ -83,4 +83,9 @@ describe('desktop id', () => {
     await setCompanionConfig('http://10.0.0.5:8090', 't', 'abc');
     expect(setSetting).toHaveBeenCalledWith('companion_id', 'abc');
   });
+
+  it('setCompanionConfig clears the id when given null', async () => {
+    await setCompanionConfig('http://10.0.0.5:8090', 't', null);
+    expect(setSetting).toHaveBeenCalledWith('companion_id', '');
+  });
 });

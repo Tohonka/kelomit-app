@@ -236,7 +236,8 @@ export default function DataSettings(_props: Props) {
     if (stored && url === stored.url && companionToken.trim() === stored.token) {
       return;
     }
-    await setCompanionConfig(companionUrl, companionToken);
+    // A new address may be a different desktop: forget the old id.
+    await setCompanionConfig(companionUrl, companionToken, url !== stored?.url ? null : undefined);
     reconnectCompanion().catch(() => {});
   };
 

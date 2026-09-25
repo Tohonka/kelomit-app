@@ -67,10 +67,15 @@ export async function getCompanionConfig(): Promise<CompanionConfig | null> {
   return {url: normalizeCompanionUrl(url), token, id};
 }
 
+/** `id`: undefined leaves the stored desktop id alone, a string stores it,
+ *  null clears it (a manually typed new address must not be yanked back to
+ *  the old desktop's beacon). An empty stored id reads back as null. */
 export async function setCompanionConfig(url: string, token: string, id?: string | null): Promise<void> {
   await setSetting('companion_url', url.trim());
   await setSetting('companion_token', token.trim());
-  if (typeof id === 'string' && id.trim()) {
+  if (id === null) {
+    await setSetting('companion_id', '');
+  } else if (typeof id === 'string' && id.trim()) {
     await setSetting('companion_id', id.trim());
   }
 }
