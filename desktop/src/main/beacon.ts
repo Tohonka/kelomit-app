@@ -27,8 +27,10 @@ export function startBeacon(
   const payload = beaconPayload(id, port);
   const socket = createSocket({type: 'udp4', reuseAddr: true});
   let timer: ReturnType<typeof setInterval> | null = null;
-  socket.on('error', () => {
-    /* a failed send is retried on the next tick */
+  // Bind/socket errors (the beacon may never start). Send errors go to
+  // send's callback instead and simply retry on the next tick.
+  socket.on('error', err => {
+    console.warn('kelomit beacon:', err.message);
   });
   socket.bind(0, () => {
     socket.setBroadcast(true);
