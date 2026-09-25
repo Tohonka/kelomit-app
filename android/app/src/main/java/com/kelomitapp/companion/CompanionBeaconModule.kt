@@ -25,7 +25,6 @@ class CompanionBeaconModule(reactContext: ReactApplicationContext) :
   ReactContextBaseJavaModule(reactContext) {
 
   private var socket: MulticastSocket? = null
-  private var thread: Thread? = null
   private var lock: WifiManager.MulticastLock? = null
 
   override fun getName() = "CompanionBeacon"
@@ -43,13 +42,16 @@ class CompanionBeaconModule(reactContext: ReactApplicationContext) :
         setReferenceCounted(false)
         acquire()
       }
-      @Suppress("DEPRECATION")
-      val s = MulticastSocket(PORT).apply {
-        reuseAddress = true
-        joinGroup(InetAddress.getByName(GROUP))
+      val s = MulticastSocket(PORT)
+      try {
+        @Suppress("DEPRECATION")
+        s.joinGroup(InetAddress.getByName(GROUP))
+      } catch (e: Exception) {
+        s.close()
+        throw e
       }
       socket = s
-      thread = Thread({ loop(s) }, "kelomit-beacon").apply {
+      Thread({ loop(s) }, "kelomit-beacon").apply {
         isDaemon = true
         start()
       }
@@ -69,9 +71,14 @@ class CompanionBeaconModule(reactContext: ReactApplicationContext) :
   private fun release() {
     socket?.close()
     socket = null
-    thread = null
     lock?.let { if (it.isHeld) it.release() }
     lock = null
+  }
+
+  /** JS reload / host teardown without a stop(): free the socket and the lock. */
+  override fun invalidate() {
+    release()
+    super.invalidate()
   }
 
   private fun loop(s: MulticastSocket) {
@@ -81,7 +88,7 @@ class CompanionBeaconModule(reactContext: ReactApplicationContext) :
       try {
         s.receive(packet)
       } catch (e: IOException) {
-        break // closed by stop()
+        if (s.isClosed) break else continue // closed by stop(), or a transient error
       }
       val json = try {
         JSONObject(String(packet.data, 0, packet.length, Charsets.UTF_8))
@@ -89,16 +96,17 @@ class CompanionBeaconModule(reactContext: ReactApplicationContext) :
         continue
       }
       if (json.optString("k") != "kelomit") continue
-      val id = json.optString("id")
+      val id = if (json.isNull("id")) "" else json.optString("id")
+      val name = if (json.isNull("name")) "" else json.optString("name")
       val port = json.optInt("port", 0)
-      if (id.isEmpty() || port <= 0) continue
+      if (id.isEmpty() || port <= 0 || port > 65535) continue
       val ctx = reactApplicationContext
       if (!ctx.hasActiveReactInstance()) continue
       val map = Arguments.createMap().apply {
         putString("ip", packet.address.hostAddress)
         putInt("port", port)
         putString("id", id)
-        putString("name", json.optString("name"))
+        putString("name", name)
       }
       ctx.emitDeviceEvent("companionBeacon", map)
     }
