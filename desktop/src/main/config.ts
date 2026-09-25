@@ -4,6 +4,8 @@ import {join} from 'node:path';
 import {randomBytes} from 'node:crypto';
 
 // KELOMIT_PORT: run a dev instance beside the packaged app (which holds 8090).
+// A dev instance also gets its own userData (port-<PORT>/), so its token, id
+// and db never collide with the packaged app's.
 export const PORT = Number(process.env.KELOMIT_PORT) || 8090;
 
 /** Same layout as the server's /data: current.db, snapshots/, media/. */

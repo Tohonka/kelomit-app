@@ -17,6 +17,12 @@ import {PhoneLink} from './ws.ts';
 import {CommandQueue} from './queue.ts';
 
 app.setName('Kelomit Companion');
+// A dev instance (KELOMIT_PORT) gets its own token/id/db so it never
+// masquerades as the packaged app on the LAN (same id + same IP = the
+// phone would flap between the two ports).
+if (process.env.KELOMIT_PORT) {
+  app.setPath('userData', join(app.getPath('userData'), `port-${PORT}`));
+}
 
 // kelomit-media:///<basename> → the file the phone pushed into media/.
 protocol.registerSchemesAsPrivileged([
