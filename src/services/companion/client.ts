@@ -19,6 +19,33 @@ import type {ActiveSession} from '../../types';
 const BACKOFF_MIN_MS = 2000;
 const BACKOFF_MAX_MS = 30_000;
 
+/** No frame for this long on an "open" socket = it is dead; re-dial. The
+ *  desktop pings every 15 s, so a healthy link never gets near this. */
+export const STALE_MS = 45_000;
+
+let lastFrameAt = 0;
+let staleTimer: ReturnType<typeof setTimeout> | null = null;
+
+function armStaleTimer(): void {
+  if (staleTimer) {
+    clearTimeout(staleTimer);
+  }
+  staleTimer = setTimeout(() => {
+    staleTimer = null;
+    if (state === 'open' && Date.now() - lastFrameAt >= STALE_MS) {
+      diag('companion.stale', 'no frames; re-dialling');
+      reconnectCompanion().catch(() => {});
+    }
+  }, STALE_MS);
+}
+
+function clearStaleTimer(): void {
+  if (staleTimer) {
+    clearTimeout(staleTimer);
+    staleTimer = null;
+  }
+}
+
 type State = 'idle' | 'connecting' | 'open';
 
 let socket: WebSocket | null = null;
@@ -64,6 +91,10 @@ export async function handleMessage(raw: string, reply: (msg: unknown) => void):
   } catch {
     return;
   }
+  if (msg.type === 'ping') {
+    reply({type: 'pong'});
+    return;
+  }
   if (msg.type === 'cmd' && typeof msg.id === 'string' && typeof msg.fn === 'string') {
     reply(await runCommand({id: msg.id, fn: msg.fn, args: Array.isArray(msg.args) ? msg.args : []}));
   }
@@ -82,6 +113,11 @@ function scheduleReconnect(): void {
 
 /** Open the link if paired. Idempotent while connecting/open. */
 export async function connectCompanion(): Promise<void> {
+  // A dozed phone leaves the socket "open" but dead; timers may not have run
+  // in the background, so the foreground kick checks staleness itself.
+  if (state === 'open' && Date.now() - lastFrameAt >= STALE_MS) {
+    disconnectCompanion();
+  }
   if (state !== 'idle') {
     return;
   }
@@ -101,6 +137,8 @@ export async function connectCompanion(): Promise<void> {
     if (myGeneration !== generation) return;
     backoffMs = BACKOFF_MIN_MS;
     setState('open');
+    lastFrameAt = Date.now();
+    armStaleTimer();
     send({type: 'hello', app_version: APP_VERSION});
     // The desktop must never be behind: one push on every connect.
     kickCompanionPush();
@@ -108,6 +146,8 @@ export async function connectCompanion(): Promise<void> {
   };
   ws.onmessage = ev => {
     if (myGeneration !== generation) return;
+    lastFrameAt = Date.now();
+    armStaleTimer();
     handleMessage(String(ev.data), send).catch(e => diag('companion.cmd.fail', String(e)));
   };
   ws.onerror = () => {
@@ -115,6 +155,7 @@ export async function connectCompanion(): Promise<void> {
   };
   ws.onclose = () => {
     if (myGeneration !== generation) return;
+    clearStaleTimer();
     socket = null;
     setState('idle');
     scheduleReconnect();
@@ -124,6 +165,7 @@ export async function connectCompanion(): Promise<void> {
 /** Drop the link (unpairing) or force a fresh connect (re-pairing). */
 export function disconnectCompanion(): void {
   generation++;
+  clearStaleTimer();
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
