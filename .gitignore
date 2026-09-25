@@ -66,3 +66,4 @@ envCreds/.withings.env
 # Fineli raw open-data package (CC BY 4.0, ~11 MB). Rebuild src/assets/fineli.json with scripts/build-fineli.js.
 /data/fineli/
 /envCreds
+/desktop/dist
