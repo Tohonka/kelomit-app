@@ -215,7 +215,7 @@ export default function DataSettings(_props: Props) {
       }
       setCompanionUrl(parsed.url);
       setCompanionToken(parsed.token);
-      await setCompanionConfig(parsed.url, parsed.token);
+      await setCompanionConfig(parsed.url, parsed.token, parsed.id);
       await handleCompanionPush();
     } catch (e) {
       Alert.alert(t('settings.companionSection'), String(e));

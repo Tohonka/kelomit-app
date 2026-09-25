@@ -9,6 +9,8 @@ import {getSetting, setSetting} from '../../db/settings';
 export interface CompanionConfig {
   url: string;
   token: string;
+  /** Desktop install id from the QR / beacon; null for pre-id pairings until learned. */
+  id: string | null;
 }
 
 export interface CompanionStatus {
@@ -51,7 +53,8 @@ export function parsePairPayload(raw: string): CompanionConfig | null {
   if (!url || !token) {
     return null;
   }
-  return {url: normalizeCompanionUrl(url), token};
+  const id = params.id?.trim() || null;
+  return {url: normalizeCompanionUrl(url), token, id};
 }
 
 export async function getCompanionConfig(): Promise<CompanionConfig | null> {
@@ -60,12 +63,25 @@ export async function getCompanionConfig(): Promise<CompanionConfig | null> {
   if (!url || !token) {
     return null;
   }
-  return {url: normalizeCompanionUrl(url), token};
+  const id = (await getSetting('companion_id'))?.trim() || null;
+  return {url: normalizeCompanionUrl(url), token, id};
 }
 
-export async function setCompanionConfig(url: string, token: string): Promise<void> {
+export async function setCompanionConfig(url: string, token: string, id?: string | null): Promise<void> {
   await setSetting('companion_url', url.trim());
   await setSetting('companion_token', token.trim());
+  if (typeof id === 'string' && id.trim()) {
+    await setSetting('companion_id', id.trim());
+  }
+}
+
+/** Discovery moved the desktop: only the address changes. */
+export async function setCompanionUrl(url: string): Promise<void> {
+  await setSetting('companion_url', normalizeCompanionUrl(url));
+}
+
+export async function setCompanionId(id: string): Promise<void> {
+  await setSetting('companion_id', id.trim());
 }
 
 /* Status lives in memory, not in the settings table: a push that recorded its

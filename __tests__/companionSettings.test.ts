@@ -3,11 +3,12 @@ jest.mock('../src/db/settings', () => ({
   setSetting: jest.fn(() => Promise.resolve()),
 }));
 
-import {getSetting} from '../src/db/settings';
+import {getSetting, setSetting} from '../src/db/settings';
 import {
   getCompanionConfig,
   normalizeCompanionUrl,
   parsePairPayload,
+  setCompanionConfig,
 } from '../src/services/companion/settings';
 
 const mockGet = getSetting as jest.MockedFunction<typeof getSetting>;
@@ -35,7 +36,7 @@ describe('parsePairPayload', () => {
       encodeURIComponent('http://192.168.1.20:8090') +
       '&token=' +
       encodeURIComponent('abc_-123');
-    expect(parsePairPayload(raw)).toEqual({url: 'http://192.168.1.20:8090', token: 'abc_-123'});
+    expect(parsePairPayload(raw)).toEqual({url: 'http://192.168.1.20:8090', token: 'abc_-123', id: null});
   });
   it('rejects other barcodes', () => {
     expect(parsePairPayload('6410405082657')).toBeNull();
@@ -54,6 +55,32 @@ describe('getCompanionConfig', () => {
     await expect(getCompanionConfig()).resolves.toEqual({
       url: 'http://192.168.1.20:8090',
       token: 't',
+      id: null,
     });
+  });
+});
+
+describe('desktop id', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('parsePairPayload reads the id and tolerates its absence', () => {
+    expect(parsePairPayload('kelomit://pair?url=http%3A%2F%2F10.0.0.5%3A8090&token=t&id=abc'))
+      .toEqual({url: 'http://10.0.0.5:8090', token: 't', id: 'abc'});
+    expect(parsePairPayload('kelomit://pair?url=http%3A%2F%2F10.0.0.5%3A8090&token=t'))
+      .toEqual({url: 'http://10.0.0.5:8090', token: 't', id: null});
+  });
+
+  it('getCompanionConfig returns the stored id or null', async () => {
+    stubSettings({companion_url: 'http://10.0.0.5:8090', companion_token: 't', companion_id: 'abc'});
+    expect(await getCompanionConfig()).toEqual({url: 'http://10.0.0.5:8090', token: 't', id: 'abc'});
+    stubSettings({companion_url: 'http://10.0.0.5:8090', companion_token: 't'});
+    expect((await getCompanionConfig())?.id).toBeNull();
+  });
+
+  it('setCompanionConfig leaves the id alone unless one is given', async () => {
+    await setCompanionConfig('http://10.0.0.5:8090', 't');
+    expect(setSetting).not.toHaveBeenCalledWith('companion_id', expect.anything());
+    await setCompanionConfig('http://10.0.0.5:8090', 't', 'abc');
+    expect(setSetting).toHaveBeenCalledWith('companion_id', 'abc');
   });
 });
