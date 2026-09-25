@@ -1,4 +1,4 @@
-import React, {useEffect, useMemo, useState} from 'react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {
   View,
@@ -25,6 +25,7 @@ import {
   getCompanionConfig,
   setCompanionConfig,
   getCompanionStatus,
+  normalizeCompanionUrl,
   parsePairPayload,
 } from '../../services/companion/settings';
 import {getFoundDesktop, onFoundDesktop} from '../../services/companion/discovery';
@@ -147,8 +148,26 @@ export default function DataSettings(_props: Props) {
   const [companionBusy, setCompanionBusy] = useState(false);
   const [companionStatusText, setCompanionStatusText] = useState('');
   const [foundDesktop, setFoundDesktop] = useState(getFoundDesktop());
+  // Last stored url+token the fields were synced to: beacons fire every 3 s,
+  // so only a real stored change (discovery switched) overwrites the fields,
+  // never text the user is mid-typing.
+  const syncedCompanion = useRef('');
   useEffect(() => {
-    const unsub = onFoundDesktop(() => setFoundDesktop(getFoundDesktop()));
+    const unsub = onFoundDesktop(() => {
+      setFoundDesktop(getFoundDesktop());
+      // Discovery may have moved companion_url; keep the fields on it so a
+      // blur doesn't write the dead address back.
+      getCompanionConfig()
+        .then(c => {
+          const key = c ? `${c.url} ${c.token}` : '';
+          if (c && key !== syncedCompanion.current) {
+            syncedCompanion.current = key;
+            setCompanionUrl(c.url);
+            setCompanionToken(c.token);
+          }
+        })
+        .catch(() => {});
+    });
     const tick = setInterval(() => setFoundDesktop(getFoundDesktop()), 5000);
     return () => {
       unsub();
@@ -200,6 +219,7 @@ export default function DataSettings(_props: Props) {
       await refreshSyncStatus();
       const companion = await getCompanionConfig();
       if (companion) {
+        syncedCompanion.current = `${companion.url} ${companion.token}`;
         setCompanionUrl(companion.url);
         setCompanionToken(companion.token);
       }
@@ -209,6 +229,13 @@ export default function DataSettings(_props: Props) {
   }, []);
 
   const handleSaveCompanion = async () => {
+    // Unchanged fields must not re-save: discovery may have moved the stored
+    // url since, and an idle blur would otherwise write the old one back.
+    const stored = await getCompanionConfig();
+    const url = normalizeCompanionUrl(companionUrl);
+    if (stored && url === stored.url && companionToken.trim() === stored.token) {
+      return;
+    }
     await setCompanionConfig(companionUrl, companionToken);
     reconnectCompanion().catch(() => {});
   };
