@@ -11,9 +11,9 @@ import type {PlaceList} from '../../main/life.ts';
 
 /** Same mode hues as the phone's route map: vehicle pink, foot cyan, cycle amber. */
 const MODE_VAR: Record<TripMode, string> = {
-  vehicle: '--accentPink',
-  foot: '--accentCyan',
-  cycle: '--accentAmber',
+  vehicle: '--work',
+  foot: '--personal',
+  cycle: '--personalWork',
   still: '--textMuted',
   unknown: '--textSecondary',
 };
@@ -260,9 +260,9 @@ export function MapView({date}: {date: string}) {
             ? 'No route recorded on this day.'
             : `${route.trips.length} ${route.trips.length === 1 ? 'trip' : 'trips'} · ${km.toFixed(1)} km · ${route.stops.length} stops`}
         <span className="legend">
-          <span style={{color: 'var(--accentPink)'}}>● vehicle</span>
-          <span style={{color: 'var(--accentCyan)'}}>● foot</span>
-          <span style={{color: 'var(--accentAmber)'}}>● cycle</span>
+          <span style={{color: 'var(--work)'}}>● vehicle</span>
+          <span style={{color: 'var(--personal)'}}>● foot</span>
+          <span style={{color: 'var(--personalWork)'}}>● cycle</span>
         </span>
       </div>
       <div ref={host} className="map" />

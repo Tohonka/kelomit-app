@@ -31,7 +31,7 @@ function createWindow(): void {
     minWidth: 900,
     minHeight: 600,
     titleBarStyle: 'hiddenInset',
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#090D16' : '#F2F5FB',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#161719' : '#F5F5F3',
     webPreferences: {
       preload: join(__dirname, '../preload/index.mjs'),
       // ESM preload scripts can't be sandboxed (Electron docs); contextIsolation stays on.
@@ -41,8 +41,12 @@ function createWindow(): void {
   win.on('closed', () => {
     win = null;
   });
-  // Dev aids: KELOMIT_DATE opens on a given day; KELOMIT_SCREENSHOT=<png>
-  // captures the window after load and quits (headless UI check).
+  // Dev aids: KELOMIT_DATE opens on a given day; KELOMIT_THEME=light|dark forces
+  // the appearance; KELOMIT_SCREENSHOT=<png> captures the window after load and
+  // quits (headless UI check).
+  if (process.env.KELOMIT_THEME === 'light' || process.env.KELOMIT_THEME === 'dark') {
+    nativeTheme.themeSource = process.env.KELOMIT_THEME;
+  }
   const query: Record<string, string> = {};
   if (process.env.KELOMIT_DATE) query.date = process.env.KELOMIT_DATE;
   if (process.env.KELOMIT_VIEW) query.view = process.env.KELOMIT_VIEW;

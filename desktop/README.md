@@ -73,8 +73,9 @@ phone (`energyDay`, `patterns`, `movementSummary`).
 | Env | Effect |
 |---|---|
 | `KELOMIT_DATE=2026-09-16` | open on that day |
-| `KELOMIT_VIEW=map` | open on a view (`day`, `map`, `habits`, `nags`, `gallery`, `insights`, `projects`, `leave`, `search`) |
+| `KELOMIT_VIEW=map` | open on a view (`home`, `day`, `map`, `food`, `health`, `habits`, `nags`, `gallery`, `insights`, `projects`, `leave`, `search`) |
 | `KELOMIT_SCREENSHOT=/tmp/x.png` | capture the window after load and quit |
+| `KELOMIT_THEME=light` | force light or dark appearance |
 | `KELOMIT_REPORT_PDF=/tmp/r.pdf` | print 1–16 Sep 2026's report headlessly and quit |
 | `KELOMIT_PORT=8091` | run a dev instance beside the packaged app (which holds 8090) |
 

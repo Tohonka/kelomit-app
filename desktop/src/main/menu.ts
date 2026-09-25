@@ -8,10 +8,13 @@ export type MenuAction =
   | 'today'
   | 'prev-day'
   | 'next-day'
+  | 'view-home'
   | 'view-day'
   | 'view-map'
   | 'view-projects'
   | 'view-leave'
+  | 'view-food'
+  | 'view-health'
   | 'view-habits'
   | 'view-nags'
   | 'view-gallery'
@@ -51,10 +54,13 @@ export function installMenu(getWindow: () => BrowserWindow | null): void {
     {
       label: 'View',
       submenu: [
+        {label: 'Home', accelerator: 'CmdOrCtrl+0', click: send('view-home')},
         {label: 'Day', accelerator: 'CmdOrCtrl+1', click: send('view-day')},
         {label: 'Map', accelerator: 'CmdOrCtrl+M', click: send('view-map')},
         {label: 'Projects & Tags', accelerator: 'CmdOrCtrl+2', click: send('view-projects')},
         {label: 'Leave', accelerator: 'CmdOrCtrl+3', click: send('view-leave')},
+        {label: 'Food', accelerator: 'CmdOrCtrl+8', click: send('view-food')},
+        {label: 'Health', accelerator: 'CmdOrCtrl+9', click: send('view-health')},
         {label: 'Habits', accelerator: 'CmdOrCtrl+4', click: send('view-habits')},
         {label: 'Nags', accelerator: 'CmdOrCtrl+5', click: send('view-nags')},
         {label: 'Gallery', accelerator: 'CmdOrCtrl+6', click: send('view-gallery')},

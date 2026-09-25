@@ -1248,10 +1248,13 @@ function installMenu(getWindow) {
     {
       label: "View",
       submenu: [
+        { label: "Home", accelerator: "CmdOrCtrl+0", click: send("view-home") },
         { label: "Day", accelerator: "CmdOrCtrl+1", click: send("view-day") },
         { label: "Map", accelerator: "CmdOrCtrl+M", click: send("view-map") },
         { label: "Projects & Tags", accelerator: "CmdOrCtrl+2", click: send("view-projects") },
         { label: "Leave", accelerator: "CmdOrCtrl+3", click: send("view-leave") },
+        { label: "Food", accelerator: "CmdOrCtrl+8", click: send("view-food") },
+        { label: "Health", accelerator: "CmdOrCtrl+9", click: send("view-health") },
         { label: "Habits", accelerator: "CmdOrCtrl+4", click: send("view-habits") },
         { label: "Nags", accelerator: "CmdOrCtrl+5", click: send("view-nags") },
         { label: "Gallery", accelerator: "CmdOrCtrl+6", click: send("view-gallery") },
@@ -1524,10 +1527,7 @@ function listPlaces(db) {
   ).all() : [];
   return { named, saved };
 }
-function dayHealth(db, date) {
-  if (!hasTable(db, "health_daily")) return null;
-  const row = db.prepare("SELECT * FROM health_daily WHERE date = ?").get(date);
-  if (!row) return null;
+function healthRow(row) {
   let exercise = null;
   if (typeof row.exercise === "string") {
     try {
@@ -1537,6 +1537,36 @@ function dayHealth(db, date) {
     }
   }
   return { ...row, exercise };
+}
+function dayHealth(db, date) {
+  if (!hasTable(db, "health_daily")) return null;
+  const row = db.prepare("SELECT * FROM health_daily WHERE date = ?").get(date);
+  return row ? healthRow(row) : null;
+}
+function healthMonth(db, month) {
+  if (!hasTable(db, "health_daily")) return [];
+  const [from, to] = monthBounds$1(month);
+  return db.prepare("SELECT * FROM health_daily WHERE date BETWEEN ? AND ? ORDER BY date DESC").all(from, to).map(healthRow);
+}
+function foodMonth(db, month) {
+  if (!hasTable(db, "food_entries")) return { days: [], kcal: 0 };
+  const [from, to] = monthBounds$1(month);
+  const rows = db.prepare(
+    `SELECT f.*, d.date AS date FROM food_entries f JOIN days d ON d.id = f.day_id
+        WHERE d.date BETWEEN ? AND ? ORDER BY d.date DESC, f.eaten_at, f.id`
+  ).all(from, to);
+  const days = [];
+  for (const r of rows) {
+    let day = days.at(-1);
+    if (!day || day.date !== r.date) {
+      day = { date: r.date, kcal: 0, noKcal: 0, entries: [] };
+      days.push(day);
+    }
+    day.entries.push(r);
+    if (r.kcal == null) day.noKcal++;
+    else day.kcal += r.kcal;
+  }
+  return { days, kcal: days.reduce((s, d) => s + d.kcal, 0) };
 }
 function gallery(db, month) {
   if (!hasTable(db, "entry_media")) return [];
@@ -2318,6 +2348,8 @@ const QUERIES = {
   listNags,
   listPlaces,
   dayHealth,
+  foodMonth,
+  healthMonth,
   gallery,
   search,
   insights
@@ -2565,7 +2597,7 @@ function createWindow() {
     minWidth: 900,
     minHeight: 600,
     titleBarStyle: "hiddenInset",
-    backgroundColor: nativeTheme.shouldUseDarkColors ? "#090D16" : "#F2F5FB",
+    backgroundColor: nativeTheme.shouldUseDarkColors ? "#161719" : "#F5F5F3",
     webPreferences: {
       preload: join(__dirname, "../preload/index.mjs"),
       // ESM preload scripts can't be sandboxed (Electron docs); contextIsolation stays on.
@@ -2575,6 +2607,9 @@ function createWindow() {
   win.on("closed", () => {
     win = null;
   });
+  if (process.env.KELOMIT_THEME === "light" || process.env.KELOMIT_THEME === "dark") {
+    nativeTheme.themeSource = process.env.KELOMIT_THEME;
+  }
   const query = {};
   if (process.env.KELOMIT_DATE) query.date = process.env.KELOMIT_DATE;
   if (process.env.KELOMIT_VIEW) query.view = process.env.KELOMIT_VIEW;

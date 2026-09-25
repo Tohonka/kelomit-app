@@ -20,13 +20,13 @@ const SCOPES: [Scope, string][] = [
   ['work', 'Work'],
   ['personal', 'Personal'],
 ];
-const CYCLE = ['var(--accentPink)', 'var(--accentCyan)', 'var(--accentAmber)'];
+const CYCLE = ['var(--work)', 'var(--personal)', 'var(--personalWork)'];
 const ACTIVITY_COLOR: Record<string, string> = {
-  work: 'var(--accentPink)',
-  personal_work: 'var(--accentAmber)',
-  personal: 'var(--accentCyan)',
+  work: 'var(--work)',
+  personal_work: 'var(--personalWork)',
+  personal: 'var(--personal)',
 };
-const DAY_CEILING_HOURS = 9;
+export const DAY_CEILING_HOURS = 9;
 const PATTERN_DAYS = 90;
 
 const km = (m: number) => `${(m / 1000).toFixed(1)} km`;
@@ -70,7 +70,7 @@ function sentence(p: Pattern): string {
     : `Days with ${x} ${cmp} ${t}: ${y} averaged ${low}. Other days: ${high}.`;
 }
 
-interface Bar {
+export interface Bar {
   key: string;
   label: string;
   value: number;
@@ -78,7 +78,7 @@ interface Bar {
 }
 
 /** One bar per day, scaled to the tallest (or a ceiling) — the phone's DayBars. */
-function Bars({days, color, ceiling, title}: {days: Bar[]; color: string; ceiling?: number; title: string}) {
+export function Bars({days, color, ceiling, title}: {days: Bar[]; color: string; ceiling?: number; title: string}) {
   const max = ceiling ?? Math.max(1, ...days.map(d => d.value));
   return (
     <>
@@ -269,7 +269,7 @@ export function Insights() {
                 : 'Add your weight in the phone’s Settings → Health for an energy estimate'}
             </p>
           </div>
-          {isWeek && <Bars title="Walking minutes" days={bars(k => Math.round((m.footSecByDay[k] ?? 0) / 60))} color="var(--accentCyan)" />}
+          {isWeek && <Bars title="Walking minutes" days={bars(k => Math.round((m.footSecByDay[k] ?? 0) / 60))} color="var(--personal)" />}
         </section>
       )}
 
@@ -308,7 +308,7 @@ export function Insights() {
             />
             {d.food.noKcal > 0 && <p className="muted note">{d.food.noKcal} without kcal</p>}
           </div>
-          {isWeek && <Bars title="Daily kcal" days={bars(k => d.food.byDay[k]?.kcal ?? 0)} color="var(--accentAmber)" />}
+          {isWeek && <Bars title="Daily kcal" days={bars(k => d.food.byDay[k]?.kcal ?? 0)} color="var(--personalWork)" />}
         </section>
       )}
 
@@ -323,7 +323,7 @@ export function Insights() {
             )}
             <p className="muted note">Finished days only. Estimates, not measurements.</p>
           </div>
-          {isWeek && <Bars title="Energy used per day" days={bars(k => d.energy.usedByDay[k] ?? 0)} color="var(--accentCyan)" />}
+          {isWeek && <Bars title="Energy used per day" days={bars(k => d.energy.usedByDay[k] ?? 0)} color="var(--personal)" />}
         </section>
       )}
       {d.energy.bmr == null && hasAnything && (
@@ -345,7 +345,7 @@ export function Insights() {
             )}
             {h.hr != null && <Stat label="Resting heart rate" value={`${h.hr} bpm`} />}
           </div>
-          {isWeek && h.steps != null && <Bars title="Daily steps" days={bars(k => h.stepsByDay[k] ?? 0)} color="var(--accentPink)" />}
+          {isWeek && h.steps != null && <Bars title="Daily steps" days={bars(k => h.stepsByDay[k] ?? 0)} color="var(--work)" />}
         </section>
       )}
 

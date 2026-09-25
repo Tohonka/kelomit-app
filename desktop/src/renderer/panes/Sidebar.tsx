@@ -11,7 +11,8 @@ interface Props {
 
 const WEEKDAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 
-/** Month grid (Monday first) + the month's days as a list, worked hours on both. */
+/** Month grid (Monday first): worked hours under the day, a dot for days that
+ *  only have notes. The grid is the overview; counts live in the day view. */
 export function Sidebar({month, date, onMonth, onDate}: Props) {
   const summary = useQuery('monthSummary', month);
   const byDate = new Map<string, MonthDay>((summary?.days ?? []).map(d => [d.date, d]));
@@ -26,8 +27,6 @@ export function Sidebar({month, date, onMonth, onDate}: Props) {
     ...Array.from({length: daysInMonth}, (_, i) => `${month}-${String(i + 1).padStart(2, '0')}`),
   ];
 
-  const listed = [...(summary?.days ?? [])].reverse();
-
   return (
     <div className="sidebar">
       <div className="month-nav">
@@ -38,9 +37,6 @@ export function Sidebar({month, date, onMonth, onDate}: Props) {
         <button className="btn" onClick={() => onMonth(addMonths(month, 1))} title="Next month">
           ›
         </button>
-      </div>
-      <div className="month-total">
-        {summary ? formatHours(summary.totalWorkSeconds) : summary === null ? 'no data' : '…'}
       </div>
       <div className="month-grid">
         {WEEKDAYS.map(w => (
@@ -71,21 +67,8 @@ export function Sidebar({month, date, onMonth, onDate}: Props) {
           );
         })}
       </div>
-      <div className="day-list">
-        {listed.map(d => (
-          <button
-            key={d.date}
-            className={`day-row${d.date === date ? ' selected' : ''}`}
-            onClick={() => onDate(d.date)}>
-            <span className="d">{d.date.slice(8)}</span>
-            <span className="meta">
-              {d.leaves.length
-                ? 'leave'
-                : `${d.entryCount} ${d.entryCount === 1 ? 'entry' : 'entries'}`}
-            </span>
-            <span className="h">{d.workSeconds > 0 ? formatHours(d.workSeconds) : ''}</span>
-          </button>
-        ))}
+      <div className="month-total">
+        {summary ? `${formatHours(summary.totalWorkSeconds)} worked` : summary === null ? 'no data' : '…'}
       </div>
     </div>
   );

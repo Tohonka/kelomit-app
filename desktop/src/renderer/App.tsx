@@ -11,10 +11,12 @@ import {MapView} from './panes/MapView.tsx';
 import {ReportSheet} from './panes/ReportSheet.tsx';
 import {Habits} from './panes/Habits.tsx';
 import {Nags} from './panes/Nags.tsx';
-import {FoodEditor} from './panes/Food.tsx';
+import {FoodEditor, FoodLog} from './panes/Food.tsx';
+import {HealthLog} from './panes/Health.tsx';
 import {Gallery} from './panes/Gallery.tsx';
 import {Search} from './panes/Search.tsx';
 import {Insights} from './panes/Insights.tsx';
+import {Home} from './panes/Home.tsx';
 import type {FoodSelection} from './panes/Food.tsx';
 import {addDays, clock, monthOf, todayIso} from './lib/format.ts';
 import {applyPendingDay, applyPendingEntries} from './lib/pending.ts';
@@ -29,23 +31,95 @@ declare global {
   }
 }
 
-type View = 'day' | 'projects' | 'leave' | 'map' | 'habits' | 'nags' | 'gallery' | 'search' | 'insights';
-const VIEWS: [View, string][] = [
-  ['day', 'Day'],
-  ['map', 'Map'],
-  ['habits', 'Habits'],
-  ['nags', 'Nags'],
-  ['gallery', 'Gallery'],
-  ['insights', 'Insights'],
-  ['projects', 'Projects & Tags'],
-  ['leave', 'Leave'],
-  ['search', 'Search'],
+type View =
+  | 'home'
+  | 'day'
+  | 'map'
+  | 'insights'
+  | 'search'
+  | 'food'
+  | 'health'
+  | 'habits'
+  | 'nags'
+  | 'gallery'
+  | 'projects'
+  | 'leave';
+const LABEL: Record<View, string> = {
+  home: 'Home',
+  day: 'Day',
+  map: 'Map',
+  insights: 'Insights',
+  search: 'Search',
+  food: 'Food',
+  health: 'Health',
+  habits: 'Habits',
+  nags: 'Nags',
+  gallery: 'Gallery',
+  projects: 'Projects & Tags',
+  leave: 'Leave',
+};
+/** The nav: flat tabs for the daily views, two dropdown groups for the rest. */
+const NAV: (View | {group: string; views: View[]})[] = [
+  'home',
+  'day',
+  'map',
+  'insights',
+  {group: 'Life', views: ['food', 'health', 'habits', 'nags']},
+  {group: 'Library', views: ['gallery', 'projects', 'leave']},
+  'search',
 ];
+const MENU_VIEWS: Record<string, View> = {
+  'view-home': 'home',
+  'view-day': 'day',
+  'view-map': 'map',
+  'view-insights': 'insights',
+  'view-search': 'search',
+  'view-food': 'food',
+  'view-health': 'health',
+  'view-habits': 'habits',
+  'view-nags': 'nags',
+  'view-gallery': 'gallery',
+  'view-projects': 'projects',
+  'view-leave': 'leave',
+};
 type AppSelection = Selection | FoodSelection;
 const isFood = (s: AppSelection): s is FoodSelection => s != null && (s.kind === 'food' || s.kind === 'newFood');
 
 const NO_PROJECTS: never[] = [];
 const NO_TAGS: never[] = [];
+
+function NavGroup({group, views, view, onView}: {group: string; views: View[]; view: View; onView: (v: View) => void}) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    window.addEventListener('mousedown', close);
+    return () => window.removeEventListener('mousedown', close);
+  }, [open]);
+  const active = views.includes(view);
+  return (
+    <span className="nav-group" onMouseDown={e => e.stopPropagation()}>
+      <button className={active ? 'on' : open ? 'open' : ''} onClick={() => setOpen(o => !o)}>
+        {active ? `${group} · ${LABEL[view]}` : group} ▾
+      </button>
+      {open && (
+        <span className="nav-menu">
+          {views.map(v => (
+            <button
+              key={v}
+              className={view === v ? 'on' : ''}
+              onClick={() => {
+                onView(v);
+                setOpen(false);
+              }}>
+              {LABEL[v]}
+            </button>
+          ))}
+        </span>
+      )}
+    </span>
+  );
+}
 
 export function App() {
   const [pairing, setPairing] = useState(false);
@@ -53,7 +127,7 @@ export function App() {
   const [showReport, setShowReport] = useState(false);
   const params = new URLSearchParams(location.search);
   const [date, setDate] = useState(() => params.get('date') ?? todayIso());
-  const [view, setView] = useState<View>(() => (params.get('view') as View) || 'day');
+  const [view, setView] = useState<View>(() => (params.get('view') as View) || 'home');
   const [month, setMonth] = useState(monthOf(date));
   const [selection, setSelection] = useState<AppSelection>(null);
   const phone = usePhoneState();
@@ -74,9 +148,18 @@ export function App() {
     setMonth(monthOf(d));
     setSelection(null);
   };
+  const openDay = (d: string) => {
+    goTo(d);
+    setView('day');
+  };
   const openEntry = (d: string, id: number) => {
     goTo(d);
     setSelection({kind: 'entry', id});
+    setView('day');
+  };
+  const openFood = (d: string, id: number) => {
+    goTo(d);
+    setSelection({kind: 'food', id});
     setView('day');
   };
 
@@ -90,16 +173,8 @@ export function App() {
         else if (action === 'new-note') {
           setView('day');
           setSelection({kind: 'new', parentId: null});
-        } else if (action === 'view-day') setView('day');
-        else if (action === 'view-projects') setView('projects');
-        else if (action === 'view-leave') setView('leave');
-        else if (action === 'view-map') setView('map');
-        else if (action === 'view-habits') setView('habits');
-        else if (action === 'view-nags') setView('nags');
-        else if (action === 'view-gallery') setView('gallery');
-        else if (action === 'view-search') setView('search');
-        else if (action === 'view-insights') setView('insights');
-        else if (action === 'export-report') setShowReport(true);
+        } else if (action === 'export-report') setShowReport(true);
+        else if (action in MENU_VIEWS) setView(MENU_VIEWS[action]);
       }),
     [date]
   );
@@ -121,11 +196,15 @@ export function App() {
           + Note
         </button>
         <span className="seg views">
-          {VIEWS.map(([v, label]) => (
-            <button key={v} className={view === v ? 'on' : ''} onClick={() => setView(v)}>
-              {label}
-            </button>
-          ))}
+          {NAV.map(item =>
+            typeof item === 'string' ? (
+              <button key={item} className={view === item ? 'on' : ''} onClick={() => setView(item)}>
+                {LABEL[item]}
+              </button>
+            ) : (
+              <NavGroup key={item.group} group={item.group} views={item.views} view={view} onView={setView} />
+            )
+          )}
         </span>
         <span className="spacer" />
         {phone.activeSession && (
@@ -152,8 +231,21 @@ export function App() {
       </header>
       <main className="panes">
         <section className="pane">
-          <Sidebar month={month} date={date} onMonth={setMonth} onDate={goTo} />
+          <Sidebar
+            month={month}
+            date={date}
+            onMonth={setMonth}
+            onDate={d => {
+              goTo(d);
+              if (view === 'home') setView('day');
+            }}
+          />
         </section>
+        {view === 'home' && (
+          <section className="pane wide">
+            <Home onOpenDay={openDay} onOpenEntry={openEntry} />
+          </section>
+        )}
         {view === 'day' && (
           <>
             <section className="pane">
@@ -194,6 +286,16 @@ export function App() {
         {view === 'leave' && (
           <section className="pane wide">
             <Leave year={Number(month.slice(0, 4))} />
+          </section>
+        )}
+        {view === 'food' && (
+          <section className="pane wide">
+            <FoodLog month={month} onMonth={setMonth} onOpen={openFood} />
+          </section>
+        )}
+        {view === 'health' && (
+          <section className="pane wide">
+            <HealthLog month={month} onMonth={setMonth} onOpen={openDay} />
           </section>
         )}
         {view === 'habits' && (

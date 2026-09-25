@@ -39,8 +39,12 @@ textarea {
   align-items: center;
   gap: 12px;
   padding: 0 16px 0 84px; /* clear the traffic lights */
-  background: var(--glassTopBar);
-  border-bottom: 1px solid var(--glassBorder);
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.titlebar > strong {
+  letter-spacing: -0.01em;
 }
 
 .titlebar button {
@@ -96,21 +100,23 @@ textarea {
 /* ---- controls ---------------------------------------------------------- */
 
 .btn {
-  border: 1px solid var(--glassBorder);
-  background: var(--glassPill);
-  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bgCard);
+  border-radius: 7px;
   padding: 4px 10px;
   cursor: default;
+  transition: border-color 120ms ease, background 120ms ease;
 }
 
 .btn:hover {
-  border-color: var(--glassHighlight);
+  border-color: var(--borderStrong);
 }
 
 .btn.primary {
   background: var(--primary);
   border-color: var(--primary);
-  color: var(--white);
+  color: var(--onPrimary);
+  font-weight: 600;
 }
 
 /* ---- sheets ------------------------------------------------------------ */
@@ -161,7 +167,7 @@ textarea {
 /* ---- sidebar ----------------------------------------------------------- */
 
 .sidebar {
-  padding: 12px;
+  padding: 16px 14px;
 }
 
 .month-nav {
@@ -172,16 +178,17 @@ textarea {
 }
 
 .month-total {
-  color: var(--primary);
-  font-weight: 700;
-  margin-bottom: 8px;
+  color: var(--textSecondary);
+  font-size: 12px;
+  padding: 0 4px;
+  font-variant-numeric: tabular-nums;
 }
 
 .month-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 2px;
-  margin-bottom: 12px;
+  margin: 8px 0 12px;
 }
 
 .month-grid .wd {
@@ -197,21 +204,22 @@ textarea {
   flex-direction: column;
   align-items: center;
   gap: 1px;
-  height: 38px;
-  padding: 3px 0 0;
-  border: 1px solid transparent;
+  height: 40px;
+  padding: 4px 0 0;
+  border: 0;
   overflow: hidden;
-  border-radius: 6px;
+  border-radius: 8px;
   background: transparent;
+  transition: background 120ms ease;
 }
 
 .month-grid .cell:hover {
   background: var(--swatch);
 }
 
-.month-grid .cell.selected {
-  background: var(--bgMuted);
-  border-color: var(--glassHighlight);
+.month-grid .cell.selected,
+.month-grid .cell.selected:hover {
+  background: var(--primary);
 }
 
 .month-grid .cell.today .n {
@@ -219,64 +227,36 @@ textarea {
   font-weight: 700;
 }
 
+.month-grid .cell.selected .n,
+.month-grid .cell.selected .h {
+  color: var(--onPrimary);
+}
+
+.month-grid .cell.selected .dot {
+  background: var(--onPrimary);
+}
+
 .month-grid .cell.leave .n {
-  color: var(--accentCyan);
+  color: var(--personal);
 }
 
 .month-grid .cell .h {
-  font-size: 9px;
+  font-size: 10px;
   white-space: nowrap;
   letter-spacing: -0.02em;
   color: var(--textSecondary);
+  font-variant-numeric: tabular-nums;
 }
 
 .month-grid .cell .dot {
   position: absolute;
-  bottom: 3px;
-  width: 4px;
-  height: 4px;
+  bottom: 5px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   background: var(--primary);
 }
 
-.day-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.day-row {
-  display: grid;
-  grid-template-columns: 28px 1fr auto;
-  gap: 8px;
-  align-items: baseline;
-  padding: 5px 8px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  text-align: left;
-}
-
-.day-row:hover {
-  background: var(--swatch);
-}
-
-.day-row.selected {
-  background: var(--bgMuted);
-}
-
-.day-row .d {
-  font-weight: 600;
-}
-
-.day-row .meta {
-  color: var(--textMuted);
-}
-
-.day-row .h {
-  color: var(--textSecondary);
-  font-variant-numeric: tabular-nums;
-}
 
 /* ---- day view ---------------------------------------------------------- */
 
@@ -371,22 +351,22 @@ textarea {
 }
 
 .work {
-  color: var(--accentPink);
+  color: var(--work);
 }
 .personal_work {
-  color: var(--accentAmber);
+  color: var(--personalWork);
 }
 .personal {
-  color: var(--accentCyan);
+  color: var(--personal);
 }
 .bar .work {
-  background: var(--accentPink);
+  background: var(--work);
 }
 .bar .personal_work {
-  background: var(--accentAmber);
+  background: var(--personalWork);
 }
 .bar .personal {
-  background: var(--accentCyan);
+  background: var(--personal);
 }
 
 .day-notes {
@@ -398,7 +378,7 @@ textarea {
 .entry {
   background: var(--bgCard);
   border: 1px solid var(--border);
-  border-left: 3px solid var(--accentPink);
+  border-left: 3px solid var(--work);
   border-radius: 10px;
   padding: 10px 12px;
   margin: 6px 0;
@@ -406,11 +386,11 @@ textarea {
 }
 
 .entry.personal_work {
-  border-left-color: var(--accentAmber);
+  border-left-color: var(--personalWork);
 }
 
 .entry.personal {
-  border-left-color: var(--accentCyan);
+  border-left-color: var(--personal);
 }
 
 .entry.selected {
@@ -521,10 +501,21 @@ textarea {
 
 /* ---- editing ----------------------------------------------------------- */
 
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
 input[type='text'],
 input:not([type]),
 input[type='number'],
 input[type='time'],
+input[type='date'],
+input[type='datetime-local'],
+input[type='month'],
 select,
 textarea {
   background: var(--bg);
@@ -532,7 +523,11 @@ textarea {
   border-radius: 6px;
   padding: 4px 6px;
   color: var(--textPrimary);
-  color-scheme: dark light;
+}
+
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: var(--primary);
 }
 
 input:focus,
@@ -585,21 +580,31 @@ textarea:focus {
 
 .seg {
   display: inline-flex;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  overflow: hidden;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 9px;
+  background: var(--bgMuted);
   margin-bottom: 10px;
 }
 
 .seg button {
   border: 0;
   background: transparent;
-  padding: 4px 10px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  color: var(--textSecondary);
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.seg button:hover {
+  color: var(--textPrimary);
 }
 
 .seg button.on {
-  background: var(--bgMuted);
+  background: var(--bgCard);
   color: var(--textPrimary);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
 }
 
 .checks {
@@ -631,7 +636,7 @@ textarea:focus {
 }
 
 .btn.queue {
-  color: var(--accentAmber);
+  color: var(--personalWork);
 }
 
 .btn.queue.failed {
@@ -639,7 +644,7 @@ textarea:focus {
 }
 
 .pending-chip {
-  color: var(--accentAmber);
+  color: var(--personalWork);
   border: 1px solid currentColor;
   background: transparent;
 }
@@ -714,7 +719,59 @@ textarea.day-notes {
 
 .seg.views {
   margin: 0 0 0 8px;
+  padding: 0;
+  background: transparent;
   -webkit-app-region: no-drag;
+}
+
+.seg.views button {
+  padding: 4px 9px;
+}
+
+.seg.views button.on {
+  background: var(--bgMuted);
+  box-shadow: none;
+}
+
+.nav-group {
+  position: relative;
+}
+
+.nav-group > button.open {
+  color: var(--textPrimary);
+}
+
+.nav-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  min-width: 170px;
+  padding: 4px;
+  background: var(--bgCard);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.nav-menu button {
+  border: 0;
+  background: transparent;
+  padding: 6px 10px;
+  border-radius: 6px;
+  text-align: left;
+  color: var(--textPrimary);
+}
+
+.nav-menu button:hover {
+  background: var(--swatch);
+}
+
+.nav-menu button.on {
+  font-weight: 600;
+  color: var(--primary);
 }
 
 .pane.wide {
@@ -1171,7 +1228,7 @@ label.check {
 }
 
 .habits .streak.on {
-  color: var(--accentAmber);
+  color: var(--personalWork);
   font-weight: 700;
 }
 
@@ -1231,7 +1288,7 @@ label.check {
 }
 
 .habits .dot:hover:not(:disabled) {
-  border-color: var(--glassHighlight);
+  border-color: var(--borderStrong);
 }
 
 .habits .dot.done {
@@ -1239,7 +1296,7 @@ label.check {
 }
 
 .habits .dot.manual {
-  box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--accentAmber);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--personalWork);
 }
 
 .habits .dot.today {
@@ -1535,7 +1592,7 @@ label.check {
   margin: 0 0 8px;
 }
 
-.insights .eyebrow {
+.eyebrow {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -1636,7 +1693,7 @@ label.check {
   line-height: 1.5;
 }
 
-.insights .bars {
+.bars {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
@@ -1644,7 +1701,7 @@ label.check {
   padding: 14px 16px 10px;
 }
 
-.insights .bars .col {
+.bars .col {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1652,7 +1709,7 @@ label.check {
   flex: 1;
 }
 
-.insights .bars .track {
+.bars .track {
   height: 100px;
   width: 22px;
   background: none;
@@ -1662,17 +1719,270 @@ label.check {
   overflow: visible;
 }
 
-.insights .bars .bar {
+.bars .bar {
   width: 100%;
   border-radius: 5px;
 }
 
-.insights .bars .lbl {
+.bars .lbl {
   font-size: 11px;
   color: var(--textMuted);
 }
 
-.insights .bars .lbl.today {
+.bars .lbl.today {
   color: var(--primary);
   font-weight: 700;
+}
+
+/* ---- home -------------------------------------------------------------- */
+
+.home {
+  padding: 28px 36px 56px;
+  max-width: 920px;
+  user-select: text;
+}
+
+.home-head {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.home-head h1 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.home-head .status {
+  color: var(--textMuted);
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 128px;
+  padding: 18px 20px;
+  background: var(--bgCard);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  text-align: left;
+  color: var(--textPrimary);
+}
+
+.tile.link:hover {
+  border-color: var(--borderStrong);
+}
+
+.tile .eyebrow {
+  margin: 0;
+}
+
+.tile .big {
+  margin-top: auto;
+  font-size: 32px;
+  font-weight: 500;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.tile .sub {
+  font-size: 12px;
+  color: var(--textSecondary);
+}
+
+.tile .track {
+  height: 6px;
+  margin-top: 6px;
+  border-radius: 3px;
+  background: var(--bgMuted);
+  overflow: hidden;
+}
+
+.tile .fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--primary);
+}
+
+.tile .mini {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+
+.tile .mini li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+  border-top: 1px solid var(--border);
+}
+
+.tile .mini li:first-child {
+  border-top: 0;
+}
+
+.home section {
+  margin-top: 28px;
+}
+
+.home h2 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--textMuted);
+}
+
+.home .eyebrow {
+  margin: 0 0 8px;
+}
+
+.list {
+  background: var(--bgCard);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 4px 8px;
+}
+
+.list .row {
+  display: grid;
+  grid-template-columns: 48px 1fr auto;
+  gap: 12px;
+  align-items: baseline;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  background: transparent;
+  text-align: left;
+  border-radius: 8px;
+}
+
+.list .row:first-child {
+  border-top: 0;
+}
+
+.list .row:hover {
+  background: var(--swatch);
+}
+
+.list .t,
+.list .meta {
+  color: var(--textMuted);
+}
+
+.list .name {
+  font-weight: 500;
+  color: var(--textPrimary);
+}
+
+.list .name.work::before,
+.list .name.personal_work::before,
+.list .name.personal::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  vertical-align: 1px;
+}
+
+.list .name.work::before {
+  background: var(--work);
+}
+
+.list .name.personal_work::before {
+  background: var(--personalWork);
+}
+
+.list .name.personal::before {
+  background: var(--personal);
+}
+
+/* ---- food / health logs -------------------------------------------------- */
+
+.foodlog,
+.healthlog {
+  padding: 16px 20px 40px;
+  max-width: 760px;
+  user-select: text;
+}
+
+.foodlog .month-nav,
+.healthlog .month-nav {
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.foodlog .day {
+  margin-bottom: 12px;
+}
+
+.foodlog .day h3 {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 4px;
+  font-size: 13px;
+}
+
+.foodlog .day .total {
+  color: var(--textSecondary);
+  font-weight: 400;
+}
+
+.foodlog .day .list {
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.healthlog table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.healthlog th {
+  padding: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--textMuted);
+  text-align: left;
+  border-bottom: 1px solid var(--borderStrong);
+}
+
+.healthlog td {
+  padding: 7px 6px;
+  border-top: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.healthlog tr:first-child td {
+  border-top: 0;
+}
+
+.healthlog th.num,
+.healthlog td.num {
+  text-align: right;
+}
+
+.healthlog tbody tr:hover {
+  background: var(--swatch);
 }

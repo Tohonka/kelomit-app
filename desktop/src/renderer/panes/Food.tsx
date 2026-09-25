@@ -3,7 +3,8 @@ import {defaultPortion, fineliToProduct, portionKcal, portionOptions} from '../.
 import type {ProductFields} from '../../../../src/db/food.ts';
 import type {FineliUnit, FoodEntry, FoodProduct, FoodUnit} from '../../../../src/types/index.ts';
 import type {DayFood, FoodSearch} from '../../main/life.ts';
-import {clock, hhmm, isoOn, nowOn} from '../lib/format.ts';
+import {addMonths, clock, dayLabel, hhmm, isoOn, monthLabel, nowOn} from '../lib/format.ts';
+import {useQuery} from '../hooks/useQuery.ts';
 import {mediaUrl} from './Media.tsx';
 
 export type FoodSelection = {kind: 'food'; id: number} | {kind: 'newFood'};
@@ -379,6 +380,61 @@ export function FoodEditor({
           {isNew ? 'Add' : 'Save'}
         </button>
       </div>
+    </div>
+  );
+}
+
+interface LogProps {
+  month: string;
+  onMonth: (m: string) => void;
+  onOpen: (date: string, id: number) => void;
+}
+
+/** The month's food log, one card per day, newest first; a row opens it on the day. */
+export function FoodLog({month, onMonth, onOpen}: LogProps) {
+  const data = useQuery('foodMonth', month);
+  const days = data?.days ?? [];
+  const logged = days.filter(d => d.kcal > 0).length;
+  return (
+    <div className="foodlog">
+      <div className="month-nav">
+        <button className="btn" onClick={() => onMonth(addMonths(month, -1))}>
+          ‹
+        </button>
+        <strong>{monthLabel(month)}</strong>
+        <button className="btn" onClick={() => onMonth(addMonths(month, 1))}>
+          ›
+        </button>
+        <span className="spacer" />
+        {data && data.kcal > 0 && (
+          <span className="muted num">
+            {data.kcal} kcal · {Math.round(data.kcal / Math.max(1, logged))} kcal / day on {logged} days
+          </span>
+        )}
+      </div>
+      {data && days.length === 0 && <p className="muted">Nothing logged this month.</p>}
+      {days.map(d => (
+        <section key={d.date} className="card day">
+          <h3>
+            <span>{dayLabel(d.date)}</span>
+            <span className="num total">
+              {d.kcal} kcal{d.noKcal > 0 && <span className="muted"> · {d.noKcal} without kcal</span>}
+            </span>
+          </h3>
+          <div className="list">
+            {d.entries.map(e => (
+              <button key={e.id} className="row" onClick={() => onOpen(d.date, e.id)}>
+                <span className="t num">{clock(e.eaten_at)}</span>
+                <span className="name">
+                  {e.name}
+                  {e.note && <span className="muted"> — {e.note}</span>}
+                </span>
+                <span className="meta num">{e.kcal != null ? `${e.kcal} kcal` : '—'}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      ))}
     </div>
   );
 }

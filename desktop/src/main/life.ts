@@ -342,10 +342,7 @@ export function listPlaces(db: Database.Database): PlaceList {
 
 // ---- health ----
 
-export function dayHealth(db: Database.Database, date: string): HealthDaily | null {
-  if (!hasTable(db, 'health_daily')) return null;
-  const row = db.prepare('SELECT * FROM health_daily WHERE date = ?').get(date) as (Row & {exercise?: string | null}) | undefined;
-  if (!row) return null;
+function healthRow(row: Row & {exercise?: string | null}): HealthDaily {
   let exercise: HealthDaily['exercise'] = null;
   if (typeof row.exercise === 'string') {
     try {
@@ -355,6 +352,56 @@ export function dayHealth(db: Database.Database, date: string): HealthDaily | nu
     }
   }
   return {...(row as unknown as HealthDaily), exercise};
+}
+
+export function dayHealth(db: Database.Database, date: string): HealthDaily | null {
+  if (!hasTable(db, 'health_daily')) return null;
+  const row = db.prepare('SELECT * FROM health_daily WHERE date = ?').get(date) as (Row & {exercise?: string | null}) | undefined;
+  return row ? healthRow(row) : null;
+}
+
+/** The month's Health Connect rows, newest first (the desktop Health view). */
+export function healthMonth(db: Database.Database, month: string): HealthDaily[] {
+  if (!hasTable(db, 'health_daily')) return [];
+  const [from, to] = monthBounds(month);
+  return (db.prepare('SELECT * FROM health_daily WHERE date BETWEEN ? AND ? ORDER BY date DESC').all(from, to) as Row[]).map(healthRow);
+}
+
+export interface FoodMonthDay {
+  date: string;
+  kcal: number;
+  noKcal: number;
+  entries: FoodEntry[];
+}
+
+export interface FoodMonth {
+  /** Newest day first, entries in eating order. */
+  days: FoodMonthDay[];
+  kcal: number;
+}
+
+/** The month's food log grouped by day (the desktop Food view). */
+export function foodMonth(db: Database.Database, month: string): FoodMonth {
+  if (!hasTable(db, 'food_entries')) return {days: [], kcal: 0};
+  const [from, to] = monthBounds(month);
+  const rows = db
+    .prepare(
+      `SELECT f.*, d.date AS date FROM food_entries f JOIN days d ON d.id = f.day_id
+        WHERE d.date BETWEEN ? AND ? ORDER BY d.date DESC, f.eaten_at, f.id`
+    )
+    .all(from, to) as (FoodEntry & {date: string})[];
+  const days: FoodMonthDay[] = [];
+  for (const r of rows) {
+    let day = days.at(-1);
+    if (!day || day.date !== r.date) {
+      day = {date: r.date, kcal: 0, noKcal: 0, entries: []};
+      days.push(day);
+    }
+    day.entries.push(r);
+    if (r.kcal == null) day.noKcal++;
+    else day.kcal += r.kcal;
+  }
+  return {days, kcal: days.reduce((s, d) => s + d.kcal, 0)};
 }
 
 // ---- gallery ----
