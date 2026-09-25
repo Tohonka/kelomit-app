@@ -121,12 +121,18 @@ export async function connectCompanion(): Promise<void> {
   if (state !== 'idle') {
     return;
   }
-  const config = await getCompanionConfig();
-  if (!config) {
-    return;
-  }
+  // Claim the slot before awaiting, so concurrent callers (watchdog,
+  // foreground kick, discovery) can't each open a socket.
   const myGeneration = ++generation;
   setState('connecting');
+  const config = await getCompanionConfig();
+  if (myGeneration !== generation) {
+    return; // disconnected while reading the config
+  }
+  if (!config) {
+    setState('idle');
+    return;
+  }
   // RN's WebSocket accepts connection headers as the third argument.
   const ws = new WebSocket(wsUrl(config.url), [], {
     headers: {Authorization: `Bearer ${config.token}`},

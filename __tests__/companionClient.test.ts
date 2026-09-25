@@ -92,4 +92,9 @@ describe('stale-link watchdog', () => {
     await connectCompanion();
     expect(FakeSocket.instances).toHaveLength(2);
   });
+
+  it('concurrent connects open exactly one socket', async () => {
+    await Promise.all([connectCompanion(), connectCompanion()]);
+    expect(FakeSocket.instances).toHaveLength(1);
+  });
 });

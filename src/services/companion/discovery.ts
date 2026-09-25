@@ -40,6 +40,9 @@ export function decide(beacon: BeaconEvent, config: CompanionConfig | null, conn
 }
 
 let sub: EmitterSubscription | null = null;
+/* Beacons arrive in pairs (broadcast + multicast); serialize so the second
+ * sees the first's write instead of switching (and re-dialling) twice. */
+let chain: Promise<void> = Promise.resolve();
 let found: {beacon: BeaconEvent; at: number} | null = null;
 const foundListeners = new Set<() => void>();
 
@@ -76,7 +79,7 @@ export function startCompanionDiscovery(): void {
     return;
   }
   sub = onBeacon(b => {
-    handleBeacon(b).catch(e => diag('companion.discovery.fail', String(e)));
+    chain = chain.then(() => handleBeacon(b)).catch(e => diag('companion.discovery.fail', String(e)));
   });
   startBeaconListener().catch(() => {});
 }
