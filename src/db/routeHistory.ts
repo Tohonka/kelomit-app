@@ -20,7 +20,7 @@ type RawRow = Record<string, unknown>;
 const DEFAULT_RADIUS_M = 70;
 const STOP_MATCH_RADIUS_M = 70;
 
-type StopNameChoice =
+export type StopNameChoice =
   | {type: 'saved'; id: number; name: string}
   | {type: 'reusable'; id: number; name: string}
   | {type: 'google'; placeId: string; name: string}

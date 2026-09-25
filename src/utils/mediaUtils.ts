@@ -11,6 +11,12 @@ export async function ensureMediaDir(): Promise<void> {
   }
 }
 
+/** Where a media file with a given basename lives (the desktop companion
+ *  hands over files by basename). */
+export function mediaPathFor(name: string): string {
+  return `${MEDIA_DIR}/${name}`;
+}
+
 export function makeMediaPath(
   type: 'photo' | 'video' | 'voice',
   ext: string,

@@ -93,9 +93,10 @@ test('media upload rejects traversal', async () => {
   assert.ok(!existsSync(join(dataDir, '..', 'passwd')));
 });
 
-test('media upload rejects video', async () => {
+test('media upload accepts video (the desktop companion syncs it over the LAN)', async () => {
   const res = await app.fetch(authed('/api/media/clip.mp4', {method: 'POST', body: 'x'}));
-  assert.equal(res.status, 400);
+  assert.equal(res.status, 200);
+  assert.equal((await app.fetch(authed('/api/media/shell.sh', {method: 'POST', body: 'x'}))).status, 400);
 });
 
 test('sync installs a valid database', async () => {
@@ -150,4 +151,16 @@ test('sync of normal size still succeeds', async () => {
     authed('/api/sync', {method: 'POST', body: validDbBuffer()}),
   );
   assert.equal(res.status, 200);
+});
+
+test('a staged media file can be fetched back by name; bad names and missing files are refused', async () => {
+  const put = await app.fetch(authed('/api/media/photo_1_ab.jpg', {method: 'POST', body: Buffer.from('jpegbytes')}));
+  assert.equal(put.status, 200);
+  const res = await app.fetch(authed('/api/media/photo_1_ab.jpg'));
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('content-type'), 'image/jpeg');
+  assert.equal(Buffer.from(await res.arrayBuffer()).toString(), 'jpegbytes');
+  assert.equal((await app.fetch(authed('/api/media/nothere.jpg'))).status, 404);
+  assert.equal((await app.fetch(authed('/api/media/..%2Ftoken'))).status, 400);
+  assert.equal((await app.fetch(new Request('http://localhost/api/media/photo_1_ab.jpg'))).status, 401);
 });

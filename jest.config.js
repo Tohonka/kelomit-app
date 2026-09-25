@@ -6,6 +6,7 @@ module.exports = {
   testPathIgnorePatterns: [
     '/node_modules/',
     '<rootDir>/server/',
+    '<rootDir>/desktop/',
     // Separate checkouts — they run their own suites.
     '<rootDir>/.worktrees/',
   ],

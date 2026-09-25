@@ -19,6 +19,9 @@ import {stopTracking} from './src/services/gpsService';
 import {expirePauseIfDue} from './src/native/backgroundLocation';
 import {ensureNotificationChannel, requestNotificationPermission} from './src/services/notificationService';
 import {maybeAutoSync} from './src/services/syncService';
+import {startCompanionAutoPush, kickCompanionPush} from './src/services/companion/autoPush';
+import {connectCompanion} from './src/services/companion/client';
+import {startCompanionStatus} from './src/services/companion/status';
 import {
   reconcileRouteHistory,
   reconcileTrackingJournal,
@@ -136,6 +139,10 @@ function AppContent() {
 
     // Health Connect daily totals: throttled inside, no-op unless enabled.
     startFoodWriteBack();
+    // Desktop companion: mirror every write, debounced; no-op until paired.
+    startCompanionAutoPush();
+    startCompanionStatus();
+    connectCompanion().catch(() => {});
     // Food widget: fold in taps made while we were away, then keep its list fresh.
     startFoodWidgetSync();
     maybeImportHealth().catch(healthError => diag('health.import.fail', String(healthError)));
@@ -164,6 +171,8 @@ function AppContent() {
         syncNagWidget().catch(e => diag('nag.sync.fail', String(e)));
         // Fire and forget — sync failures never surface here.
         maybeAutoSync().catch(() => {});
+        kickCompanionPush();
+        connectCompanion().catch(() => {});
         maybeImportHealth().catch(healthError => diag('health.import.fail', String(healthError)));
       } else if (
         appState.current === 'active' &&

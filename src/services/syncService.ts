@@ -9,27 +9,47 @@ import {
 
 export type SyncResult = 'done' | 'not_configured' | 'failed';
 
-/** Extensions we push. Video is deliberately excluded — see the design doc. */
+/** Extensions we push. Video is deliberately excluded for the remote server —
+ *  see the design doc; the LAN companion target opts back in. */
 export const SYNCABLE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'wav', 'm4a'] as const;
+const VIDEO_EXTENSIONS = ['mp4'] as const;
 
 const MEDIA_DIR = `${RNFS.DocumentDirectoryPath}/kelomit/media`;
-const SNAPSHOT_PATH = `${RNFS.CachesDirectoryPath}/kelomit-sync.db`;
 const AUTO_SYNC_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
-let running = false;
+/** Where a push goes. The remote server and the desktop companion are two
+ *  targets of the same pipeline: snapshot → media diff → DB upload. */
+export interface SyncTarget {
+  url: string;
+  token: string;
+  includeVideo: boolean;
+  /** Per-target temp file, so a companion push can't delete the server
+   *  sync's snapshot from under it. */
+  snapshotPath: string;
+  onSuccess: (at: string) => Promise<void>;
+  onError: (message: string) => Promise<void>;
+}
 
-function isSyncable(name: string): boolean {
+const SERVER_SNAPSHOT_PATH = `${RNFS.CachesDirectoryPath}/kelomit-sync.db`;
+
+/** Snapshots currently being pushed, keyed by snapshot path. */
+const running = new Set<string>();
+
+function isSyncable(name: string, includeVideo: boolean): boolean {
   const ext = name.split('.').pop()?.toLowerCase() ?? '';
-  return (SYNCABLE_EXTENSIONS as readonly string[]).includes(ext);
+  return (
+    (SYNCABLE_EXTENSIONS as readonly string[]).includes(ext) ||
+    (includeVideo && (VIDEO_EXTENSIONS as readonly string[]).includes(ext))
+  );
 }
 
 /** Consistent snapshot of the live WAL database. Does not close the DB and does
  *  not interrupt tracking, unlike backupService's export. */
-async function writeSnapshot(): Promise<void> {
-  if (await RNFS.exists(SNAPSHOT_PATH)) {
-    await RNFS.unlink(SNAPSHOT_PATH);
+async function writeSnapshot(path: string): Promise<void> {
+  if (await RNFS.exists(path)) {
+    await RNFS.unlink(path);
   }
-  await getDB().execute(`VACUUM INTO '${SNAPSHOT_PATH}';`);
+  await getDB().execute(`VACUUM INTO '${path}';`);
 }
 
 async function fetchManifest(url: string, token: string): Promise<Set<string>> {
@@ -49,6 +69,7 @@ const MIME_TYPES: Record<string, string> = {
   png: 'image/png',
   wav: 'audio/wav',
   m4a: 'audio/mp4',
+  mp4: 'video/mp4',
   db: 'application/octet-stream',
 };
 
@@ -72,8 +93,7 @@ async function upload(path: string, toUrl: string, token: string): Promise<void>
 }
 
 async function uploadMissingMedia(
-  url: string,
-  token: string,
+  target: SyncTarget,
   present: Set<string>,
 ): Promise<void> {
   let items: Awaited<ReturnType<typeof RNFS.readDir>>;
@@ -91,42 +111,59 @@ async function uploadMissingMedia(
     return;
   }
   for (const item of items) {
-    if (!item.isFile() || !isSyncable(item.name) || present.has(item.name)) {
+    if (
+      !item.isFile() ||
+      !isSyncable(item.name, target.includeVideo) ||
+      present.has(item.name)
+    ) {
       continue;
     }
-    await upload(item.path, `${url}/api/media/${item.name}`, token);
+    await upload(item.path, `${target.url}/api/media/${item.name}`, target.token);
   }
 }
 
-/** Push everything to the server. Never throws — failures are recorded and
- *  surfaced in Settings only. */
+/** Push everything to `target`. Never throws — failures are reported through
+ *  the target's `onError` only. */
+export async function runSyncTo(target: SyncTarget): Promise<SyncResult> {
+  if (running.has(target.snapshotPath)) {
+    // Benign overlap, not a failure — leave the recorded status alone.
+    return 'failed';
+  }
+  running.add(target.snapshotPath);
+  try {
+    await writeSnapshot(target.snapshotPath);
+    const present = await fetchManifest(target.url, target.token);
+    // Media first: the DB must never reference a file the server lacks.
+    await uploadMissingMedia(target, present);
+    await upload(target.snapshotPath, `${target.url}/api/sync`, target.token);
+    await target.onSuccess(new Date().toISOString());
+    return 'done';
+  } catch (e) {
+    await target.onError(e instanceof Error ? e.message : String(e));
+    return 'failed';
+  } finally {
+    running.delete(target.snapshotPath);
+    if (await RNFS.exists(target.snapshotPath)) {
+      await RNFS.unlink(target.snapshotPath).catch(() => {});
+    }
+  }
+}
+
+/** Push everything to the remote server. Never throws — failures are recorded
+ *  and surfaced in Settings only. */
 export async function runSync(): Promise<SyncResult> {
   const config = await getSyncConfig();
   if (!config) {
     return 'not_configured';
   }
-  if (running) {
-    // Benign overlap, not a failure — leave the recorded status alone.
-    return 'failed';
-  }
-  running = true;
-  try {
-    await writeSnapshot();
-    const present = await fetchManifest(config.url, config.token);
-    // Media first: the DB must never reference a file the server lacks.
-    await uploadMissingMedia(config.url, config.token, present);
-    await upload(SNAPSHOT_PATH, `${config.url}/api/sync`, config.token);
-    await recordSyncSuccess(new Date().toISOString());
-    return 'done';
-  } catch (e) {
-    await recordSyncError(e instanceof Error ? e.message : String(e));
-    return 'failed';
-  } finally {
-    running = false;
-    if (await RNFS.exists(SNAPSHOT_PATH)) {
-      await RNFS.unlink(SNAPSHOT_PATH).catch(() => {});
-    }
-  }
+  return runSyncTo({
+    url: config.url,
+    token: config.token,
+    includeVideo: false,
+    snapshotPath: SERVER_SNAPSHOT_PATH,
+    onSuccess: recordSyncSuccess,
+    onError: recordSyncError,
+  });
 }
 
 /** Foreground trigger: sync at most every 6 hours. */

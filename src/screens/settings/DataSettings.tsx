@@ -19,6 +19,15 @@ import {exportToCsv} from '../../utils/exportUtils';
 import {exportBackup, importBackup} from '../../services/backupService';
 import {runSync} from '../../services/syncService';
 import {getSyncConfig, setSyncConfig, getSyncStatus} from '../../services/syncSettings';
+import {pushToCompanion} from '../../services/companion/push';
+import {reconnectCompanion} from '../../services/companion/client';
+import {
+  getCompanionConfig,
+  setCompanionConfig,
+  getCompanionStatus,
+  parsePairPayload,
+} from '../../services/companion/settings';
+import {isBarcodeScannerAvailable, scanBarcode} from '../../native/barcodeScanner';
 import {useTheme, typography, spacing, radius} from '../../theme';
 import {getDateFnsLocale} from '../../i18n';
 import {useSettingsStore} from '../../store/settingsStore';
@@ -131,6 +140,27 @@ export default function DataSettings(_props: Props) {
   const [syncToken, setSyncToken] = useState('');
   const [syncBusy, setSyncBusy] = useState(false);
   const [syncStatusText, setSyncStatusText] = useState('');
+  const [companionUrl, setCompanionUrl] = useState('');
+  const [companionToken, setCompanionToken] = useState('');
+  const [companionBusy, setCompanionBusy] = useState(false);
+  const [companionStatusText, setCompanionStatusText] = useState('');
+
+  const refreshCompanionStatus = async () => {
+    const {lastPushAt, lastError} = await getCompanionStatus();
+    if (lastError) {
+      setCompanionStatusText(t('settings.companionFailed', {error: lastError}));
+    } else if (lastPushAt) {
+      setCompanionStatusText(
+        t('settings.companionLastPush', {
+          when: format(new Date(lastPushAt), 'd.M.yyyy HH:mm', {
+            locale: getDateFnsLocale(language),
+          }),
+        }),
+      );
+    } else {
+      setCompanionStatusText(t('settings.companionNeverPushed'));
+    }
+  };
 
   const refreshSyncStatus = async () => {
     const {lastAt, lastError} = await getSyncStatus();
@@ -157,9 +187,56 @@ export default function DataSettings(_props: Props) {
         setSyncToken(config.token);
       }
       await refreshSyncStatus();
+      const companion = await getCompanionConfig();
+      if (companion) {
+        setCompanionUrl(companion.url);
+        setCompanionToken(companion.token);
+      }
+      await refreshCompanionStatus();
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleSaveCompanion = async () => {
+    await setCompanionConfig(companionUrl, companionToken);
+    reconnectCompanion().catch(() => {});
+  };
+
+  const handleScanPairing = async () => {
+    try {
+      const raw = await scanBarcode();
+      if (raw == null) {
+        return;
+      }
+      const parsed = parsePairPayload(raw);
+      if (!parsed) {
+        Alert.alert(t('settings.companionSection'), t('settings.companionScanBad'));
+        return;
+      }
+      setCompanionUrl(parsed.url);
+      setCompanionToken(parsed.token);
+      await setCompanionConfig(parsed.url, parsed.token);
+      await handleCompanionPush();
+    } catch (e) {
+      Alert.alert(t('settings.companionSection'), String(e));
+    }
+  };
+
+  const handleCompanionPush = async () => {
+    setCompanionBusy(true);
+    try {
+      await handleSaveCompanion();
+      const result = await pushToCompanion();
+      if (result === 'not_configured') {
+        Alert.alert(t('settings.companionSection'), t('settings.companionNotConfigured'));
+      } else if (result === 'done') {
+        Alert.alert(t('settings.companionSection'), t('settings.companionDone'));
+      }
+      await refreshCompanionStatus();
+    } finally {
+      setCompanionBusy(false);
+    }
+  };
 
   const handleSaveSync = async () => {
     await setSyncConfig(syncUrl, syncToken);
@@ -361,6 +438,56 @@ export default function DataSettings(_props: Props) {
             {syncBusy ? t('settings.syncing') : t('settings.syncNow')}
           </Text>
           {syncBusy
+            ? <ActivityIndicator size="small" color={colors.primary} />
+            : <Text style={styles.rowCaret}>›</Text>}
+        </TouchableOpacity>
+
+        <Text style={styles.sectionHeader}>{t('settings.companionSection')}</Text>
+
+        {isBarcodeScannerAvailable() && (
+          <TouchableOpacity style={styles.row} onPress={handleScanPairing} disabled={companionBusy}>
+            <Text style={styles.rowLabel}>{t('settings.companionScan')}</Text>
+            <Text style={styles.rowCaret}>›</Text>
+          </TouchableOpacity>
+        )}
+        <TextInput
+          style={local.syncInput}
+          value={companionUrl}
+          onChangeText={setCompanionUrl}
+          onBlur={handleSaveCompanion}
+          placeholder={t('settings.companionUrl')}
+          placeholderTextColor={colors.textMuted}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="url"
+        />
+        <TextInput
+          style={local.syncInput}
+          value={companionToken}
+          onChangeText={setCompanionToken}
+          onBlur={handleSaveCompanion}
+          placeholder={t('settings.companionToken')}
+          placeholderTextColor={colors.textMuted}
+          autoCapitalize="none"
+          autoCorrect={false}
+          secureTextEntry
+        />
+        {companionBusy ? (
+          <View style={local.syncBusyRow}>
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text style={local.syncBusyText}>{t('settings.companionPushing')}</Text>
+          </View>
+        ) : (
+          <Text style={local.syncStatus}>{companionStatusText}</Text>
+        )}
+        <TouchableOpacity
+          style={styles.row}
+          onPress={() => handleCompanionPush()}
+          disabled={companionBusy}>
+          <Text style={styles.rowLabel}>
+            {companionBusy ? t('settings.companionPushing') : t('settings.companionPushNow')}
+          </Text>
+          {companionBusy
             ? <ActivityIndicator size="small" color={colors.primary} />
             : <Text style={styles.rowCaret}>›</Text>}
         </TouchableOpacity>

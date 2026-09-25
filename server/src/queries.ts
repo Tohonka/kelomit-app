@@ -10,6 +10,7 @@ export interface DaySummary {
 }
 
 export interface MediaRow {
+  id: number;
   entry_id: number;
   media_type: string;
   file_path: string;
@@ -39,7 +40,7 @@ export interface RouteStopRow {
 /** The phone pushes whole snapshots, so the server can be handed a database
  *  older than the queries written against it. A table the snapshot predates
  *  reads as empty instead of 500-ing the page. */
-function hasTable(db: Database.Database, name: string): boolean {
+export function hasTable(db: Database.Database, name: string): boolean {
   return (
     db
       .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?")
@@ -167,7 +168,7 @@ function tagsByEntry(
 /** Entries with their project and tags attached, exactly as the app builds them
  *  — `hoursUtils` reclassifies by `project.type`, so bare rows give wrong hours.
  *  `scope` is a fixed WHERE fragment chosen by the caller; values are bound. */
-function loadEntries(
+export function loadEntries(
   db: Database.Database,
   scope: string,
   params: unknown[],
@@ -270,7 +271,7 @@ export function getSetting(db: Database.Database, key: string): string | null {
 export function getEntryMedia(db: Database.Database, dayId: number): MediaRow[] {
   return db
     .prepare(
-      `SELECT m.entry_id, m.media_type, m.file_path, m.thumbnail_path,
+      `SELECT m.id, m.entry_id, m.media_type, m.file_path, m.thumbnail_path,
               m.duration_sec, m.transcript
          FROM entry_media m
          JOIN entries e ON e.id = m.entry_id

@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "noEmit": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node", "electron-vite/node"]
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "test/**/*.ts",
+    "electron.vite.config.ts",
+    "../server/src/**/*.ts",
+    "../src/types/index.ts",
+    "../src/theme/colors.ts",
+    "../src/utils/hoursUtils.ts",
+    "../src/utils/timeFormat.ts",
+    "../src/reports/**/*.ts",
+    "../src/utils/habitMatch.ts",
+    "../src/utils/foodMath.ts",
+    "../src/utils/nagSchedule.ts",
+    "../src/utils/habitMonth.ts",
+    "../src/services/openFoodFacts.ts",
+    "../src/services/locationUtils.ts",
+    "../src/utils/geofence.ts"
+  ]
+}
