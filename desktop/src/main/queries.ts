@@ -13,6 +13,7 @@ import type {MediaRow, RouteSegmentRow, RouteStopRow} from '../../../server/src/
 import {calcDayWorkSecs} from '../../../src/utils/hoursUtils.ts';
 import {dayFood, dayHealth, foodMonth, foodProduct, foodSearch, gallery, habitsMonth, healthMonth, listNags, listPlaces, search} from './life.ts';
 import {insights} from './insights.ts';
+import {appUseRange, dayAppUse, excludedApps} from './appUse/read.ts';
 import type {Day, DayRouteStop, Entry, LeaveRange, ModeSpan, Project, RouteCoordinate, Tag} from '../../../src/types/index.ts';
 
 /**
@@ -217,6 +218,9 @@ export const QUERIES = {
   gallery,
   search,
   insights,
+  dayAppUse,
+  appUseRange,
+  excludedApps,
 } as const;
 
 export type QueryName = keyof typeof QUERIES;
