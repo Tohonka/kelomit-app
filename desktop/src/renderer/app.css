@@ -2039,3 +2039,23 @@ label.check {
 .app-use .assign input[type='number'] {
   width: 64px;
 }
+
+.app-use .break .top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  margin-bottom: 5px;
+}
+
+.app-use .break .lbl {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-use .note {
+  font-size: 12px;
+  margin: 0 0 10px;
+}

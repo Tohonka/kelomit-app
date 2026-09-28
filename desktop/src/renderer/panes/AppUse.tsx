@@ -17,6 +17,7 @@ function useDayAppUse(date: string): DayAppUse | null | undefined {
   const [data, setData] = useState<DayAppUse | null | undefined>(undefined);
   useEffect(() => {
     let live = true;
+    setData(undefined);
     const load = () => {
       window.kelomit
         .query('dayAppUse', date)
@@ -85,10 +86,14 @@ function AssignForm({date, app, notes, onDone}: {date: string; app: AppUseApp; n
   if (notes.length === 0) return <p className="muted note">No notes on this day to assign to.</p>;
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (max < 1 || notes.length === 0) {
+      onDone();
+      return;
+    }
     const m = Math.min(max, Math.max(1, Math.round(minutes)));
-    const note = notes.find(n => n.id === entryId);
+    const note = notes.find(n => n.id === entryId) ?? notes[0];
     window.kelomit
-      .cmd('appUse.assign', [date, app.bundle_id, entryId, m * 60], `${app.app_name}: ${m} min → ${note?.title || 'note'}`)
+      .cmd('appUse.assign', [date, app.bundle_id, note.id, m * 60], `${app.app_name}: ${m} min → ${note.title || 'note'}`)
       .catch(() => {});
     onDone();
   };
@@ -141,8 +146,8 @@ function AppRow({
         <div className="fill" style={{width: `${assignedPct}%`, background: 'var(--primary)'}} />
       </div>
       <div className="chips">
-        {app.chunks.map(c => (
-          <Chip key={`${c.kind}-${c.id}-${c.seconds}`} chunk={c} app={app} />
+        {app.chunks.map((c, i) => (
+          <Chip key={c.id > 0 ? `${c.kind}-${c.id}` : `live-${i}`} chunk={c} app={app} />
         ))}
         {app.unassigned_sec >= 60 && (
           <button className="btn" onClick={onToggle}>
