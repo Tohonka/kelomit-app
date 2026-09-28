@@ -181,7 +181,10 @@ export function DayView({date, detail, day, entries, selectedEntryId, onSelectEn
   const groups = useMemo(() => groupEntries(entries, 'time_asc'), [entries]);
   // Work (hours + notes) and food are separate logs on the phone too; a food
   // selection in the inspector pulls the Food tab forward.
-  const [tab, setTab] = useState<'work' | 'food' | 'health' | 'apps'>('work');
+  const [tab, setTab] = useState<'work' | 'food' | 'health' | 'apps'>(
+    // Dev aid: KELOMIT_TAB=apps (index.ts) opens on a given tab for screenshots.
+    () => (new URLSearchParams(window.location.search).get('tab') as 'work' | 'food' | 'health' | 'apps' | null) ?? 'work',
+  );
   const health = useQuery('dayHealth', date);
   const shown = selectedFoodId != null ? 'food' : tab === 'health' && !health ? 'work' : tab;
   const foodLabel = food && food.entries.length > 0 ? `Food · ${food.kcal} kcal` : 'Food';

@@ -63,6 +63,7 @@ function createWindow(): void {
   const query: Record<string, string> = {};
   if (process.env.KELOMIT_DATE) query.date = process.env.KELOMIT_DATE;
   if (process.env.KELOMIT_VIEW) query.view = process.env.KELOMIT_VIEW;
+  if (process.env.KELOMIT_TAB) query.tab = process.env.KELOMIT_TAB;
   if (process.env.ELECTRON_RENDERER_URL) {
     const url = new URL(process.env.ELECTRON_RENDERER_URL);
     for (const [k, v] of Object.entries(query)) url.searchParams.set(k, v);
