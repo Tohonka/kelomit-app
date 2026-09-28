@@ -1,4 +1,9 @@
-export {formatHours} from '../../../../src/utils/hoursUtils.ts';
+import {formatHours} from '../../../../src/utils/hoursUtils.ts';
+
+export {formatHours};
+
+/** Hours past an hour, whole minutes (at least 1) under it. */
+export const fmtSpan = (s: number): string => (s >= 3600 ? formatHours(s) : `${Math.max(1, Math.round(s / 60))} min`);
 
 /** `7:48` — fits a calendar cell where `7h 48m` does not. */
 export function compactHours(seconds: number): string {

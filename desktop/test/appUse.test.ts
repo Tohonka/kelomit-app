@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync, rmSync} from 'node:fs';
+import {mkdtempSync, rmSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {EventEmitter} from 'node:events';
@@ -79,6 +79,19 @@ test('store persists and reloads; prune drops old clean days only', () => {
   }
 });
 
+test('store treats a malformed buffer as empty instead of throwing', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'appuse-'));
+  try {
+    const file = join(dir, 'appuse.json');
+    writeFileSync(file, '{"days":{"2026-09-28":{}},"dirty":5}');
+    const s = new AppUseStore(file);
+    assert.deepEqual(s.rows('2026-09-28'), []);
+    assert.deepEqual(s.dirtyDates(), []);
+  } finally {
+    rmSync(dir, {recursive: true, force: true});
+  }
+});
+
 const auto = (p: Partial<AutoRow>): AutoRow => ({
   id: 1, date: '2026-09-28', bundle_id: 'com.google.Chrome', app_name: 'Google Chrome', session_from: '',
   entry_id: null, detached: 0, active_sec: 0, idle_sec: 0, title: null, ...p,
@@ -132,6 +145,7 @@ class FakeQueue extends EventEmitter {
   items: {id: string; fn: string; args: unknown[]; label: string}[] = [];
   failed: {item: {id: string; fn: string; args: unknown[]; label: string}; error: string}[] = [];
   dismissed: string[] = [];
+  sending: string | null = null;
   private n = 0;
   push(fn: string, args: unknown[], label: string): string {
     const id = `q${++this.n}`;
@@ -140,7 +154,7 @@ class FakeQueue extends EventEmitter {
   }
   update(id: string, args: unknown[], label?: string): boolean {
     const it = this.items.find(i => i.id === id);
-    if (!it) return false;
+    if (!it || this.sending === id) return false;
     it.args = args;
     if (label) it.label = label;
     return true;
@@ -150,7 +164,7 @@ class FakeQueue extends EventEmitter {
     this.failed = this.failed.filter(f => f.item.id !== id);
   }
   snapshot(): QueueSnapshot {
-    return {items: this.items.map(i => ({...i, createdAt: ''})), failed: this.failed.map(f => ({...f, item: {...f.item, createdAt: ''}, failedAt: ''})), sending: null};
+    return {items: this.items.map(i => ({...i, createdAt: ''})), failed: this.failed.map(f => ({...f, item: {...f.item, createdAt: ''}, failedAt: ''})), sending: this.sending};
   }
   ack(id: string): void {
     this.items = this.items.filter(i => i.id !== id);
@@ -253,6 +267,21 @@ test('a failed flush marks the day dirty again and dismisses the failed item', a
   assert.deepEqual(queue.dismissed, ['q1']);
   c.flush();
   assert.equal(queue.items[0].id, 'q2');
+});
+
+test('a flush while the item is in flight keeps the day dirty and re-sends it on ack', async () => {
+  const {store, queue, c} = harness();
+  await c.tick();
+  c.flush();
+  queue.sending = 'q1';
+  await c.tick();
+  c.flush();
+  assert.equal(queue.items.length, 1);
+  assert.deepEqual(store.dirtyDates(), ['2026-09-28']);
+  queue.sending = null;
+  queue.ack('q1');
+  assert.equal(queue.items[0].id, 'q2');
+  assert.deepEqual(store.dirtyDates(), []);
 });
 
 test('a session transition flushes immediately', async () => {

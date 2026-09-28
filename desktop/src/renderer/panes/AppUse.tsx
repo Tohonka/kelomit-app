@@ -2,7 +2,7 @@ import {useEffect, useState} from 'react';
 import type {DayAppUse, AppUseApp, AppUseChunk} from '../../main/appUse/read.ts';
 import type {CollectorStatus} from '../../main/appUse/collector.ts';
 import type {PendingEntry} from '../lib/pending.ts';
-import {formatHours} from '../lib/format.ts';
+import {fmtSpan} from '../lib/format.ts';
 import {useQuery} from '../hooks/useQuery.ts';
 
 /*
@@ -12,7 +12,6 @@ import {useQuery} from '../hooks/useQuery.ts';
  * carries the from–to. Everything goes to the phone as commands.
  */
 const mins = (s: number) => `${Math.max(1, Math.round(s / 60))} min`;
-const fmt = (s: number) => (s >= 3600 ? formatHours(s) : mins(s));
 
 function useDayAppUse(date: string): DayAppUse | null | undefined {
   const [data, setData] = useState<DayAppUse | null | undefined>(undefined);
@@ -123,12 +122,14 @@ function AppRow({
   date,
   app,
   notes,
+  excluded,
   open,
   onToggle,
 }: {
   date: string;
   app: AppUseApp;
   notes: PendingEntry[];
+  excluded: string[];
   open: boolean;
   onToggle: () => void;
 }) {
@@ -139,8 +140,8 @@ function AppRow({
       <div className="top">
         <span className="lbl">{app.app_name}</span>
         <span className="muted num">
-          {fmt(total)}
-          {app.idle_sec > 0 && ` · idling ${fmt(app.idle_sec)}`}
+          {fmtSpan(total)}
+          {app.idle_sec > 0 && ` · idling ${fmtSpan(app.idle_sec)}`}
         </span>
       </div>
       <div className="track" title={`${assignedPct}% assigned to notes`}>
@@ -155,12 +156,16 @@ function AppRow({
             Assign {mins(app.unassigned_sec)}…
           </button>
         )}
-        <button
-          className="btn"
-          title="Stop tracking this app from now on; what was logged stays"
-          onClick={() => window.kelomit.cmd('appUse.setExcluded', [app.bundle_id, true], `Stop tracking ${app.app_name}`).catch(() => {})}>
-          Stop tracking
-        </button>
+        {!excluded.includes(app.bundle_id) && (
+          <button
+            className="btn"
+            title="Stop tracking this app from now on; what was logged stays"
+            onClick={() =>
+              window.kelomit.cmd('appUse.setExcluded', [app.bundle_id, true], `Stop tracking ${app.app_name}`).catch(() => {})
+            }>
+            Stop tracking
+          </button>
+        )}
       </div>
       {open && <AssignForm date={date} app={app} notes={notes} onDone={onToggle} />}
     </div>
@@ -182,8 +187,8 @@ export function AppUseCard({date, entries}: {date: string; entries: PendingEntry
       ) : (
         <>
           <p className="muted">
-            {formatHours(data.total_sec)} in apps
-            {data.idle_sec > 0 && ` · idling ${fmt(data.idle_sec)} of that`}
+            {fmtSpan(data.total_sec)} in apps
+            {data.idle_sec > 0 && ` · idling ${fmtSpan(data.idle_sec)} of that`}
           </p>
           {data.apps.map(a => (
             <AppRow
@@ -191,6 +196,7 @@ export function AppUseCard({date, entries}: {date: string; entries: PendingEntry
               date={date}
               app={a}
               notes={notes}
+              excluded={excluded}
               open={assigning === a.bundle_id}
               onToggle={() => setAssigning(assigning === a.bundle_id ? null : a.bundle_id)}
             />

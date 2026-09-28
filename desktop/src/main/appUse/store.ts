@@ -34,8 +34,10 @@ export class AppUseStore {
     if (file && existsSync(file)) {
       try {
         const saved = JSON.parse(readFileSync(file, 'utf8')) as Partial<Saved>;
-        this.days = saved.days ?? {};
-        this.dirty = new Set(saved.dirty ?? []);
+        const days = saved.days && typeof saved.days === 'object' ? saved.days : {};
+        const dirty = Array.isArray(saved.dirty) ? saved.dirty.filter((d): d is string => typeof d === 'string') : [];
+        this.days = days;
+        this.dirty = new Set(dirty);
       } catch {
         // A corrupt buffer is an empty buffer.
       }

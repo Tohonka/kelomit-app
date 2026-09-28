@@ -41,9 +41,9 @@ export function parseFront(info: string): FrontApp | null {
 
 export async function readFront(): Promise<FrontApp | null> {
   try {
-    const {stdout: asn} = await run('lsappinfo', ['front']);
+    const {stdout: asn} = await run('lsappinfo', ['front'], {timeout: 3000});
     if (!asn.trim()) return null;
-    const {stdout: info} = await run('lsappinfo', ['info', '-only', 'name,bundleid', asn.trim()]);
+    const {stdout: info} = await run('lsappinfo', ['info', '-only', 'name,bundleid', asn.trim()], {timeout: 3000});
     return parseFront(info);
   } catch {
     return null;
@@ -53,7 +53,7 @@ export async function readFront(): Promise<FrontApp | null> {
 /** pgrep exits 1 when nothing matches. */
 export async function screensaverRunning(): Promise<boolean> {
   try {
-    await run('pgrep', ['-x', SCREENSAVER_PROCESS]);
+    await run('pgrep', ['-x', SCREENSAVER_PROCESS], {timeout: 3000});
     return true;
   } catch {
     return false;

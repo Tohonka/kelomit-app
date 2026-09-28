@@ -105,7 +105,10 @@ export class AppUseCollector {
       const args = [date, this.d.store.rows(date)];
       const label = `App use ${date}`;
       const id = this.pending.get(date);
-      if (!(id && this.d.queue.update(id, args, label))) {
+      if (id) {
+        // In flight: onQueue already drops acked/failed ids, so a false here means "sending". Keep the day dirty.
+        if (!this.d.queue.update(id, args, label)) continue;
+      } else {
         this.pending.set(date, this.d.queue.push('appUse.upsert', args, label));
       }
       this.d.store.markClean(date);
@@ -115,6 +118,7 @@ export class AppUseCollector {
 
   private onQueue(s: QueueSnapshot): void {
     const failed: string[] = [];
+    let refetch = false;
     for (const [date, id] of [...this.pending]) {
       if (s.failed.some(f => f.item.id === id)) {
         this.pending.delete(date);
@@ -122,14 +126,18 @@ export class AppUseCollector {
         failed.push(id);
       } else if (!s.items.some(i => i.id === id)) {
         this.pending.delete(date); // acked
+        // Ticks that landed while it was in flight are still dirty: send them now.
+        if (this.d.store.dirtyDates().includes(date)) refetch = true;
       }
     }
     // A background command must not sit in the failed list; the next cycle retries with fresh totals.
     for (const id of failed) this.d.queue.dismissFailed(id);
+    if (refetch) this.flush();
   }
 
   start(): void {
     this.timers = [setInterval(() => void this.tick(), TICK_MS), setInterval(() => this.flush(), FLUSH_MS)];
+    void this.tick();
     this.flush();
   }
 

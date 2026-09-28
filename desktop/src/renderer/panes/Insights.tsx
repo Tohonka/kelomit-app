@@ -1,6 +1,6 @@
 import {useState} from 'react';
 import {useQuery} from '../hooks/useQuery.ts';
-import {ACTIVITY_LABEL, addDays, formatHours} from '../lib/format.ts';
+import {ACTIVITY_LABEL, addDays, fmtSpan, formatHours} from '../lib/format.ts';
 import type {Insights as Data, Period, Scope, Slice} from '../../main/insights.ts';
 import type {Pattern, SeriesKey} from '../../../../src/utils/patterns.ts';
 import {MIN_DAYS} from '../../../../src/utils/patterns.ts';
@@ -367,8 +367,8 @@ export function Insights() {
           <h2>App use</h2>
           <div className="card">
             <p className="muted note">
-              {formatHours(d.appUse.total_sec)} in apps on {d.appUse.days} {d.appUse.days === 1 ? 'day' : 'days'}
-              {d.appUse.idle_sec > 0 && ` · idling ${formatHours(d.appUse.idle_sec)} of that`}
+              {fmtSpan(d.appUse.total_sec)} in apps on {d.appUse.days} {d.appUse.days === 1 ? 'day' : 'days'}
+              {d.appUse.idle_sec > 0 && ` · idling ${fmtSpan(d.appUse.idle_sec)} of that`}
             </p>
             {d.appUse.apps.slice(0, 8).map((a, i) => {
               const t = a.active_sec + a.idle_sec;
@@ -378,7 +378,7 @@ export function Insights() {
                   <div className="top">
                     <span className="lbl">{a.app_name}</span>
                     <span className="muted num">
-                      {formatHours(t)} · {pct}%
+                      {fmtSpan(t)} · {pct}%
                     </span>
                   </div>
                   <div className="track">
