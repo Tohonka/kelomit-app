@@ -179,7 +179,7 @@ export function Insights() {
   const hasMovement = m.footSec + m.cycleSec + m.vehicleSec > 0;
   const h = d.health;
   const hasHealth = h.steps != null || h.sleep != null || h.weightTo != null || h.hr != null;
-  const hasAnything = hasWork || hasMovement || d.habits.length > 0 || d.food.entries > 0 || hasHealth;
+  const hasAnything = hasWork || hasMovement || d.habits.length > 0 || d.food.entries > 0 || hasHealth || d.appUse.total_sec > 0;
   const targetSecs = d.weeklyTargetHours * 3600;
   const targetPct = targetSecs > 0 ? Math.min(1, workedSecs / targetSecs) : 0;
   // Hours the notes and tasks account for, vs. the day start→end work hours above.
@@ -359,6 +359,35 @@ export function Insights() {
             {h.hr != null && <Stat label="Resting heart rate" value={`${h.hr} bpm`} />}
           </div>
           {isWeek && h.steps != null && <Bars title="Daily steps" days={bars(k => h.stepsByDay[k] ?? 0)} color="var(--work)" />}
+        </section>
+      )}
+
+      {d.appUse.total_sec > 0 && (
+        <section>
+          <h2>App use</h2>
+          <div className="card">
+            <p className="muted note">
+              {formatHours(d.appUse.total_sec)} in apps on {d.appUse.days} {d.appUse.days === 1 ? 'day' : 'days'}
+              {d.appUse.idle_sec > 0 && ` · idling ${formatHours(d.appUse.idle_sec)} of that`}
+            </p>
+            {d.appUse.apps.slice(0, 8).map((a, i) => {
+              const t = a.active_sec + a.idle_sec;
+              const pct = Math.round((100 * t) / d.appUse.total_sec);
+              return (
+                <div key={a.bundle_id} className="break">
+                  <div className="top">
+                    <span className="lbl">{a.app_name}</span>
+                    <span className="muted num">
+                      {formatHours(t)} · {pct}%
+                    </span>
+                  </div>
+                  <div className="track">
+                    <div className="fill" style={{width: `${Math.max(3, pct)}%`, background: CYCLE[i % 3]}} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </section>
       )}
 

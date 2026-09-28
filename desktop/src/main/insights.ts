@@ -8,6 +8,8 @@ import {bmrMifflin, energyDay, missingProfileFields} from '../../../src/utils/en
 import type {ProfileField, WorkActivity} from '../../../src/utils/energyDay.ts';
 import {findPatterns, usableDays} from '../../../src/utils/patterns.ts';
 import type {DayPoint, Pattern} from '../../../src/utils/patterns.ts';
+import {appUseRange} from './appUse/read.ts';
+import type {AppUseRange} from './appUse/read.ts';
 import {habitDone, habitStates, localToday, shiftDate} from './life.ts';
 import type {DayRouteSegment, Entry, HealthDaily, Sex} from '../../../src/types/index.ts';
 
@@ -73,6 +75,7 @@ export interface Insights {
     usedByDay: Record<string, number>;
   };
   patterns: {days: number; list: Pattern[]};
+  appUse: AppUseRange;
 }
 
 const PATTERN_DAYS = 90;
@@ -225,6 +228,7 @@ export function insights(db: Database.Database, period: Period, scope: Scope): I
   const now = new Date();
 
   const work = {...breakdown(db, start, end, scope), byDay: workSecondsByDay(db, start, end)};
+  const appUse = appUseRange(db, start, end);
 
   // ── Movement ──
   const segs = segmentsByDay(db, start, end);
@@ -363,5 +367,6 @@ export function insights(db: Database.Database, period: Period, scope: Scope): I
     health,
     energy,
     patterns: {days: usableDays(points), list: findPatterns(points)},
+    appUse,
   };
 }
