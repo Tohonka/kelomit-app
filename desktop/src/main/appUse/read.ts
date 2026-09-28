@@ -84,8 +84,16 @@ export function mergeLive(rows: AutoRow[], live: Bucket[] | null): AutoRow[] {
       hit.app_name = b.app_name;
     } else {
       out.push({
-        id: -1, date: '', bundle_id: b.bundle_id, app_name: b.app_name, session_from: b.session_from,
-        entry_id: null, detached: 0, active_sec: b.active_sec, idle_sec: b.idle_sec, title: null,
+        id: -1,
+        date: '',
+        bundle_id: b.bundle_id,
+        app_name: b.app_name,
+        session_from: b.session_from,
+        entry_id: null,
+        detached: 0,
+        active_sec: b.active_sec,
+        idle_sec: b.idle_sec,
+        title: null,
       });
     }
   }
