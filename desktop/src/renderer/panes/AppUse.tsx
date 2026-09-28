@@ -3,6 +3,7 @@ import type {DayAppUse, AppUseApp, AppUseChunk} from '../../main/appUse/read.ts'
 import type {CollectorStatus} from '../../main/appUse/collector.ts';
 import type {PendingEntry} from '../lib/pending.ts';
 import {formatHours} from '../lib/format.ts';
+import {useQuery} from '../hooks/useQuery.ts';
 
 /*
  * The day's app use: which apps were in front on the Mac, for how long,
@@ -154,6 +155,12 @@ function AppRow({
             Assign {mins(app.unassigned_sec)}…
           </button>
         )}
+        <button
+          className="btn"
+          title="Stop tracking this app from now on; what was logged stays"
+          onClick={() => window.kelomit.cmd('appUse.setExcluded', [app.bundle_id, true], `Stop tracking ${app.app_name}`).catch(() => {})}>
+          Stop tracking
+        </button>
       </div>
       {open && <AssignForm date={date} app={app} notes={notes} onDone={onToggle} />}
     </div>
@@ -162,6 +169,7 @@ function AppRow({
 
 export function AppUseCard({date, entries}: {date: string; entries: PendingEntry[]}) {
   const data = useDayAppUse(date);
+  const excluded = useQuery('excludedApps') ?? [];
   const [assigning, setAssigning] = useState<string | null>(null);
   // Top-level, already-on-the-phone notes only (a pending create has no id yet).
   const notes = entries.filter(e => e.parent_id == null && !e.pending);
@@ -188,6 +196,22 @@ export function AppUseCard({date, entries}: {date: string; entries: PendingEntry
             />
           ))}
         </>
+      )}
+      {excluded.length > 0 && (
+        <div className="chips">
+          <span className="muted">Not tracked:</span>
+          {excluded.map(b => (
+            <span key={b} className="chip">
+              {b}
+              <button
+                className="x"
+                title="Track again"
+                onClick={() => window.kelomit.cmd('appUse.setExcluded', [b, false], `Track ${b} again`).catch(() => {})}>
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
       )}
     </div>
   );
