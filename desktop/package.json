@@ -2,7 +2,7 @@
   "name": "kelomit-desktop",
   "version": "0.1.0",
   "private": true,
-  "description": "Kelomit desktop companion \u2014 a live mirror of the phone with editing over the LAN",
+  "description": "Kelomit desktop companion — a live mirror of the phone with editing over the LAN",
   "main": "./out/main/index.js",
   "type": "module",
   "scripts": {
@@ -65,5 +65,12 @@
       "category": "public.app-category.productivity"
     },
     "npmRebuild": false
+  },
+  "allowScripts": {
+    "better-sqlite3@13.0.3": true,
+    "electron-winstaller@5.4.0": true,
+    "fsevents@2.3.3": true,
+    "esbuild@0.25.12": true,
+    "esbuild@0.28.2": true
   }
 }
