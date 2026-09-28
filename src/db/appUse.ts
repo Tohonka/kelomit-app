@@ -24,7 +24,8 @@ function isTotal(r: unknown): r is AppUseTotal {
   return (
     typeof t?.bundle_id === 'string' && t.bundle_id.length > 0 &&
     typeof t.app_name === 'string' && typeof t.session_from === 'string' &&
-    Number.isFinite(t.active_sec) && Number.isFinite(t.idle_sec)
+    Number.isFinite(t.active_sec) && Number.isFinite(t.idle_sec) &&
+    Number(t.active_sec) >= 0 && Number(t.idle_sec) >= 0
   );
 }
 

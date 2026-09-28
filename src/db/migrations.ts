@@ -671,7 +671,8 @@ export const migrations: Migration[] = [
       // which is exactly the segment's started_at. `detached` = the user
       // took the bucket off its note and its seconds count as free time.
       // `app_use_assignments` are manual "N seconds of this app → that note"
-      // chunks; they die with the note.
+      // chunks; they die with the note; a deleted note detaches its timer
+      // buckets (trigger).
       `CREATE TABLE IF NOT EXISTS app_use (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         date TEXT NOT NULL,
@@ -687,6 +688,11 @@ export const migrations: Migration[] = [
         UNIQUE (date, bundle_id, session_from)
       )`,
       'CREATE INDEX IF NOT EXISTS idx_app_use_date ON app_use(date)',
+      // BEFORE, not AFTER: the ON DELETE SET NULL action runs first, so an
+      // AFTER trigger keyed on entry_id = OLD.id would match nothing.
+      `CREATE TRIGGER IF NOT EXISTS app_use_entry_deleted BEFORE DELETE ON entries BEGIN
+        UPDATE app_use SET entry_id = NULL, detached = 1, updated_at = datetime('now') WHERE entry_id = OLD.id;
+      END`,
       `CREATE TABLE IF NOT EXISTS app_use_assignments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         date TEXT NOT NULL,

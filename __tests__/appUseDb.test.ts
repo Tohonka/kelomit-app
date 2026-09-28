@@ -27,6 +27,7 @@ it('migration 36 creates app_use + app_use_assignments', () => {
   expect(sql).toContain('UNIQUE (date, bundle_id, session_from)');
   expect(sql).toContain('CREATE TABLE IF NOT EXISTS app_use_assignments (');
   expect(sql).toContain('REFERENCES entries(id) ON DELETE CASCADE');
+  expect(sql).toContain('BEFORE DELETE ON entries');
   expect(migrations[migrations.length - 1].version).toBe(36);
 });
 
@@ -36,6 +37,7 @@ describe('upsertAppUseTotals', () => {
       {bundle_id: 'com.google.Chrome', app_name: 'Google Chrome', session_from: '', active_sec: 600, idle_sec: 60},
       {bundle_id: 'com.apple.Terminal', app_name: 'Terminal', session_from: '', active_sec: 0, idle_sec: 0},
       {bundle_id: 'junk'},
+      {bundle_id: 'neg', app_name: 'N', session_from: '', active_sec: -5, idle_sec: 10},
     ]);
     expect(n).toBe(1);
     const [insertSql, insertArgs] = calls()[0];
