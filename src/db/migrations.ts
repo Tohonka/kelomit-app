@@ -660,4 +660,42 @@ export const migrations: Migration[] = [
       )`,
     ],
   },
+  {
+    version: 36,
+    up: [
+      // App use (plan 2026-09-28): per-day, per-app foreground time the
+      // desktop companion observed. `app_use` rows are whole-day totals the
+      // desktop re-sends every flush (idempotent upsert on the unique key).
+      // `session_from` is the timer segment the time was collected under
+      // ('' = none); it resolves to the timer's note via entries.time_from,
+      // which is exactly the segment's started_at. `detached` = the user
+      // took the bucket off its note and its seconds count as free time.
+      // `app_use_assignments` are manual "N seconds of this app → that note"
+      // chunks; they die with the note.
+      `CREATE TABLE IF NOT EXISTS app_use (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date TEXT NOT NULL,
+        bundle_id TEXT NOT NULL,
+        app_name TEXT NOT NULL,
+        session_from TEXT NOT NULL DEFAULT '',
+        entry_id INTEGER REFERENCES entries(id) ON DELETE SET NULL,
+        detached INTEGER NOT NULL DEFAULT 0,
+        active_sec INTEGER NOT NULL DEFAULT 0,
+        idle_sec INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE (date, bundle_id, session_from)
+      )`,
+      'CREATE INDEX IF NOT EXISTS idx_app_use_date ON app_use(date)',
+      `CREATE TABLE IF NOT EXISTS app_use_assignments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date TEXT NOT NULL,
+        bundle_id TEXT NOT NULL,
+        entry_id INTEGER NOT NULL REFERENCES entries(id) ON DELETE CASCADE,
+        seconds INTEGER NOT NULL CHECK(seconds > 0),
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )`,
+      'CREATE INDEX IF NOT EXISTS idx_app_use_assignments_date ON app_use_assignments(date)',
+    ],
+  },
 ];
