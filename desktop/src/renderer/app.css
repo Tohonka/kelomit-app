@@ -257,7 +257,6 @@ textarea {
   background: var(--primary);
 }
 
-
 /* ---- day view ---------------------------------------------------------- */
 
 .dayview {
@@ -1995,4 +1994,48 @@ label.check {
 
 .healthlog tbody tr:hover {
   background: var(--swatch);
+}
+
+/* App use (Apps tab) */
+.app-use .break + .break {
+  margin-top: 14px;
+}
+
+.app-use .track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bgMuted);
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.app-use .fill {
+  height: 100%;
+  border-radius: 3px;
+}
+
+.app-use .chip .x {
+  border: 0;
+  background: none;
+  color: inherit;
+  margin-left: 4px;
+  padding: 0;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.app-use .chips .btn {
+  font-size: 11px;
+  padding: 1px 8px;
+}
+
+.app-use .assign {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.app-use .assign input[type='number'] {
+  width: 64px;
 }

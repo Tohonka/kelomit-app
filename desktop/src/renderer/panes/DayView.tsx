@@ -11,6 +11,7 @@ import {FoodCard} from './Food.tsx';
 import type {FoodSelection} from './Food.tsx';
 import type {DayFood} from '../../main/life.ts';
 import {HealthCard} from './Health.tsx';
+import {AppUseCard} from './AppUse.tsx';
 import {useQuery} from '../hooks/useQuery.ts';
 import {attachFiles, droppedFiles, hasFiles} from '../lib/media.ts';
 
@@ -180,7 +181,7 @@ export function DayView({date, detail, day, entries, selectedEntryId, onSelectEn
   const groups = useMemo(() => groupEntries(entries, 'time_asc'), [entries]);
   // Work (hours + notes) and food are separate logs on the phone too; a food
   // selection in the inspector pulls the Food tab forward.
-  const [tab, setTab] = useState<'work' | 'food' | 'health'>('work');
+  const [tab, setTab] = useState<'work' | 'food' | 'health' | 'apps'>('work');
   const health = useQuery('dayHealth', date);
   const shown = selectedFoodId != null ? 'food' : tab === 'health' && !health ? 'work' : tab;
   const foodLabel = food && food.entries.length > 0 ? `Food · ${food.kcal} kcal` : 'Food';
@@ -222,6 +223,9 @@ export function DayView({date, detail, day, entries, selectedEntryId, onSelectEn
               Health
             </button>
           )}
+          <button className={shown === 'apps' ? 'on' : ''} onClick={() => setTab('apps')}>
+            Apps
+          </button>
         </span>
       </div>
       {detail === undefined ? (
@@ -241,6 +245,8 @@ export function DayView({date, detail, day, entries, selectedEntryId, onSelectEn
           )}
           {shown === 'food' ? (
             <FoodCard food={food} selectedId={selectedFoodId} onSelect={onSelectFood} />
+          ) : shown === 'apps' ? (
+            <AppUseCard date={date} entries={entries} />
           ) : shown === 'health' && health ? (
             <HealthCard health={health} />
           ) : (
