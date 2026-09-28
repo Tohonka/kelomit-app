@@ -108,6 +108,8 @@ const makeStyles = (c: Colors) =>
     ringLabel: {fontSize: typography.sizes.sm, color: c.textMuted},
     ringTotal: {fontSize: 22, fontWeight: typography.weights.bold, color: c.textPrimary, marginTop: 2},
     ringTarget: {fontSize: typography.sizes.xs, color: c.textMuted, marginTop: 4},
+    ringBar: {height: 8, borderRadius: 4, backgroundColor: c.bgMuted, overflow: 'hidden', marginTop: 8},
+    ringSecond: {marginTop: spacing.lg},
     eyebrow: {
       fontSize: typography.sizes.xs,
       fontWeight: typography.weights.bold,
@@ -418,6 +420,9 @@ export default function InsightsScreen() {
 
   const targetSecs = weeklyTargetHours * 3600;
   const targetPct = targetSecs > 0 ? Math.min(1, workedSecs / targetSecs) : 0;
+  // Hours the notes and tasks account for, vs. the day start→end work hours above.
+  const notesSecs = data?.byActivity.find(s => s.key === 'work')?.seconds ?? 0;
+  const notesPct = workedSecs > 0 ? Math.min(1, notesSecs / workedSecs) : 0;
   const isWeek = period === 'week';
 
   return (
@@ -472,6 +477,15 @@ export default function InsightsScreen() {
                     <Text style={styles.ringTarget}>
                       {t('insights.ofTargetHours', {target: `${weeklyTargetHours}h`})}
                     </Text>
+                    <View style={styles.ringBar}>
+                      <View style={[styles.breakFill, {width: `${Math.max(1, targetPct * 100)}%`, backgroundColor: colors.primary}]} />
+                    </View>
+                    <Text style={[styles.ringLabel, styles.ringSecond]}>{t('insights.trackedByNotes')}</Text>
+                    <Text style={styles.ringTotal}>{formatHours(notesSecs)}</Text>
+                    <Text style={styles.ringTarget}>{t('insights.ofWorkHours', {worked: formatHours(workedSecs)})}</Text>
+                    <View style={styles.ringBar}>
+                      <View style={[styles.breakFill, {width: `${Math.max(1, notesPct * 100)}%`, backgroundColor: colors.accentPink}]} />
+                    </View>
                   </View>
                 </View>
 

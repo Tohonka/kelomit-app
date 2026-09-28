@@ -182,6 +182,9 @@ export function Insights() {
   const hasAnything = hasWork || hasMovement || d.habits.length > 0 || d.food.entries > 0 || hasHealth;
   const targetSecs = d.weeklyTargetHours * 3600;
   const targetPct = targetSecs > 0 ? Math.min(1, workedSecs / targetSecs) : 0;
+  // Hours the notes and tasks account for, vs. the day start→end work hours above.
+  const notesSecs = d.work.byActivity.find(s => s.key === 'work')?.seconds ?? 0;
+  const notesPct = workedSecs > 0 ? Math.min(1, notesSecs / workedSecs) : 0;
 
   return (
     <div className="insights">
@@ -214,12 +217,22 @@ export function Insights() {
                   <strong>{Math.round(targetPct * 100)}%</strong>
                   <span className="muted">of target</span>
                 </div>
-                <div>
-                  <span className="muted">Tracked this week</span>
-                  <div className="big num">{formatHours(workedSecs)}</div>
-                  <span className="muted">of {d.weeklyTargetHours}h target</span>
-                  <div className="track">
-                    <div className="fill" style={{width: `${Math.max(1, targetPct * 100)}%`, background: 'var(--primary)'}} />
+                <div className="split">
+                  <div>
+                    <span className="muted">Work hours this week</span>
+                    <div className="big num">{formatHours(workedSecs)}</div>
+                    <span className="muted">of {d.weeklyTargetHours}h target</span>
+                    <div className="track">
+                      <div className="fill" style={{width: `${Math.max(1, targetPct * 100)}%`, background: 'var(--primary)'}} />
+                    </div>
+                  </div>
+                  <div>
+                    <span className="muted">Tracked by notes and tasks</span>
+                    <div className="big num">{formatHours(notesSecs)}</div>
+                    <span className="muted">of {formatHours(workedSecs)} work hours</span>
+                    <div className="track">
+                      <div className="fill" style={{width: `${Math.max(1, notesPct * 100)}%`, background: 'var(--work)'}} />
+                    </div>
                   </div>
                 </div>
               </div>

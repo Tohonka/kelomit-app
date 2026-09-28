@@ -1628,7 +1628,7 @@ label.check {
 }
 
 .insights .ring .pct .muted,
-.insights .ring > div > .muted {
+.insights .ring .split .muted {
   font-size: 11px;
 }
 
@@ -1638,9 +1638,19 @@ label.check {
   margin: 2px 0;
 }
 
+.insights .ring .split {
+  display: flex;
+  flex: 1;
+  gap: 22px;
+}
+
+.insights .ring .split > div {
+  flex: 1;
+  min-width: 0;
+}
+
 .insights .ring .track {
   margin-top: 8px;
-  width: 220px;
 }
 
 .insights .track {
