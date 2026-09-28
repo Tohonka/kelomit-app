@@ -4,6 +4,7 @@ import type {MenuAction} from '../main/menu.ts';
 import type {QueryArgs, QueryName, QueryResult} from '../main/queries.ts';
 import type {PhoneState} from '../main/ws.ts';
 import type {QueueSnapshot} from '../main/queue.ts';
+import type {CollectorStatus} from '../main/appUse/collector.ts';
 import type {ReportParams, ReportResult} from '../main/report.ts';
 import type {ProductFields} from '../../../src/db/food.ts';
 import type {StageResult} from '../main/media.ts';
@@ -34,6 +35,10 @@ export interface CompanionApi {
   mediaStage(files: File[]): Promise<StageResult>;
   /** Same, through an open-file dialog. */
   mediaPick(): Promise<StageResult>;
+  /** The app-use collector's last sample (Apps tab status line). */
+  appUseStatus(): Promise<CollectorStatus>;
+  /** Live app-use totals moved (throttled to once a minute). */
+  onAppUseChanged(handler: () => void): () => void;
 }
 
 function on(channel: string, handler: (...args: any[]) => void): () => void {
@@ -62,6 +67,8 @@ const api: CompanionApi = {
   offLookup: barcode => ipcRenderer.invoke('off-lookup', barcode),
   mediaStage: files => ipcRenderer.invoke('media-stage', files.map(f => webUtils.getPathForFile(f))),
   mediaPick: () => ipcRenderer.invoke('media-pick'),
+  appUseStatus: () => ipcRenderer.invoke('app-use-status'),
+  onAppUseChanged: handler => on('app-use-changed', handler),
 };
 
 contextBridge.exposeInMainWorld('kelomit', api);

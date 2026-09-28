@@ -1,4 +1,10 @@
-import {app, BrowserWindow, ipcMain, nativeTheme, net, protocol} from 'electron';
+import {app, BrowserWindow, ipcMain, nativeTheme, net, powerMonitor, protocol} from 'electron';
+import {openCurrent} from '../../../server/src/db.ts';
+import {AppUseStore} from './appUse/store.ts';
+import {AppUseCollector} from './appUse/collector.ts';
+import {readFront, screensaverRunning} from './appUse/signals.ts';
+import {excludedApps, setLiveSource} from './appUse/read.ts';
+import {localToday} from './life.ts';
 import {pathToFileURL} from 'node:url';
 import {isSafeMediaName, mediaPath} from '../../../server/src/media.ts';
 import {registerReportIpc} from './report.ts';
@@ -90,6 +96,34 @@ app.whenReady().then(() => {
     if (state.connected) queue.drain();
   });
   queue.on('change', snapshot => win?.webContents.send('queue-changed', snapshot));
+  // App use (plan 2026-09-28): macOS-only signals; elsewhere the Apps tab just stays empty.
+  const appUseStore = new AppUseStore(join(dataDir, 'appuse.json'));
+  setLiveSource(date => (appUseStore.has(date) ? appUseStore.rows(date) : null));
+  const collector = new AppUseCollector({
+    store: appUseStore,
+    readFront,
+    screensaver: screensaverRunning,
+    idleSeconds: () => powerMonitor.getSystemIdleTime(),
+    locked: () => powerMonitor.getSystemIdleState(1) === 'locked',
+    excluded: () => {
+      const db = openCurrent(dataDir);
+      return new Set(db ? excludedApps(db) : []);
+    },
+    today: localToday,
+    queue,
+    onChanged: () => win?.webContents.send('app-use-changed'),
+  });
+  ipcMain.handle('app-use-status', () => collector.status);
+  if (process.platform === 'darwin') {
+    // One call per event: powerMonitor.on's per-event overloads reject a union.
+    powerMonitor.on('suspend', () => collector.setAway(true));
+    powerMonitor.on('lock-screen', () => collector.setAway(true));
+    powerMonitor.on('resume', () => collector.setAway(false));
+    powerMonitor.on('unlock-screen', () => collector.setAway(false));
+    phone.on('state', state => collector.setSession(state.activeSession));
+    collector.start();
+    app.on('will-quit', () => collector.stop());
+  }
 
   protocol.handle('kelomit-media', request => {
     const name = decodeURIComponent(new URL(request.url).pathname.replace(/^\/+/, ''));
