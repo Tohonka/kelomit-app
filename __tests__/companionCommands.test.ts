@@ -36,6 +36,14 @@ const mockFood = {
   upsertProduct: jest.fn(async () => ({id: 9})),
 };
 jest.mock('../src/db/food', () => lazy(() => mockFood));
+const mockAppUse = {
+  upsertAppUseTotals: jest.fn(async (_d: string, rows: unknown[]) => rows.length),
+  assignAppUse: jest.fn(async () => 9),
+  removeAppUseAssignment: jest.fn(async () => {}),
+  detachAppUse: jest.fn(async () => {}),
+  setAppUseExcluded: jest.fn(async (b: string) => [b]),
+};
+jest.mock('../src/db/appUse', () => lazy(() => mockAppUse));
 const mockHabits = {
   createHabit: jest.fn(async () => ({id: 4})),
   updateHabit: jest.fn(async () => {}),
@@ -104,7 +112,7 @@ jest.mock('../src/store/projectStore', () => ({useProjectStore: {getState: () =>
 jest.mock('../src/store/tagStore', () => ({useTagStore: {getState: () => mockTagStore}}));
 
 import RNFS from 'react-native-fs';
-import {runCommand} from '../src/services/companion/commands';
+import {COMMANDS, runCommand} from '../src/services/companion/commands';
 import {updateDay} from '../src/db/days';
 
 beforeEach(() => {
@@ -269,5 +277,25 @@ describe('runCommand', () => {
       expect(mockDeleteMediaFile).toHaveBeenCalledTimes(1);
       expect(mockDeleteMediaFile).toHaveBeenCalledWith('/mock/docs/kelomit/media/photo_1.jpg');
     });
+  });
+});
+
+describe('appUse.*', () => {
+  it('upsert forwards the day and rows', async () => {
+    const rows = [{bundle_id: 'a', app_name: 'A', session_from: '', active_sec: 5, idle_sec: 0}];
+    await expect(COMMANDS['appUse.upsert']('2026-09-28', rows)).resolves.toBe(1);
+    expect(mockAppUse.upsertAppUseTotals).toHaveBeenCalledWith('2026-09-28', rows);
+  });
+  it('assign checks the note exists first', async () => {
+    await expect(COMMANDS['appUse.assign']('2026-09-28', 'a', 404, 60)).rejects.toThrow('entry 404 not found');
+    expect(mockAppUse.assignAppUse).not.toHaveBeenCalled();
+    await expect(COMMANDS['appUse.assign']('2026-09-28', 'a', 5, 60)).resolves.toBe(9);
+  });
+  it('removeAssignment / detach / setExcluded are thin wrappers', async () => {
+    await COMMANDS['appUse.removeAssignment'](3);
+    expect(mockAppUse.removeAppUseAssignment).toHaveBeenCalledWith(3);
+    await COMMANDS['appUse.detach'](4);
+    expect(mockAppUse.detachAppUse).toHaveBeenCalledWith(4);
+    await expect(COMMANDS['appUse.setExcluded']('com.a', true)).resolves.toEqual(['com.a']);
   });
 });

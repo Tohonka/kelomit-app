@@ -20,6 +20,7 @@ export const NOISY_TABLES: ReadonlySet<string> = new Set([
   'geofence_events',
   'place_cache',
   'health_daily',
+  'app_use',
 ]);
 export const IGNORED_TABLES: ReadonlySet<string> = new Set(['diag_log', 'schema_version']);
 

@@ -28,6 +28,9 @@ describe('debounceFor', () => {
     expect(debounceFor('gps_track')).toBe(NOISY_DEBOUNCE_MS);
     expect(debounceFor('diag_log')).toBeNull();
   });
+  it('app_use flushes are noisy, not content', () => {
+    expect(debounceFor('app_use')).toBe(NOISY_DEBOUNCE_MS);
+  });
 });
 
 describe('failBackoff', () => {

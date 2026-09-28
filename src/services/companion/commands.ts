@@ -42,6 +42,9 @@ import {
 } from '../../db/routeHistory';
 import type {StopNameChoice} from '../../db/routeHistory';
 import {useLocationStore} from '../../store/locationStore';
+import {
+  assignAppUse, detachAppUse, removeAppUseAssignment, setAppUseExcluded, upsertAppUseTotals,
+} from '../../db/appUse';
 import {getSetting, setSetting} from '../../db/settings';
 import {getOrCreateTag} from '../../db/tags';
 import {useDayStore} from '../../store/dayStore';
@@ -354,6 +357,15 @@ export const COMMANDS: Record<string, (...args: any[]) => Promise<unknown>> = {
   'locations.rename': (id: number, name: string) => useLocationStore.getState().rename(id, name),
   'locations.setRadius': (id: number, radiusM: number) => useLocationStore.getState().setRadius(id, radiusM),
   'locations.delete': (id: number) => useLocationStore.getState().remove(id),
+  // ── App use: foreground time the desktop observed (plan 2026-09-28) ──
+  'appUse.upsert': (date: string, rows: unknown[]) => upsertAppUseTotals(date, rows),
+  'appUse.assign': async (date: string, bundleId: string, entryId: number, seconds: number) => {
+    await requireEntry(entryId);
+    return assignAppUse(date, bundleId, entryId, seconds);
+  },
+  'appUse.removeAssignment': (id: number) => removeAppUseAssignment(id),
+  'appUse.detach': (id: number) => detachAppUse(id),
+  'appUse.setExcluded': (bundleId: string, excluded: boolean) => setAppUseExcluded(bundleId, excluded),
 };
 
 const LAST_CMD_KEY = 'companion_last_cmd';
