@@ -1,45 +1,24 @@
-import { ipcMain, dialog, app, shell, BrowserWindow, Menu, protocol, net, nativeTheme } from "electron";
-import { pathToFileURL } from "node:url";
-import { existsSync, readdirSync, mkdirSync, writeFileSync, statSync, copyFileSync, readFileSync, rmSync, renameSync, watch } from "node:fs";
+import { ipcMain, dialog, app, shell, BrowserWindow, Menu, protocol, powerMonitor, net, nativeTheme } from "electron";
+import { existsSync, statSync, readFileSync, writeFileSync, renameSync, readdirSync, mkdirSync, copyFileSync, rmSync, watch } from "node:fs";
 import { join, extname } from "node:path";
 import Database from "better-sqlite3";
-import { parseISO, format, differenceInSeconds, eachDayOfInterval } from "date-fns";
+import { differenceInSeconds, parseISO, format, eachDayOfInterval } from "date-fns";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { pathToFileURL } from "node:url";
 import { fi, enUS } from "date-fns/locale";
-import { networkInterfaces } from "node:os";
+import { networkInterfaces, hostname } from "node:os";
 import { randomBytes, randomUUID } from "node:crypto";
 import { serve } from "@hono/node-server";
 import { readFile } from "node:fs/promises";
 import { Hono } from "hono";
+import { createSocket } from "node:dgram";
 import { EventEmitter } from "node:events";
 import { WebSocketServer, WebSocket } from "ws";
 import __cjs_mod__ from "node:module";
 const __filename = import.meta.filename;
 const __dirname = import.meta.dirname;
 const require2 = __cjs_mod__.createRequire(import.meta.url);
-const ALLOWED_EXTENSIONS = ["jpg", "jpeg", "png", "wav", "m4a", "mp4"];
-const SAFE_NAME = /^[A-Za-z0-9._-]+$/;
-function isSafeMediaName(name) {
-  if (!name || name.length > 200 || !SAFE_NAME.test(name) || name.includes("..")) {
-    return false;
-  }
-  const ext = name.split(".").pop()?.toLowerCase() ?? "";
-  return ext !== name.toLowerCase() && ALLOWED_EXTENSIONS.includes(ext);
-}
-function mediaPath(dataDir, name) {
-  if (!isSafeMediaName(name)) {
-    throw new Error(`unsafe media name: ${name}`);
-  }
-  return join(dataDir, "media", name);
-}
-function listMedia(dataDir) {
-  const dir = join(dataDir, "media");
-  return existsSync(dir) ? readdirSync(dir) : [];
-}
-function saveMedia(dataDir, name, body) {
-  const path = mediaPath(dataDir, name);
-  mkdirSync(join(dataDir, "media"), { recursive: true });
-  writeFileSync(path, body);
-}
 let cached = null;
 function openCurrent(dataDir) {
   const path = join(dataDir, "current.db");
@@ -55,6 +34,10 @@ function openCurrent(dataDir) {
   cached = { path, ino, size, mtimeMs, db };
   return db;
 }
+const unitLabels = { "DL": ["desilitra", "decilitre"], "RKL": ["ruokalusikka", "tablespoon"], "TL": ["teelusikka", "teaspoon"], "KPL_S": ["pieni (kpl)", "small piece"], "KPL_M": ["keskikokoinen (kpl)", "medium-sized piece"], "KPL_L": ["iso (kpl)", "big piece"], "KPL_VALM": ["Valmistaja (kpl)", "Manufacturer (piece)"], "PORTS": ["pieni annos", "small portion"], "PORTM": ["keskikokoinen annos", "medium-sized portion"], "PORTL": ["iso annos", "big portion"] };
+const fineliJson = {
+  unitLabels
+};
 function hasTable(db, name) {
   return db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name) != null;
 }
@@ -181,47 +164,6 @@ function getRouteStops(db, dayId) {
     `SELECT start_ts, end_ts, latitude, longitude, display_name
          FROM day_route_stops WHERE day_id = ? ORDER BY start_ts`
   ).all(dayId);
-}
-const ESCAPES = {
-  "&": "&amp;",
-  "<": "&lt;",
-  ">": "&gt;",
-  '"': "&quot;",
-  "'": "&#39;"
-};
-function esc(value) {
-  return String(value ?? "").replace(/[&<>"']/g, (ch) => ESCAPES[ch] ?? ch);
-}
-function reportDocument(template, model, options = {}) {
-  const page = options.pageMargin ? `@page { size: A4; margin: ${template.marginPt}pt; }` : "@page { size: A4; }";
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<title>${esc(model.meta.title)}</title>
-<style>
-${page}
-html, body { margin: 0; padding: 0; background: #FFFFFF; }
-/* The app ellipsizes overlong labels to keep its hand-drawn columns aligned.
-   Here the browser wraps them instead — same content, no truncation. */
-* { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-tr { break-inside: avoid; }
-thead { display: table-header-group; }
-h1, h2, h3 { break-after: avoid; }
-${template.css}
-</style>
-</head>
-<body>${template.html(model)}</body>
-</html>`;
-}
-function parseTimestamp(value) {
-  if (value.includes("T")) {
-    return parseISO(value);
-  }
-  return /* @__PURE__ */ new Date(value.replace(" ", "T") + "Z");
-}
-function formatTime(isoDatetime) {
-  return format(parseTimestamp(isoDatetime), "HH:mm");
 }
 function entryTrackedSeconds(entry) {
   if (entry.is_todo && !entry.completed_at) {
@@ -369,6 +311,695 @@ function calcDayWorkBreakdown(day, entries) {
 }
 function calcDayWorkSecs(day, entries) {
   return calcDayWorkBreakdown(day, entries).workSeconds;
+}
+function entryMatchesHabit(entry, matchers, entryTriggerIds) {
+  return matchers.some((m) => {
+    switch (m.kind) {
+      case "project":
+        return entry.project_id === m.ref_id;
+      case "tag":
+        return entry.tags?.some((t) => t.id === m.ref_id) ?? false;
+      case "trigger":
+        return entryTriggerIds.get(entry.id)?.includes(m.ref_id) ?? false;
+      default:
+        return false;
+    }
+  });
+}
+function dayMatchesLife(matchers, ctx) {
+  return matchers.some((m) => {
+    switch (m.kind) {
+      case "steps":
+        return ctx.health?.steps != null && ctx.health.steps >= (m.threshold ?? 1);
+      case "sleep_minutes":
+        return ctx.health?.sleep_minutes != null && ctx.health.sleep_minutes >= (m.threshold ?? 1);
+      case "food_entries":
+        return (ctx.food?.entries ?? 0) >= (m.threshold ?? 1);
+      case "food_kcal":
+        return m.threshold != null && (ctx.food?.entries ?? 0) > 0 && (ctx.food?.kcal ?? 0) <= m.threshold;
+      default:
+        return false;
+    }
+  });
+}
+function habitDayProgress(habit, matchers, dayEntries, entryTriggerIds, ctx = {}) {
+  const hits = dayEntries.filter((e) => entryMatchesHabit(e, matchers, entryTriggerIds));
+  const count = hits.length + (dayMatchesLife(matchers, ctx) ? 1 : 0);
+  const seconds = hits.reduce((sum, e) => sum + entryTrackedSeconds(e), 0);
+  const goal = habit.goal_value ?? 0;
+  const done = habit.goal_kind === "count" ? count >= goal : habit.goal_kind === "minutes" ? seconds >= goal * 60 : count > 0;
+  return { done, seconds, count };
+}
+function categoryStreak(habitsDoneByDate, today) {
+  let d = /* @__PURE__ */ new Date(`${today}T00:00:00`);
+  if (!habitsDoneByDate.get(today)) {
+    d.setDate(d.getDate() - 1);
+  }
+  let n = 0;
+  for (; ; ) {
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    if (!habitsDoneByDate.get(key)) {
+      return n;
+    }
+    n++;
+    d.setDate(d.getDate() - 1);
+  }
+}
+const FINELI_UNIT_LABELS = fineliJson.unitLabels;
+const STREAK_WINDOW_DAYS = 120;
+function localToday() {
+  const d = /* @__PURE__ */ new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function shiftDate(date, days) {
+  const d = /* @__PURE__ */ new Date(`${date}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function monthBounds$1(month) {
+  const [y, m] = month.split("-").map(Number);
+  return [`${month}-01`, `${month}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`];
+}
+function product(row) {
+  return { ...row, archived: Boolean(row.archived) };
+}
+function dayFood(db, date) {
+  if (!hasTable(db, "food_entries")) {
+    return { entries: [], products: {}, kcal: 0, noKcal: 0 };
+  }
+  const entries = db.prepare(
+    `SELECT f.* FROM food_entries f JOIN days d ON d.id = f.day_id
+        WHERE d.date = ? ORDER BY f.eaten_at, f.id`
+  ).all(date);
+  const ids = [...new Set(entries.map((e) => e.product_id).filter((id) => id != null))];
+  const products = {};
+  if (ids.length > 0) {
+    const rows = db.prepare(`SELECT * FROM food_products WHERE id IN (${ids.map(() => "?").join(",")})`).all(...ids);
+    for (const r of rows) products[r.id] = product(r);
+  }
+  return {
+    entries,
+    products,
+    kcal: entries.reduce((s, e) => s + (e.kcal ?? 0), 0),
+    noKcal: entries.filter((e) => e.kcal == null).length
+  };
+}
+function fineliUnits(db, foodId) {
+  return db.prepare("SELECT code, grams FROM fineli_units WHERE food_id = ? ORDER BY rowid").all(foodId);
+}
+function foodSearch(db, query, lang = "fi") {
+  const q = query.trim();
+  const empty = { products: [], fineli: [], unitLabels: FINELI_UNIT_LABELS };
+  if (!q || !hasTable(db, "food_products")) return empty;
+  const products = db.prepare(
+    `SELECT * FROM food_products
+          WHERE archived = 0 AND (name LIKE ? OR brand LIKE ?)
+          ORDER BY CASE WHEN name LIKE ? THEN 0 ELSE 1 END, name LIMIT 6`
+  ).all(`%${q}%`, `%${q}%`, `${q}%`).map(product);
+  const own = new Set(products.filter((p) => p.source === "fineli").map((p) => p.source_ref));
+  const col = lang === "fi" ? "name_fi" : "name_en";
+  const fineli = hasTable(db, "fineli_foods") ? db.prepare(
+    `SELECT * FROM fineli_foods
+              WHERE name_fi LIKE ? OR name_en LIKE ?
+              ORDER BY CASE WHEN ${col} LIKE ? THEN 0 WHEN name_fi LIKE ? THEN 1 ELSE 2 END, length(${col}) LIMIT 8`
+  ).all(`%${q}%`, `%${q}%`, `${q}%`, `${q}%`).filter((f) => !own.has(String(f.id))).map((f) => ({ ...f, units: fineliUnits(db, f.id) })) : [];
+  return { products, fineli, unitLabels: FINELI_UNIT_LABELS };
+}
+function foodProduct(db, id) {
+  const row = hasTable(db, "food_products") ? db.prepare("SELECT * FROM food_products WHERE id = ?").get(id) : void 0;
+  const p = row ? product(row) : null;
+  const units = p?.source === "fineli" && p.source_ref && hasTable(db, "fineli_units") ? fineliUnits(db, Number(p.source_ref)) : [];
+  return { product: p, units, unitLabels: FINELI_UNIT_LABELS };
+}
+function habitStates(db, from, to) {
+  const empty = { categories: [], habits: [], matchers: [], triggers: [], overrides: {}, auto: {} };
+  if (!hasTable(db, "habits")) return empty;
+  const categories = db.prepare("SELECT * FROM habit_categories ORDER BY archived, id").all().map((r) => ({
+    ...r,
+    archived: Boolean(r.archived)
+  }));
+  const habits = db.prepare("SELECT * FROM habits ORDER BY archived, id").all().map((r) => ({
+    ...r,
+    archived: Boolean(r.archived)
+  }));
+  const matchers = db.prepare("SELECT habit_id, kind, ref_id, threshold FROM habit_matchers").all();
+  const triggers = hasTable(db, "triggers") ? db.prepare("SELECT * FROM triggers ORDER BY name").all() : [];
+  const overrides = {};
+  for (const r of db.prepare("SELECT habit_id, date, done FROM habit_day_overrides WHERE date BETWEEN ? AND ?").all(from, to)) {
+    (overrides[r.habit_id] ??= {})[r.date] = Boolean(r.done);
+  }
+  const byHabit = /* @__PURE__ */ new Map();
+  for (const m of matchers) byHabit.set(m.habit_id, [...byHabit.get(m.habit_id) ?? [], m]);
+  const active = habits.filter((h) => (byHabit.get(h.id)?.length ?? 0) > 0);
+  const auto = {};
+  if (active.length > 0) {
+    const days = getDaysInRange(db, from, to);
+    const entries = getEntriesInRange(db, from, to);
+    const entriesByDay = /* @__PURE__ */ new Map();
+    for (const e of entries) entriesByDay.set(e.day_id, [...entriesByDay.get(e.day_id) ?? [], e]);
+    const triggerIds = /* @__PURE__ */ new Map();
+    if (hasTable(db, "entry_triggers")) {
+      for (const r of db.prepare(
+        `SELECT et.entry_id, et.trigger_id FROM entry_triggers et
+             JOIN entries e ON e.id = et.entry_id JOIN days d ON d.id = e.day_id
+            WHERE d.date BETWEEN ? AND ?`
+      ).all(from, to)) {
+        triggerIds.set(r.entry_id, [...triggerIds.get(r.entry_id) ?? [], r.trigger_id]);
+      }
+    }
+    const health = /* @__PURE__ */ new Map();
+    if (hasTable(db, "health_daily")) {
+      for (const r of db.prepare("SELECT date, steps, sleep_minutes FROM health_daily WHERE date BETWEEN ? AND ?").all(from, to)) {
+        health.set(r.date, r);
+      }
+    }
+    const food = /* @__PURE__ */ new Map();
+    if (hasTable(db, "food_entries")) {
+      for (const r of db.prepare(
+        `SELECT d.date AS date, COALESCE(SUM(f.kcal), 0) AS kcal, COUNT(*) AS entries
+             FROM food_entries f JOIN days d ON d.id = f.day_id
+            WHERE d.date BETWEEN ? AND ? GROUP BY d.date`
+      ).all(from, to)) {
+        food.set(r.date, r);
+      }
+    }
+    const dayByDate = new Map(days.map((d) => [d.date, d]));
+    const dates = /* @__PURE__ */ new Set([...dayByDate.keys(), ...health.keys(), ...food.keys()]);
+    for (const h of active) {
+      const inner = {};
+      for (const date of dates) {
+        const day = dayByDate.get(date);
+        const ctx = { health: health.get(date) ?? null, food: food.get(date) ?? null };
+        const p = habitDayProgress(h, byHabit.get(h.id), day ? entriesByDay.get(day.id) ?? [] : [], triggerIds, ctx);
+        if (p.count > 0) inner[date] = p;
+      }
+      auto[h.id] = inner;
+    }
+  }
+  return { categories, habits, matchers, triggers, overrides, auto };
+}
+function habitDone(s, habitId, date) {
+  return s.overrides[habitId]?.[date] ?? s.auto[habitId]?.[date]?.done ?? false;
+}
+function habitsMonth(db, month) {
+  const today = localToday();
+  const [mFrom, mTo] = monthBounds$1(month);
+  const back = shiftDate(today, -STREAK_WINDOW_DAYS);
+  const states = habitStates(db, mFrom < back ? mFrom : back, mTo > today ? mTo : today);
+  const streaks = {};
+  for (const c of states.categories) {
+    const ids = states.habits.filter((h) => h.category_id === c.id && !h.archived).map((h) => h.id);
+    const byDate = /* @__PURE__ */ new Map();
+    for (let i = 0; i <= STREAK_WINDOW_DAYS; i++) {
+      const d = shiftDate(today, -i);
+      if (ids.some((id) => habitDone(states, id, d))) byDate.set(d, true);
+    }
+    streaks[c.id] = categoryStreak(byDate, today);
+  }
+  return { month, ...states, streaks, today };
+}
+function listNags(db) {
+  if (!hasTable(db, "nags")) return { nags: [], done: {} };
+  const nags = db.prepare("SELECT * FROM nags ORDER BY active DESC, title COLLATE NOCASE").all().map((r) => ({
+    ...r,
+    schedule: JSON.parse(r.schedule),
+    plan: JSON.parse(r.plan),
+    countdown: Boolean(r.countdown),
+    active: Boolean(r.active)
+  }));
+  const done = {};
+  for (const r of db.prepare("SELECT nag_id, due_at, done_at FROM nag_done").all()) {
+    done[`${r.nag_id}|${r.due_at}`] = r.done_at;
+  }
+  return { nags, done };
+}
+function listPlaces(db) {
+  const stops = hasTable(db, "day_route_stops");
+  const named = hasTable(db, "named_places") ? db.prepare(
+    `SELECT p.*, ${stops ? "(SELECT COUNT(*) FROM day_route_stops s WHERE s.named_place_id = p.id)" : "0"} AS uses
+             FROM named_places p ORDER BY p.name COLLATE NOCASE`
+  ).all() : [];
+  const saved = hasTable(db, "locations") ? db.prepare(
+    `SELECT l.*, ${stops ? "(SELECT COUNT(*) FROM day_route_stops s WHERE s.saved_location_id = l.id)" : "0"} AS uses
+             FROM locations l ORDER BY l.created_at`
+  ).all() : [];
+  return { named, saved };
+}
+function healthRow(row) {
+  let exercise = null;
+  if (typeof row.exercise === "string") {
+    try {
+      exercise = JSON.parse(row.exercise);
+    } catch {
+      exercise = null;
+    }
+  }
+  return { ...row, exercise };
+}
+function dayHealth(db, date) {
+  if (!hasTable(db, "health_daily")) return null;
+  const row = db.prepare("SELECT * FROM health_daily WHERE date = ?").get(date);
+  return row ? healthRow(row) : null;
+}
+function healthMonth(db, month) {
+  if (!hasTable(db, "health_daily")) return [];
+  const [from, to] = monthBounds$1(month);
+  return db.prepare("SELECT * FROM health_daily WHERE date BETWEEN ? AND ? ORDER BY date DESC").all(from, to).map(healthRow);
+}
+function foodMonth(db, month) {
+  if (!hasTable(db, "food_entries")) return { days: [], kcal: 0 };
+  const [from, to] = monthBounds$1(month);
+  const rows = db.prepare(
+    `SELECT f.*, d.date AS date FROM food_entries f JOIN days d ON d.id = f.day_id
+        WHERE d.date BETWEEN ? AND ? ORDER BY d.date DESC, f.eaten_at, f.id`
+  ).all(from, to);
+  const days = [];
+  for (const r of rows) {
+    let day = days.at(-1);
+    if (!day || day.date !== r.date) {
+      day = { date: r.date, kcal: 0, noKcal: 0, entries: [] };
+      days.push(day);
+    }
+    day.entries.push(r);
+    if (r.kcal == null) day.noKcal++;
+    else day.kcal += r.kcal;
+  }
+  return { days, kcal: days.reduce((s, d) => s + d.kcal, 0) };
+}
+function gallery(db, month) {
+  if (!hasTable(db, "entry_media")) return [];
+  const [from, to] = monthBounds$1(month);
+  return db.prepare(
+    `SELECT em.entry_id, em.media_type, em.file_path, em.thumbnail_path, d.date, e.created_at, e.title
+         FROM entry_media em
+         JOIN entries e ON e.id = em.entry_id
+         JOIN days d ON d.id = e.day_id
+        WHERE em.media_type IN ('photo', 'video') AND d.date BETWEEN ? AND ?
+        ORDER BY d.date DESC, e.created_at DESC, em.position`
+  ).all(from, to);
+}
+function search(db, query, limit = 60) {
+  const q = query.trim();
+  if (!q) return [];
+  const like = `%${q}%`;
+  const rows = db.prepare(
+    `SELECT DISTINCT e.id, d.date
+         FROM entries e
+         JOIN days d ON d.id = e.day_id
+         LEFT JOIN projects p ON p.id = e.project_id
+         LEFT JOIN entry_tags et ON et.entry_id = e.id
+         LEFT JOIN tags t ON t.id = et.tag_id
+        WHERE e.title LIKE ? OR e.body LIKE ? OR p.name LIKE ? OR t.name LIKE ?
+        ORDER BY d.date DESC, e.created_at DESC
+        LIMIT ?`
+  ).all(like, like, like, like, limit);
+  if (rows.length === 0) return [];
+  const byId = new Map(
+    loadEntries(
+      db,
+      `e.id IN (${rows.map(() => "?").join(",")})`,
+      rows.map((r) => r.id)
+    ).map((e) => [e.id, e])
+  );
+  return rows.flatMap((r) => {
+    const entry = byId.get(r.id);
+    return entry ? [{ entry, date: r.date }] : [];
+  });
+}
+const bucketKey = (bundleId, sessionFrom) => `${bundleId}\0${sessionFrom}`;
+class AppUseStore {
+  /** `file` null = in-memory (tests). */
+  constructor(file) {
+    this.file = file;
+    if (file && existsSync(file)) {
+      try {
+        const saved = JSON.parse(readFileSync(file, "utf8"));
+        const days = saved.days && typeof saved.days === "object" ? saved.days : {};
+        const dirty = Array.isArray(saved.dirty) ? saved.dirty.filter((d) => typeof d === "string") : [];
+        this.days = days;
+        this.dirty = new Set(dirty);
+      } catch {
+      }
+    }
+  }
+  file;
+  days = {};
+  dirty = /* @__PURE__ */ new Set();
+  add(date, app2, sessionFrom, state, seconds) {
+    const day = this.days[date] ??= {};
+    const key = bucketKey(app2.bundleId, sessionFrom);
+    const b = day[key] ??= { bundle_id: app2.bundleId, app_name: app2.name, session_from: sessionFrom, active_sec: 0, idle_sec: 0 };
+    b.app_name = app2.name;
+    if (state === "active") b.active_sec += seconds;
+    else b.idle_sec += seconds;
+    this.dirty.add(date);
+    this.persist();
+  }
+  rows(date) {
+    return Object.values(this.days[date] ?? {}).map((b) => ({ ...b }));
+  }
+  has(date) {
+    return date in this.days;
+  }
+  dirtyDates() {
+    return [...this.dirty].sort();
+  }
+  markClean(date) {
+    this.dirty.delete(date);
+    this.persist();
+  }
+  markDirty(date) {
+    if (!(date in this.days)) return;
+    this.dirty.add(date);
+    this.persist();
+  }
+  /** Forget flushed days older than keepDays. Dirty days are kept whatever their age. */
+  prune(today, keepDays = 7) {
+    const cutoff = shiftDate(today, -keepDays);
+    let changed = false;
+    for (const date of Object.keys(this.days)) {
+      if (date < cutoff && !this.dirty.has(date)) {
+        delete this.days[date];
+        changed = true;
+      }
+    }
+    if (changed) this.persist();
+  }
+  persist() {
+    if (!this.file) return;
+    const tmp = `${this.file}.tmp`;
+    writeFileSync(tmp, JSON.stringify({ days: this.days, dirty: [...this.dirty] }));
+    renameSync(tmp, this.file);
+  }
+}
+const run = promisify(execFile);
+const SCREENSAVER_PROCESS = "ScreenSaverEngine";
+const LOCK_SCREEN_BUNDLE = "com.apple.loginwindow";
+function isLockScreen(app2) {
+  return app2?.bundleId === LOCK_SCREEN_BUNDLE;
+}
+function parseFront(info) {
+  const name = /^"(.+?)" ASN:/m.exec(info)?.[1];
+  if (!name) return null;
+  const bundleId = /bundleID="([^"]+)"/.exec(info)?.[1] ?? name;
+  return { bundleId, name };
+}
+async function readFront() {
+  try {
+    const { stdout: asn } = await run("lsappinfo", ["front"], { timeout: 3e3 });
+    if (!asn.trim()) return null;
+    const { stdout: info } = await run("lsappinfo", ["info", "-only", "name,bundleid", asn.trim()], { timeout: 3e3 });
+    return parseFront(info);
+  } catch {
+    return null;
+  }
+}
+async function screensaverRunning() {
+  try {
+    await run("pgrep", ["-x", SCREENSAVER_PROCESS], { timeout: 3e3 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+function classify(input) {
+  if (input.away) return "away";
+  return input.idleSeconds >= input.idleAfter ? "idle" : "active";
+}
+const TICK_MS = 5e3;
+const IDLE_AFTER_S = 60;
+const FLUSH_MS = 10 * 6e4;
+const KEEP_DAYS = 7;
+const NOTIFY_MS = 6e4;
+class AppUseCollector {
+  constructor(d) {
+    this.d = d;
+    d.queue.on("change", (s) => this.onQueue(s));
+  }
+  d;
+  status = { front: null, state: "off", sessionFrom: "", at: null };
+  away = false;
+  sessionFrom = "";
+  /** date → id of that day's not-yet-acked upsert. */
+  pending = /* @__PURE__ */ new Map();
+  timers = [];
+  ticking = false;
+  lastNotify = 0;
+  /** suspend / lock-screen → true; resume / unlock-screen → false. */
+  setAway(away) {
+    this.away = away;
+  }
+  /** The phone's active session (null when none, or offline). A paused
+   *  session counts as none. Any change flushes so the timer's chunk lands
+   *  right after the note is written. */
+  setSession(session) {
+    const next = session && !session.paused_at ? session.started_at : "";
+    if (next === this.sessionFrom) return;
+    this.sessionFrom = next;
+    this.flush();
+  }
+  async tick() {
+    if (this.ticking) return;
+    this.ticking = true;
+    try {
+      const front = await this.d.readFront();
+      const away = this.away || isLockScreen(front) || this.d.locked() || await this.d.screensaver();
+      const state = classify({ away, idleSeconds: this.d.idleSeconds(), idleAfter: IDLE_AFTER_S });
+      this.status = { front: state === "away" ? null : front, state, sessionFrom: this.sessionFrom, at: (/* @__PURE__ */ new Date()).toISOString() };
+      if (state === "away" || !front || this.d.excluded().has(front.bundleId)) return;
+      this.d.store.add(this.d.today(), front, this.sessionFrom, state, TICK_MS / 1e3);
+      const now = Date.now();
+      if (now - this.lastNotify >= NOTIFY_MS) {
+        this.lastNotify = now;
+        this.d.onChanged?.();
+      }
+    } catch (e) {
+      console.error("app-use tick failed", e);
+    } finally {
+      this.ticking = false;
+    }
+  }
+  /** Send every dirty day's totals: rewrite the still-unsent item for that
+   *  day in place, else queue a new one. Clean at enqueue; a failure marks
+   *  the day dirty again (see onQueue). */
+  flush() {
+    for (const date of this.d.store.dirtyDates()) {
+      const args = [date, this.d.store.rows(date)];
+      const label = `App use ${date}`;
+      const id = this.pending.get(date);
+      if (id) {
+        if (!this.d.queue.update(id, args, label)) continue;
+      } else {
+        this.pending.set(date, this.d.queue.push("appUse.upsert", args, label));
+      }
+      this.d.store.markClean(date);
+    }
+    this.d.store.prune(this.d.today(), KEEP_DAYS);
+  }
+  onQueue(s) {
+    const failed = [];
+    let refetch = false;
+    for (const [date, id] of [...this.pending]) {
+      if (s.failed.some((f) => f.item.id === id)) {
+        this.pending.delete(date);
+        this.d.store.markDirty(date);
+        failed.push(id);
+      } else if (!s.items.some((i) => i.id === id)) {
+        this.pending.delete(date);
+        if (this.d.store.dirtyDates().includes(date)) refetch = true;
+      }
+    }
+    for (const id of failed) this.d.queue.dismissFailed(id);
+    if (refetch) this.flush();
+  }
+  start() {
+    this.timers = [setInterval(() => void this.tick(), TICK_MS), setInterval(() => this.flush(), FLUSH_MS)];
+    void this.tick();
+    this.flush();
+  }
+  stop() {
+    for (const t of this.timers) clearInterval(t);
+    this.timers = [];
+    this.status = { ...this.status, state: "off" };
+    this.flush();
+  }
+}
+let liveSource = () => null;
+function setLiveSource(fn) {
+  liveSource = fn;
+}
+function mergeLive(rows, live) {
+  if (!live) return rows;
+  const out = rows.map((r) => ({ ...r }));
+  for (const b of live) {
+    const hit = out.find((r) => r.bundle_id === b.bundle_id && r.session_from === b.session_from);
+    if (hit) {
+      hit.active_sec = b.active_sec;
+      hit.idle_sec = b.idle_sec;
+      hit.app_name = b.app_name;
+    } else {
+      out.push({
+        id: -1,
+        date: "",
+        bundle_id: b.bundle_id,
+        app_name: b.app_name,
+        session_from: b.session_from,
+        entry_id: null,
+        detached: 0,
+        active_sec: b.active_sec,
+        idle_sec: b.idle_sec,
+        title: null
+      });
+    }
+  }
+  return out;
+}
+function build(date, rows, assigns) {
+  const apps = /* @__PURE__ */ new Map();
+  const appFor = (bundleId, name) => {
+    let a = apps.get(bundleId);
+    if (!a) {
+      a = { bundle_id: bundleId, app_name: name, active_sec: 0, idle_sec: 0, unassigned_sec: 0, chunks: [] };
+      apps.set(bundleId, a);
+    }
+    return a;
+  };
+  for (const r of rows) {
+    const a = appFor(r.bundle_id, r.app_name);
+    a.active_sec += r.active_sec;
+    a.idle_sec += r.idle_sec;
+    const secs = r.active_sec + r.idle_sec;
+    if (r.entry_id != null) {
+      a.chunks.push({ kind: "timer", id: r.id, entry_id: r.entry_id, title: r.title, seconds: secs });
+    } else if (r.session_from === "" || r.detached) {
+      a.unassigned_sec += secs;
+    } else {
+      a.chunks.push({ kind: "timer", id: r.id, entry_id: null, title: null, seconds: secs });
+    }
+  }
+  for (const s of assigns) {
+    const a = apps.get(s.bundle_id);
+    if (!a) continue;
+    a.chunks.push({ kind: "manual", id: s.id, entry_id: s.entry_id, title: s.title, seconds: s.seconds });
+    a.unassigned_sec -= s.seconds;
+  }
+  const list = [...apps.values()].map((a) => ({ ...a, unassigned_sec: Math.max(0, a.unassigned_sec) })).sort((x, y) => y.active_sec + y.idle_sec - (x.active_sec + x.idle_sec));
+  return {
+    date,
+    apps: list,
+    total_sec: list.reduce((s, a) => s + a.active_sec + a.idle_sec, 0),
+    idle_sec: list.reduce((s, a) => s + a.idle_sec, 0)
+  };
+}
+function dayAppUse(db, date) {
+  const live = liveSource(date);
+  if (!hasTable(db, "app_use")) {
+    return build(date, mergeLive([], live), []);
+  }
+  const rows = db.prepare(
+    `SELECT u.id, u.date, u.bundle_id, u.app_name, u.session_from, u.entry_id, u.detached, u.active_sec, u.idle_sec, e.title
+         FROM app_use u LEFT JOIN entries e ON e.id = u.entry_id WHERE u.date = ? ORDER BY u.id`
+  ).all(date);
+  const assigns = db.prepare(
+    `SELECT a.id, a.bundle_id, a.entry_id, a.seconds, e.title
+         FROM app_use_assignments a LEFT JOIN entries e ON e.id = a.entry_id WHERE a.date = ? ORDER BY a.id`
+  ).all(date);
+  return build(date, mergeLive(rows, live), assigns);
+}
+function appUseRange(db, from, to) {
+  const apps = /* @__PURE__ */ new Map();
+  let days = 0;
+  for (let date = from; date <= to; date = shiftDate(date, 1)) {
+    const d = dayAppUse(db, date);
+    if (d.total_sec > 0) days++;
+    for (const a of d.apps) {
+      const t = apps.get(a.bundle_id) ?? { bundle_id: a.bundle_id, app_name: a.app_name, active_sec: 0, idle_sec: 0 };
+      t.active_sec += a.active_sec;
+      t.idle_sec += a.idle_sec;
+      t.app_name = a.app_name;
+      apps.set(a.bundle_id, t);
+    }
+  }
+  const list = [...apps.values()].sort((x, y) => y.active_sec + y.idle_sec - (x.active_sec + x.idle_sec));
+  return {
+    apps: list,
+    total_sec: list.reduce((s, a) => s + a.active_sec + a.idle_sec, 0),
+    idle_sec: list.reduce((s, a) => s + a.idle_sec, 0),
+    days
+  };
+}
+function excludedApps(db) {
+  try {
+    const parsed = JSON.parse(getSetting(db, "app_use_excluded") ?? "[]");
+    return Array.isArray(parsed) ? parsed.filter((x) => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+const ALLOWED_EXTENSIONS = ["jpg", "jpeg", "png", "wav", "m4a", "mp4"];
+const SAFE_NAME = /^[A-Za-z0-9._-]+$/;
+function isSafeMediaName(name) {
+  if (!name || name.length > 200 || !SAFE_NAME.test(name) || name.includes("..")) {
+    return false;
+  }
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  return ext !== name.toLowerCase() && ALLOWED_EXTENSIONS.includes(ext);
+}
+function mediaPath(dataDir, name) {
+  if (!isSafeMediaName(name)) {
+    throw new Error(`unsafe media name: ${name}`);
+  }
+  return join(dataDir, "media", name);
+}
+function listMedia(dataDir) {
+  const dir = join(dataDir, "media");
+  return existsSync(dir) ? readdirSync(dir) : [];
+}
+function saveMedia(dataDir, name, body) {
+  const path = mediaPath(dataDir, name);
+  mkdirSync(join(dataDir, "media"), { recursive: true });
+  writeFileSync(path, body);
+}
+const ESCAPES = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;"
+};
+function esc(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (ch) => ESCAPES[ch] ?? ch);
+}
+function reportDocument(template, model, options = {}) {
+  const page = options.pageMargin ? `@page { size: A4; margin: ${template.marginPt}pt; }` : "@page { size: A4; }";
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>${esc(model.meta.title)}</title>
+<style>
+${page}
+html, body { margin: 0; padding: 0; background: #FFFFFF; }
+/* The app ellipsizes overlong labels to keep its hand-drawn columns aligned.
+   Here the browser wraps them instead — same content, no truncation. */
+* { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+tr { break-inside: avoid; }
+thead { display: table-header-group; }
+h1, h2, h3 { break-after: avoid; }
+${template.css}
+</style>
+</head>
+<body>${template.html(model)}</body>
+</html>`;
+}
+function parseTimestamp(value) {
+  if (value.includes("T")) {
+    return parseISO(value);
+  }
+  return /* @__PURE__ */ new Date(value.replace(" ", "T") + "Z");
+}
+function formatTime(isoDatetime) {
+  return format(parseTimestamp(isoDatetime), "HH:mm");
 }
 function mergeIntervals(intervals) {
   const sorted = intervals.filter(([start, end]) => end > start).sort((left, right) => left[0] - right[0]);
@@ -1080,14 +1711,20 @@ function ensureDataDir(userData) {
   mkdirSync(join(userData, "snapshots"), { recursive: true });
   return userData;
 }
-function loadOrCreateToken(dataDir) {
-  const path = join(dataDir, "token");
+function loadOrCreateSecret(dataDir, name, bytes) {
+  const path = join(dataDir, name);
   if (existsSync(path)) {
     return readFileSync(path, "utf8").trim();
   }
-  const token = randomBytes(24).toString("base64url");
-  writeFileSync(path, token, { mode: 384 });
-  return token;
+  const value = randomBytes(bytes).toString("base64url");
+  writeFileSync(path, value, { mode: 384 });
+  return value;
+}
+function loadOrCreateToken(dataDir) {
+  return loadOrCreateSecret(dataDir, "token", 24);
+}
+function loadOrCreateId(dataDir) {
+  return loadOrCreateSecret(dataDir, "id", 8);
 }
 function lanAddress() {
   for (const list of Object.values(networkInterfaces())) {
@@ -1099,11 +1736,11 @@ function lanAddress() {
   }
   return null;
 }
-function pairInfo(token) {
+function pairInfo(token, id) {
   const ip = lanAddress();
   const url = ip ? `http://${ip}:${PORT}` : null;
-  const payload = url ? `kelomit://pair?url=${encodeURIComponent(url)}&token=${encodeURIComponent(token)}` : null;
-  return { url, token, payload };
+  const payload = url ? `kelomit://pair?url=${encodeURIComponent(url)}&token=${encodeURIComponent(token)}&id=${encodeURIComponent(id)}` : null;
+  return { url, token, id, payload };
 }
 function bearerAuth(token) {
   return async (c, next) => {
@@ -1217,6 +1854,42 @@ function startApiServer(dataDir, token) {
   console.log(`kelomit companion api on :${PORT}, data=${dataDir}`);
   return server;
 }
+const BEACON_PORT = 53318;
+const BEACON_GROUP = "224.0.0.167";
+const INTERVAL_MS = 3e3;
+const TARGETS = ["255.255.255.255", BEACON_GROUP];
+function beaconPayload(id, port, name = hostname()) {
+  return Buffer.from(JSON.stringify({ k: "kelomit", v: 1, id, port, name }));
+}
+function startBeacon(id, port, opts = {}) {
+  const targets = opts.targets ?? TARGETS;
+  const beaconPort = opts.beaconPort ?? BEACON_PORT;
+  const payload = beaconPayload(id, port);
+  const socket = createSocket({ type: "udp4", reuseAddr: true });
+  let timer = null;
+  socket.on("error", (err) => {
+    console.warn("kelomit beacon:", err.message);
+  });
+  socket.bind(0, () => {
+    socket.setBroadcast(true);
+    try {
+      socket.setMulticastTTL(1);
+    } catch {
+    }
+    const tick = () => {
+      for (const target of targets) {
+        socket.send(payload, beaconPort, target, () => {
+        });
+      }
+    };
+    tick();
+    timer = setInterval(tick, opts.intervalMs ?? INTERVAL_MS);
+  });
+  return () => {
+    if (timer) clearInterval(timer);
+    socket.close();
+  };
+}
 function installMenu(getWindow) {
   const send = (action) => () => getWindow()?.webContents.send("menu", action);
   const template = [
@@ -1289,324 +1962,6 @@ function installMenu(getWindow) {
     }
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
-}
-const unitLabels = { "DL": ["desilitra", "decilitre"], "RKL": ["ruokalusikka", "tablespoon"], "TL": ["teelusikka", "teaspoon"], "KPL_S": ["pieni (kpl)", "small piece"], "KPL_M": ["keskikokoinen (kpl)", "medium-sized piece"], "KPL_L": ["iso (kpl)", "big piece"], "KPL_VALM": ["Valmistaja (kpl)", "Manufacturer (piece)"], "PORTS": ["pieni annos", "small portion"], "PORTM": ["keskikokoinen annos", "medium-sized portion"], "PORTL": ["iso annos", "big portion"] };
-const fineliJson = {
-  unitLabels
-};
-function entryMatchesHabit(entry, matchers, entryTriggerIds) {
-  return matchers.some((m) => {
-    switch (m.kind) {
-      case "project":
-        return entry.project_id === m.ref_id;
-      case "tag":
-        return entry.tags?.some((t) => t.id === m.ref_id) ?? false;
-      case "trigger":
-        return entryTriggerIds.get(entry.id)?.includes(m.ref_id) ?? false;
-      default:
-        return false;
-    }
-  });
-}
-function dayMatchesLife(matchers, ctx) {
-  return matchers.some((m) => {
-    switch (m.kind) {
-      case "steps":
-        return ctx.health?.steps != null && ctx.health.steps >= (m.threshold ?? 1);
-      case "sleep_minutes":
-        return ctx.health?.sleep_minutes != null && ctx.health.sleep_minutes >= (m.threshold ?? 1);
-      case "food_entries":
-        return (ctx.food?.entries ?? 0) >= (m.threshold ?? 1);
-      case "food_kcal":
-        return m.threshold != null && (ctx.food?.entries ?? 0) > 0 && (ctx.food?.kcal ?? 0) <= m.threshold;
-      default:
-        return false;
-    }
-  });
-}
-function habitDayProgress(habit, matchers, dayEntries, entryTriggerIds, ctx = {}) {
-  const hits = dayEntries.filter((e) => entryMatchesHabit(e, matchers, entryTriggerIds));
-  const count = hits.length + (dayMatchesLife(matchers, ctx) ? 1 : 0);
-  const seconds = hits.reduce((sum, e) => sum + entryTrackedSeconds(e), 0);
-  const goal = habit.goal_value ?? 0;
-  const done = habit.goal_kind === "count" ? count >= goal : habit.goal_kind === "minutes" ? seconds >= goal * 60 : count > 0;
-  return { done, seconds, count };
-}
-function categoryStreak(habitsDoneByDate, today) {
-  let d = /* @__PURE__ */ new Date(`${today}T00:00:00`);
-  if (!habitsDoneByDate.get(today)) {
-    d.setDate(d.getDate() - 1);
-  }
-  let n = 0;
-  for (; ; ) {
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    if (!habitsDoneByDate.get(key)) {
-      return n;
-    }
-    n++;
-    d.setDate(d.getDate() - 1);
-  }
-}
-const FINELI_UNIT_LABELS = fineliJson.unitLabels;
-const STREAK_WINDOW_DAYS = 120;
-function localToday() {
-  const d = /* @__PURE__ */ new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-function shiftDate(date, days) {
-  const d = /* @__PURE__ */ new Date(`${date}T00:00:00`);
-  d.setDate(d.getDate() + days);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-function monthBounds$1(month) {
-  const [y, m] = month.split("-").map(Number);
-  return [`${month}-01`, `${month}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`];
-}
-function product(row) {
-  return { ...row, archived: Boolean(row.archived) };
-}
-function dayFood(db, date) {
-  if (!hasTable(db, "food_entries")) {
-    return { entries: [], products: {}, kcal: 0, noKcal: 0 };
-  }
-  const entries = db.prepare(
-    `SELECT f.* FROM food_entries f JOIN days d ON d.id = f.day_id
-        WHERE d.date = ? ORDER BY f.eaten_at, f.id`
-  ).all(date);
-  const ids = [...new Set(entries.map((e) => e.product_id).filter((id) => id != null))];
-  const products = {};
-  if (ids.length > 0) {
-    const rows = db.prepare(`SELECT * FROM food_products WHERE id IN (${ids.map(() => "?").join(",")})`).all(...ids);
-    for (const r of rows) products[r.id] = product(r);
-  }
-  return {
-    entries,
-    products,
-    kcal: entries.reduce((s, e) => s + (e.kcal ?? 0), 0),
-    noKcal: entries.filter((e) => e.kcal == null).length
-  };
-}
-function fineliUnits(db, foodId) {
-  return db.prepare("SELECT code, grams FROM fineli_units WHERE food_id = ? ORDER BY rowid").all(foodId);
-}
-function foodSearch(db, query, lang = "fi") {
-  const q = query.trim();
-  const empty = { products: [], fineli: [], unitLabels: FINELI_UNIT_LABELS };
-  if (!q || !hasTable(db, "food_products")) return empty;
-  const products = db.prepare(
-    `SELECT * FROM food_products
-          WHERE archived = 0 AND (name LIKE ? OR brand LIKE ?)
-          ORDER BY CASE WHEN name LIKE ? THEN 0 ELSE 1 END, name LIMIT 6`
-  ).all(`%${q}%`, `%${q}%`, `${q}%`).map(product);
-  const own = new Set(products.filter((p) => p.source === "fineli").map((p) => p.source_ref));
-  const col = lang === "fi" ? "name_fi" : "name_en";
-  const fineli = hasTable(db, "fineli_foods") ? db.prepare(
-    `SELECT * FROM fineli_foods
-              WHERE name_fi LIKE ? OR name_en LIKE ?
-              ORDER BY CASE WHEN ${col} LIKE ? THEN 0 WHEN name_fi LIKE ? THEN 1 ELSE 2 END, length(${col}) LIMIT 8`
-  ).all(`%${q}%`, `%${q}%`, `${q}%`, `${q}%`).filter((f) => !own.has(String(f.id))).map((f) => ({ ...f, units: fineliUnits(db, f.id) })) : [];
-  return { products, fineli, unitLabels: FINELI_UNIT_LABELS };
-}
-function foodProduct(db, id) {
-  const row = hasTable(db, "food_products") ? db.prepare("SELECT * FROM food_products WHERE id = ?").get(id) : void 0;
-  const p = row ? product(row) : null;
-  const units = p?.source === "fineli" && p.source_ref && hasTable(db, "fineli_units") ? fineliUnits(db, Number(p.source_ref)) : [];
-  return { product: p, units, unitLabels: FINELI_UNIT_LABELS };
-}
-function habitStates(db, from, to) {
-  const empty = { categories: [], habits: [], matchers: [], triggers: [], overrides: {}, auto: {} };
-  if (!hasTable(db, "habits")) return empty;
-  const categories = db.prepare("SELECT * FROM habit_categories ORDER BY archived, id").all().map((r) => ({
-    ...r,
-    archived: Boolean(r.archived)
-  }));
-  const habits = db.prepare("SELECT * FROM habits ORDER BY archived, id").all().map((r) => ({
-    ...r,
-    archived: Boolean(r.archived)
-  }));
-  const matchers = db.prepare("SELECT habit_id, kind, ref_id, threshold FROM habit_matchers").all();
-  const triggers = hasTable(db, "triggers") ? db.prepare("SELECT * FROM triggers ORDER BY name").all() : [];
-  const overrides = {};
-  for (const r of db.prepare("SELECT habit_id, date, done FROM habit_day_overrides WHERE date BETWEEN ? AND ?").all(from, to)) {
-    (overrides[r.habit_id] ??= {})[r.date] = Boolean(r.done);
-  }
-  const byHabit = /* @__PURE__ */ new Map();
-  for (const m of matchers) byHabit.set(m.habit_id, [...byHabit.get(m.habit_id) ?? [], m]);
-  const active = habits.filter((h) => (byHabit.get(h.id)?.length ?? 0) > 0);
-  const auto = {};
-  if (active.length > 0) {
-    const days = getDaysInRange(db, from, to);
-    const entries = getEntriesInRange(db, from, to);
-    const entriesByDay = /* @__PURE__ */ new Map();
-    for (const e of entries) entriesByDay.set(e.day_id, [...entriesByDay.get(e.day_id) ?? [], e]);
-    const triggerIds = /* @__PURE__ */ new Map();
-    if (hasTable(db, "entry_triggers")) {
-      for (const r of db.prepare(
-        `SELECT et.entry_id, et.trigger_id FROM entry_triggers et
-             JOIN entries e ON e.id = et.entry_id JOIN days d ON d.id = e.day_id
-            WHERE d.date BETWEEN ? AND ?`
-      ).all(from, to)) {
-        triggerIds.set(r.entry_id, [...triggerIds.get(r.entry_id) ?? [], r.trigger_id]);
-      }
-    }
-    const health = /* @__PURE__ */ new Map();
-    if (hasTable(db, "health_daily")) {
-      for (const r of db.prepare("SELECT date, steps, sleep_minutes FROM health_daily WHERE date BETWEEN ? AND ?").all(from, to)) {
-        health.set(r.date, r);
-      }
-    }
-    const food = /* @__PURE__ */ new Map();
-    if (hasTable(db, "food_entries")) {
-      for (const r of db.prepare(
-        `SELECT d.date AS date, COALESCE(SUM(f.kcal), 0) AS kcal, COUNT(*) AS entries
-             FROM food_entries f JOIN days d ON d.id = f.day_id
-            WHERE d.date BETWEEN ? AND ? GROUP BY d.date`
-      ).all(from, to)) {
-        food.set(r.date, r);
-      }
-    }
-    const dayByDate = new Map(days.map((d) => [d.date, d]));
-    const dates = /* @__PURE__ */ new Set([...dayByDate.keys(), ...health.keys(), ...food.keys()]);
-    for (const h of active) {
-      const inner = {};
-      for (const date of dates) {
-        const day = dayByDate.get(date);
-        const ctx = { health: health.get(date) ?? null, food: food.get(date) ?? null };
-        const p = habitDayProgress(h, byHabit.get(h.id), day ? entriesByDay.get(day.id) ?? [] : [], triggerIds, ctx);
-        if (p.count > 0) inner[date] = p;
-      }
-      auto[h.id] = inner;
-    }
-  }
-  return { categories, habits, matchers, triggers, overrides, auto };
-}
-function habitDone(s, habitId, date) {
-  return s.overrides[habitId]?.[date] ?? s.auto[habitId]?.[date]?.done ?? false;
-}
-function habitsMonth(db, month) {
-  const today = localToday();
-  const [mFrom, mTo] = monthBounds$1(month);
-  const back = shiftDate(today, -STREAK_WINDOW_DAYS);
-  const states = habitStates(db, mFrom < back ? mFrom : back, mTo > today ? mTo : today);
-  const streaks = {};
-  for (const c of states.categories) {
-    const ids = states.habits.filter((h) => h.category_id === c.id && !h.archived).map((h) => h.id);
-    const byDate = /* @__PURE__ */ new Map();
-    for (let i = 0; i <= STREAK_WINDOW_DAYS; i++) {
-      const d = shiftDate(today, -i);
-      if (ids.some((id) => habitDone(states, id, d))) byDate.set(d, true);
-    }
-    streaks[c.id] = categoryStreak(byDate, today);
-  }
-  return { month, ...states, streaks, today };
-}
-function listNags(db) {
-  if (!hasTable(db, "nags")) return { nags: [], done: {} };
-  const nags = db.prepare("SELECT * FROM nags ORDER BY active DESC, title COLLATE NOCASE").all().map((r) => ({
-    ...r,
-    schedule: JSON.parse(r.schedule),
-    plan: JSON.parse(r.plan),
-    countdown: Boolean(r.countdown),
-    active: Boolean(r.active)
-  }));
-  const done = {};
-  for (const r of db.prepare("SELECT nag_id, due_at, done_at FROM nag_done").all()) {
-    done[`${r.nag_id}|${r.due_at}`] = r.done_at;
-  }
-  return { nags, done };
-}
-function listPlaces(db) {
-  const stops = hasTable(db, "day_route_stops");
-  const named = hasTable(db, "named_places") ? db.prepare(
-    `SELECT p.*, ${stops ? "(SELECT COUNT(*) FROM day_route_stops s WHERE s.named_place_id = p.id)" : "0"} AS uses
-             FROM named_places p ORDER BY p.name COLLATE NOCASE`
-  ).all() : [];
-  const saved = hasTable(db, "locations") ? db.prepare(
-    `SELECT l.*, ${stops ? "(SELECT COUNT(*) FROM day_route_stops s WHERE s.saved_location_id = l.id)" : "0"} AS uses
-             FROM locations l ORDER BY l.created_at`
-  ).all() : [];
-  return { named, saved };
-}
-function healthRow(row) {
-  let exercise = null;
-  if (typeof row.exercise === "string") {
-    try {
-      exercise = JSON.parse(row.exercise);
-    } catch {
-      exercise = null;
-    }
-  }
-  return { ...row, exercise };
-}
-function dayHealth(db, date) {
-  if (!hasTable(db, "health_daily")) return null;
-  const row = db.prepare("SELECT * FROM health_daily WHERE date = ?").get(date);
-  return row ? healthRow(row) : null;
-}
-function healthMonth(db, month) {
-  if (!hasTable(db, "health_daily")) return [];
-  const [from, to] = monthBounds$1(month);
-  return db.prepare("SELECT * FROM health_daily WHERE date BETWEEN ? AND ? ORDER BY date DESC").all(from, to).map(healthRow);
-}
-function foodMonth(db, month) {
-  if (!hasTable(db, "food_entries")) return { days: [], kcal: 0 };
-  const [from, to] = monthBounds$1(month);
-  const rows = db.prepare(
-    `SELECT f.*, d.date AS date FROM food_entries f JOIN days d ON d.id = f.day_id
-        WHERE d.date BETWEEN ? AND ? ORDER BY d.date DESC, f.eaten_at, f.id`
-  ).all(from, to);
-  const days = [];
-  for (const r of rows) {
-    let day = days.at(-1);
-    if (!day || day.date !== r.date) {
-      day = { date: r.date, kcal: 0, noKcal: 0, entries: [] };
-      days.push(day);
-    }
-    day.entries.push(r);
-    if (r.kcal == null) day.noKcal++;
-    else day.kcal += r.kcal;
-  }
-  return { days, kcal: days.reduce((s, d) => s + d.kcal, 0) };
-}
-function gallery(db, month) {
-  if (!hasTable(db, "entry_media")) return [];
-  const [from, to] = monthBounds$1(month);
-  return db.prepare(
-    `SELECT em.entry_id, em.media_type, em.file_path, em.thumbnail_path, d.date, e.created_at, e.title
-         FROM entry_media em
-         JOIN entries e ON e.id = em.entry_id
-         JOIN days d ON d.id = e.day_id
-        WHERE em.media_type IN ('photo', 'video') AND d.date BETWEEN ? AND ?
-        ORDER BY d.date DESC, e.created_at DESC, em.position`
-  ).all(from, to);
-}
-function search(db, query, limit = 60) {
-  const q = query.trim();
-  if (!q) return [];
-  const like = `%${q}%`;
-  const rows = db.prepare(
-    `SELECT DISTINCT e.id, d.date
-         FROM entries e
-         JOIN days d ON d.id = e.day_id
-         LEFT JOIN projects p ON p.id = e.project_id
-         LEFT JOIN entry_tags et ON et.entry_id = e.id
-         LEFT JOIN tags t ON t.id = et.tag_id
-        WHERE e.title LIKE ? OR e.body LIKE ? OR p.name LIKE ? OR t.name LIKE ?
-        ORDER BY d.date DESC, e.created_at DESC
-        LIMIT ?`
-  ).all(like, like, like, like, limit);
-  if (rows.length === 0) return [];
-  const byId = new Map(
-    loadEntries(
-      db,
-      `e.id IN (${rows.map(() => "?").join(",")})`,
-      rows.map((r) => r.id)
-    ).map((e) => [e.id, e])
-  );
-  return rows.flatMap((r) => {
-    const entry = byId.get(r.id);
-    return entry ? [{ entry, date: r.date }] : [];
-  });
 }
 function aggregateModeDurations(spans) {
   const totals = {};
@@ -2095,6 +2450,7 @@ function insights(db, period, scope) {
   const dates = datesBetween$1(start, end);
   const now = /* @__PURE__ */ new Date();
   const work = { ...breakdown(db, start, end, scope), byDay: workSecondsByDay(db, start, end) };
+  const appUse = appUseRange(db, start, end);
   const segs = segmentsByDay(db, start, end);
   const movement = summarizeSegments([...segs.values()].flat());
   const footSecByDay = {};
@@ -2218,7 +2574,8 @@ function insights(db, period, scope) {
     food,
     health,
     energy,
-    patterns: { days: usableDays(points), list: findPatterns(points) }
+    patterns: { days: usableDays(points), list: findPatterns(points) },
+    appUse
   };
 }
 function monthBounds(month) {
@@ -2352,7 +2709,10 @@ const QUERIES = {
   healthMonth,
   gallery,
   search,
-  insights
+  insights,
+  dayAppUse,
+  appUseRange,
+  excludedApps
 };
 function registerQueryIpc(dataDir) {
   ipcMain.handle("query", (_e, name, ...args) => {
@@ -2388,10 +2748,13 @@ class PhoneOfflineError extends Error {
   }
 }
 const ACK_TIMEOUT_MS = 2e4;
+const PING_MS = 15e3;
+const MISSED_PINGS_LIMIT = 2;
 class PhoneLink extends EventEmitter {
-  constructor(server, token) {
+  constructor(server, token, pingMs = PING_MS) {
     super();
     this.token = token;
+    this.pingMs = pingMs;
     const wss = new WebSocketServer({ server, path: "/ws" });
     wss.on("connection", (socket, req) => {
       if (req.headers.authorization !== `Bearer ${this.token}`) {
@@ -2401,12 +2764,14 @@ class PhoneLink extends EventEmitter {
       this.socket?.close(4e3, "replaced");
       this.socket = socket;
       this.update({ connected: true, lastSeenAt: (/* @__PURE__ */ new Date()).toISOString() });
+      this.startHeartbeat(socket);
       socket.on("message", (data) => this.onMessage(String(data)));
       socket.on("close", () => {
         if (this.socket === socket) {
           this.socket = null;
           this.update({ connected: false, activeSession: null });
           this.failPending("phone disconnected");
+          this.stopHeartbeat();
         }
       });
       socket.on("error", () => {
@@ -2414,9 +2779,39 @@ class PhoneLink extends EventEmitter {
     });
   }
   token;
+  pingMs;
   socket = null;
   pending = /* @__PURE__ */ new Map();
+  pingTimer = null;
+  missedPings = 0;
   state = { connected: false, lastSeenAt: null, appVersion: null, activeSession: null };
+  /** JSON ping every pingMs; two unanswered pings = the phone is gone.
+   *  JSON (not a ws control frame) so the phone's JS sees it too and can
+   *  run its own staleness watchdog off the same traffic. */
+  startHeartbeat(socket) {
+    this.stopHeartbeat();
+    this.missedPings = 0;
+    this.pingTimer = setInterval(() => {
+      if (this.missedPings >= MISSED_PINGS_LIMIT) {
+        if (this.socket === socket) {
+          this.socket = null;
+          this.update({ connected: false, activeSession: null });
+          this.failPending("phone disconnected");
+        }
+        this.stopHeartbeat();
+        socket.terminate();
+        return;
+      }
+      this.missedPings++;
+      socket.send(JSON.stringify({ type: "ping" }));
+    }, this.pingMs);
+  }
+  stopHeartbeat() {
+    if (this.pingTimer) {
+      clearInterval(this.pingTimer);
+      this.pingTimer = null;
+    }
+  }
   update(patch) {
     this.state = { ...this.state, ...patch };
     this.emit("state", this.state);
@@ -2428,6 +2823,7 @@ class PhoneLink extends EventEmitter {
     } catch {
       return;
     }
+    this.missedPings = 0;
     const patch = { lastSeenAt: (/* @__PURE__ */ new Date()).toISOString() };
     if (msg.type === "hello") {
       patch.appVersion = typeof msg.app_version === "string" ? msg.app_version : null;
@@ -2586,6 +2982,9 @@ class CommandQueue extends EventEmitter {
   }
 }
 app.setName("Kelomit Companion");
+if (process.env.KELOMIT_PORT) {
+  app.setPath("userData", join(app.getPath("userData"), `port-${PORT}`));
+}
 protocol.registerSchemesAsPrivileged([
   { scheme: "kelomit-media", privileges: { secure: true, supportFetchAPI: true, stream: true } }
 ]);
@@ -2613,6 +3012,7 @@ function createWindow() {
   const query = {};
   if (process.env.KELOMIT_DATE) query.date = process.env.KELOMIT_DATE;
   if (process.env.KELOMIT_VIEW) query.view = process.env.KELOMIT_VIEW;
+  if (process.env.KELOMIT_TAB) query.tab = process.env.KELOMIT_TAB;
   if (process.env.ELECTRON_RENDERER_URL) {
     const url = new URL(process.env.ELECTRON_RENDERER_URL);
     for (const [k, v] of Object.entries(query)) url.searchParams.set(k, v);
@@ -2634,7 +3034,10 @@ function createWindow() {
 app.whenReady().then(() => {
   const dataDir = ensureDataDir(app.getPath("userData"));
   const token = loadOrCreateToken(dataDir);
+  const id = loadOrCreateId(dataDir);
   const server = startApiServer(dataDir, token);
+  const stopBeacon = startBeacon(id, PORT);
+  app.on("will-quit", stopBeacon);
   const phone = new PhoneLink(server, token);
   const queue = new CommandQueue(join(dataDir, "queue.json"), phone);
   phone.on("state", (state) => {
@@ -2642,6 +3045,32 @@ app.whenReady().then(() => {
     if (state.connected) queue.drain();
   });
   queue.on("change", (snapshot) => win?.webContents.send("queue-changed", snapshot));
+  const appUseStore = new AppUseStore(join(dataDir, "appuse.json"));
+  setLiveSource((date) => appUseStore.has(date) ? appUseStore.rows(date) : null);
+  const collector = new AppUseCollector({
+    store: appUseStore,
+    readFront,
+    screensaver: screensaverRunning,
+    idleSeconds: () => powerMonitor.getSystemIdleTime(),
+    locked: () => powerMonitor.getSystemIdleState(1) === "locked",
+    excluded: () => {
+      const db = openCurrent(dataDir);
+      return new Set(db ? excludedApps(db) : []);
+    },
+    today: localToday,
+    queue,
+    onChanged: () => win?.webContents.send("app-use-changed")
+  });
+  ipcMain.handle("app-use-status", () => collector.status);
+  if (process.platform === "darwin") {
+    powerMonitor.on("suspend", () => collector.setAway(true));
+    powerMonitor.on("lock-screen", () => collector.setAway(true));
+    powerMonitor.on("resume", () => collector.setAway(false));
+    powerMonitor.on("unlock-screen", () => collector.setAway(false));
+    phone.on("state", (state) => collector.setSession(state.activeSession));
+    collector.start();
+    app.on("will-quit", () => collector.stop());
+  }
   protocol.handle("kelomit-media", (request) => {
     const name = decodeURIComponent(new URL(request.url).pathname.replace(/^\/+/, ""));
     if (!isSafeMediaName(name)) {
@@ -2652,13 +3081,13 @@ app.whenReady().then(() => {
   registerReportIpc(dataDir);
   registerOffIpc();
   registerMediaIpc(dataDir, () => win);
-  ipcMain.handle("pair-info", () => pairInfo(token));
+  ipcMain.handle("pair-info", () => pairInfo(token, id));
   ipcMain.handle("phone-state", () => phone.state);
   ipcMain.handle("cmd", (_e, fn, args, label) => queue.push(fn, args, label));
   ipcMain.handle("queue", () => queue.snapshot());
-  ipcMain.handle("queue-update", (_e, id, args, label) => queue.update(id, args, label));
-  ipcMain.handle("queue-remove", (_e, id) => queue.remove(id));
-  ipcMain.handle("queue-dismiss", (_e, id) => queue.dismissFailed(id));
+  ipcMain.handle("queue-update", (_e, id2, args, label) => queue.update(id2, args, label));
+  ipcMain.handle("queue-remove", (_e, id2) => queue.remove(id2));
+  ipcMain.handle("queue-dismiss", (_e, id2) => queue.dismissFailed(id2));
   registerQueryIpc(dataDir);
   watchCurrentDb(dataDir, () => win?.webContents.send("db-changed"));
   if (process.env.KELOMIT_REPORT_PDF) {

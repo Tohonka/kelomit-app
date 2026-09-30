@@ -23,6 +23,8 @@ const api = {
   reportPdf: (params) => ipcRenderer.invoke("report-pdf", params),
   offLookup: (barcode) => ipcRenderer.invoke("off-lookup", barcode),
   mediaStage: (files) => ipcRenderer.invoke("media-stage", files.map((f) => webUtils.getPathForFile(f))),
-  mediaPick: () => ipcRenderer.invoke("media-pick")
+  mediaPick: () => ipcRenderer.invoke("media-pick"),
+  appUseStatus: () => ipcRenderer.invoke("app-use-status"),
+  onAppUseChanged: (handler) => on("app-use-changed", handler)
 };
 contextBridge.exposeInMainWorld("kelomit", api);
