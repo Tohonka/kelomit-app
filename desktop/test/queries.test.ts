@@ -4,7 +4,7 @@ import {mkdtempSync, rmSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import Database from 'better-sqlite3';
-import {monthSummary, dayDetail} from '../src/main/queries.ts';
+import {monthSummary, dayDetail, dayTrack} from '../src/main/queries.ts';
 
 let dir: string;
 let db: Database.Database;
@@ -101,4 +101,32 @@ test('dayDetail on an unknown day is empty, not an error', () => {
   const d = dayDetail(db, '2026-09-20');
   assert.equal(d.day, null);
   assert.deepEqual(d.entries, []);
+});
+
+test('dayTrack numbers raw fixes trip:n, 0 outside trips, with activity, mode and step from the previous fix', () => {
+  db.exec(`
+    ALTER TABLE day_route_segments ADD COLUMN mode_spans_json TEXT;
+    CREATE TABLE gps_track (id INTEGER PRIMARY KEY AUTOINCREMENT, day_id INTEGER, latitude REAL, longitude REAL, accuracy REAL, altitude REAL, speed REAL, timestamp TEXT);
+    CREATE TABLE activity_events (id INTEGER PRIMARY KEY AUTOINCREMENT, activity TEXT, transition TEXT, timestamp TEXT);
+    INSERT INTO day_route_segments (day_id, sequence, start_ts, end_ts, coordinates_json, mode_spans_json) VALUES
+      (1, 1, '2026-09-15T07:00:00.000Z', '2026-09-15T07:00:10.000Z', '[]',
+       '[{"mode":"foot","startTs":"2026-09-15T07:00:00.000Z","endTs":"2026-09-15T07:00:10.000Z"}]');
+    INSERT INTO activity_events (activity, transition, timestamp) VALUES
+      ('still', 'enter', '2026-09-14T20:00:00.000Z'),
+      ('walking', 'enter', '2026-09-15T07:00:03.000Z'),
+      ('walking', 'exit', '2026-09-15T07:00:09.000Z');
+    INSERT INTO gps_track (day_id, latitude, longitude, accuracy, speed, timestamp) VALUES
+      (1, 60.0, 22.0, 5, 0, '2026-09-15T06:59:00.000Z'),
+      (1, 60.0, 22.0, 5, 1.4, '2026-09-15T07:00:00.000Z'),
+      (1, 60.0001, 22.0, 5, 1.4, '2026-09-15T07:00:04.000Z'),
+      (1, 60.0002, 22.0, 5, 0, '2026-09-15T07:01:00.000Z');
+  `);
+  const pts = dayTrack(db, '2026-09-15');
+  assert.deepEqual(pts.map(p => p.label), ['0:1', '1:1', '1:2', '0:2']);
+  assert.deepEqual(pts.map(p => p.activity), ['still', 'still', 'walking', 'walking']);
+  assert.deepEqual(pts.map(p => p.mode), [null, 'foot', 'foot', null]);
+  assert.equal(pts[0].dt_sec, null);
+  assert.equal(pts[2].dt_sec, 4);
+  assert.ok(Math.abs(pts[2].dist_m! - 11.1) < 0.2);
+  assert.deepEqual(dayTrack(db, '2026-09-20'), []);
 });

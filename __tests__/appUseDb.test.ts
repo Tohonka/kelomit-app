@@ -28,7 +28,7 @@ it('migration 36 creates app_use + app_use_assignments', () => {
   expect(sql).toContain('CREATE TABLE IF NOT EXISTS app_use_assignments (');
   expect(sql).toContain('REFERENCES entries(id) ON DELETE CASCADE');
   expect(sql).toContain('BEFORE DELETE ON entries');
-  expect(migrations[migrations.length - 1].version).toBe(36);
+  expect(migrations[migrations.length - 1].version).toBe(37);
 });
 
 describe('upsertAppUseTotals', () => {

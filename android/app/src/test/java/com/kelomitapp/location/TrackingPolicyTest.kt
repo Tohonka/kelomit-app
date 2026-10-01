@@ -61,16 +61,16 @@ class TrackingPolicyTest {
   fun speedTierUsesExistingHysteresis() {
     var state = TrackingPolicy.State(
       mode = TrackingPolicy.Mode.FAST,
-      intervalMs = 4_000L,
+      intervalMs = TrackingPolicy.FAST_MS,
     )
 
     state = TrackingPolicy.reduce(state, TrackingPolicy.Signal.MovingFix(3.5f, 1L))
-    assertEquals(2_000L, state.intervalMs)
+    assertEquals(TrackingPolicy.SPRINT_MS, state.intervalMs)
 
     state = TrackingPolicy.reduce(state, TrackingPolicy.Signal.MovingFix(2.5f, 2L))
-    assertEquals(2_000L, state.intervalMs)
+    assertEquals(TrackingPolicy.SPRINT_MS, state.intervalMs)
 
     state = TrackingPolicy.reduce(state, TrackingPolicy.Signal.MovingFix(2.4f, 3L))
-    assertEquals(4_000L, state.intervalMs)
+    assertEquals(TrackingPolicy.FAST_MS, state.intervalMs)
   }
 }

@@ -1963,6 +1963,16 @@ function installMenu(getWindow) {
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
+const EARTH_RADIUS_M = 6371e3;
+function toRad(deg) {
+  return deg * Math.PI / 180;
+}
+function distanceMeters(lat1, lon1, lat2, lon2) {
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(a));
+}
 function aggregateModeDurations(spans) {
   const totals = {};
   for (const span of spans) {
@@ -2001,16 +2011,6 @@ function sliceByModeSpans(coordinates, spans) {
     }
   }
   return slices2;
-}
-const EARTH_RADIUS_M = 6371e3;
-function toRad(deg) {
-  return deg * Math.PI / 180;
-}
-function distanceMeters(lat1, lon1, lat2, lon2) {
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return 2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(a));
 }
 function emptyMovement() {
   return { footSec: 0, cycleSec: 0, vehicleSec: 0, stillSec: 0, footM: 0, cycleM: 0, vehicleM: 0 };
@@ -2685,6 +2685,48 @@ function dayRoute(db, date) {
     }))
   };
 }
+function dayTrack(db, date) {
+  const day = getDay(db, date);
+  if (!day || day.id < 0) {
+    return [];
+  }
+  const rows = db.prepare("SELECT id, latitude, longitude, accuracy, altitude, speed, timestamp FROM gps_track WHERE day_id = ? ORDER BY timestamp, id").all(day.id);
+  if (rows.length === 0) {
+    return [];
+  }
+  const trips = db.prepare("SELECT sequence, start_ts, end_ts, mode_spans_json FROM day_route_segments WHERE day_id = ? ORDER BY sequence").all(day.id).map((t) => {
+    let spans = [];
+    try {
+      spans = t.mode_spans_json && JSON.parse(t.mode_spans_json) || [];
+    } catch {
+    }
+    return { sequence: t.sequence, start: Date.parse(t.start_ts), end: Date.parse(t.end_ts), spans };
+  });
+  const enters = (where, order, ...args) => db.prepare(`SELECT activity, timestamp FROM activity_events WHERE transition = 'enter' AND ${where} ORDER BY timestamp ${order}`).all(...args);
+  const acts = [
+    ...enters("timestamp <= ?", "DESC LIMIT 1", rows[0].timestamp),
+    ...enters("timestamp > ? AND timestamp <= ?", "ASC", rows[0].timestamp, rows[rows.length - 1].timestamp)
+  ].map((a) => ({ activity: a.activity, t: Date.parse(a.timestamp) }));
+  const counts = /* @__PURE__ */ new Map();
+  let ai = -1;
+  return rows.map((r, i) => {
+    const t = Date.parse(r.timestamp);
+    const trip = trips.find((s) => t >= s.start && t <= s.end);
+    const seq = trip?.sequence ?? 0;
+    const n = (counts.get(seq) ?? 0) + 1;
+    counts.set(seq, n);
+    while (ai + 1 < acts.length && acts[ai + 1].t <= t) ai++;
+    const prev = rows[i - 1];
+    return {
+      ...r,
+      label: `${seq}:${n}`,
+      activity: acts[ai]?.activity ?? null,
+      mode: trip?.spans.find((s) => t >= Date.parse(s.startTs) && t <= Date.parse(s.endTs))?.mode ?? null,
+      dt_sec: prev ? (t - Date.parse(prev.timestamp)) / 1e3 : null,
+      dist_m: prev ? distanceMeters(prev.latitude, prev.longitude, r.latitude, r.longitude) : null
+    };
+  });
+}
 function listLeave(db, year) {
   return getLeaveRangesInRange(db, `${year}-01-01`, `${year}-12-31`);
 }
@@ -2698,6 +2740,7 @@ const QUERIES = {
   listTags,
   listLeave,
   dayRoute,
+  dayTrack,
   dayFood,
   foodSearch,
   foodProduct,

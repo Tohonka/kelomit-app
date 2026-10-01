@@ -832,6 +832,11 @@ textarea.day-notes {
   user-select: text;
 }
 
+.btn.on {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
 .btn.small {
   padding: 1px 7px;
   font-size: 11px;
@@ -949,6 +954,32 @@ textarea.day-notes {
   background: var(--bgCard);
   color: var(--textPrimary);
   border-color: var(--border);
+}
+
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: var(--bgCard);
+  color: var(--textPrimary);
+}
+
+.pt-info td {
+  padding: 1px 8px 1px 0;
+  user-select: text;
+}
+
+.pt-info td:first-child {
+  color: var(--textSecondary);
+}
+
+.leaflet-tooltip.pt-label {
+  padding: 0 3px;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+.leaflet-tooltip.pt-label::before {
+  display: none;
 }
 
 /* ---- media ------------------------------------------------------------- */

@@ -84,7 +84,7 @@ class LocationService : Service() {
 
   private var fusedClient: FusedLocationProviderClient? = null
   private var activityClient: ActivityRecognitionClient? = null
-  private var slowIntervalMs = 60_000L
+  private var slowIntervalMs = TrackingPolicy.SLOW_MS
   private var policy = TrackingPolicy.State()
   private var lastFix: Location? = null
   private var samplingActive = false

@@ -8,6 +8,7 @@ import {distanceMeters} from '../../../../src/services/locationUtils.ts';
 import {MAX_RADIUS_M, MIN_RADIUS_M} from '../../../../src/utils/geofence.ts';
 import type {DayRouteStop, TripMode} from '../../../../src/types/index.ts';
 import type {PlaceList} from '../../main/life.ts';
+import type {TrackPoint} from '../../main/queries.ts';
 
 /** Same mode hues as the phone's route map: vehicle pink, foot cyan, cycle amber. */
 const MODE_VAR: Record<TripMode, string> = {
@@ -22,6 +23,27 @@ const cssVar = (name: string) => getComputedStyle(document.documentElement).getP
 const cmd = (fn: string, args: unknown[], label: string) => window.kelomit.cmd(fn, args, label).catch(() => {});
 
 const SOURCE_LABEL: Record<string, string> = {saved: 'saved place', reusable: 'named place', google: 'Google', day: 'this day', unknown: ''};
+
+/** Permanent `trip:n` labels only this close in, and only for fixes in view. */
+const LABEL_ZOOM = 17;
+
+const num = (v: number | null, digits: number, unit: string) => (v == null ? '–' : `${v.toFixed(digits)} ${unit}`);
+const kmh = (mps: number | null) => (mps == null ? '–' : `${mps.toFixed(1)} m/s (${(mps * 3.6).toFixed(0)} km/h)`);
+
+function pointInfo(p: TrackPoint): string {
+  const rows: [string, string][] = [
+    ['Time', new Date(p.timestamp).toLocaleTimeString('en-GB')],
+    ['Position', `${p.latitude.toFixed(6)}, ${p.longitude.toFixed(6)}`],
+    ['Speed', kmh(p.speed)],
+    ['Accuracy', num(p.accuracy, 0, 'm')],
+    ['Altitude', num(p.altitude, 0, 'm')],
+    ['Activity', p.activity ?? '–'],
+    ['Route mode', p.mode ?? '–'],
+    ['Since prev', p.dt_sec == null || p.dist_m == null ? '–' : `${p.dt_sec.toFixed(1)} s · ${p.dist_m.toFixed(0)} m · ${kmh(p.dt_sec > 0 ? p.dist_m / p.dt_sec : null)}`],
+    ['Row id', String(p.id)],
+  ];
+  return `<b>${p.label}</b><table class="pt-info">${rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('')}</table>`;
+}
 
 type Nearby = {type: 'saved' | 'reusable'; id: number; name: string; distanceM: number};
 
@@ -195,6 +217,11 @@ export function MapView({date}: {date: string}) {
   const places = useQuery('listPlaces');
   const [side, setSide] = useState<'stops' | 'places'>('stops');
   const [activeStop, setActiveStop] = useState<number | null>(null);
+  // Dev aid: KELOMIT_TAB=points (index.ts) opens with the debug dots on for screenshots.
+  const [debug, setDebug] = useState(() => new URLSearchParams(window.location.search).get('tab') === 'points');
+  const track = useQuery('dayTrack', date);
+  const debugLayer = useRef<L.LayerGroup | null>(null);
+  const canvas = useRef<L.Canvas | null>(null);
   const host = useRef<HTMLDivElement>(null);
   const map = useRef<L.Map | null>(null);
   const layer = useRef<L.LayerGroup | null>(null);
@@ -208,6 +235,8 @@ export function MapView({date}: {date: string}) {
       maxZoom: 19,
     }).addTo(map.current);
     layer.current = L.layerGroup().addTo(map.current);
+    debugLayer.current = L.layerGroup().addTo(map.current);
+    canvas.current = L.canvas(); // thousands of dots: one canvas, not one SVG node each
     return () => {
       map.current?.remove();
       map.current = null;
@@ -243,6 +272,38 @@ export function MapView({date}: {date: string}) {
     if (bounds.isValid()) m.fitBounds(bounds, {padding: [30, 30]});
   }, [route]);
 
+  useEffect(() => {
+    const m = map.current;
+    const g = debugLayer.current;
+    if (!m || !g) return;
+    g.clearLayers();
+    if (!debug || !track) return;
+    const edge = cssVar('--bg');
+    const onTrip = cssVar('--textPrimary'); // not a mode hue: must stand out on the route line
+    const offTrip = cssVar('--textMuted');
+    for (const p of track) {
+      L.circleMarker([p.latitude, p.longitude], {renderer: canvas.current!, radius: 4, color: edge, weight: 1, fillColor: p.label.startsWith('0:') ? offTrip : onTrip, fillOpacity: 1})
+        .bindTooltip(`${p.label} · ${new Date(p.timestamp).toLocaleTimeString('en-GB')}`)
+        .bindPopup(pointInfo(p))
+        .addTo(g);
+    }
+    const labels = L.layerGroup().addTo(g);
+    const relabel = () => {
+      labels.clearLayers();
+      if (m.getZoom() < LABEL_ZOOM) return;
+      const view = m.getBounds();
+      for (const p of track) {
+        if (!view.contains([p.latitude, p.longitude])) continue;
+        L.tooltip({permanent: true, direction: 'right', offset: [5, 0], className: 'pt-label'}).setLatLng([p.latitude, p.longitude]).setContent(p.label).addTo(labels);
+      }
+    };
+    relabel();
+    m.on('moveend', relabel); // also fires after a zoom
+    return () => {
+      m.off('moveend', relabel);
+    };
+  }, [debug, track]);
+
   const focusStop = (stop: DayRouteStop) => {
     setActiveStop(stop.id);
     map.current?.panTo([stop.latitude, stop.longitude]);
@@ -259,6 +320,9 @@ export function MapView({date}: {date: string}) {
           : !route || route.trips.length === 0
             ? 'No route recorded on this day.'
             : `${route.trips.length} ${route.trips.length === 1 ? 'trip' : 'trips'} · ${km.toFixed(1)} km · ${route.stops.length} stops`}
+        <button className={`btn small${debug ? ' on' : ''}`} onClick={() => setDebug(d => !d)} title="Show every logged GPS fix, numbered trip:n (0 = outside a trip). Zoom in for labels, click a dot for details.">
+          Debug points{debug && track ? ` · ${track.length}` : ''}
+        </button>
         <span className="legend">
           <span style={{color: 'var(--work)'}}>● vehicle</span>
           <span style={{color: 'var(--personal)'}}>● foot</span>

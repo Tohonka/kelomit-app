@@ -25,7 +25,7 @@ class NativeTrackingSettings(context: Context) {
     }
 
   var slowIntervalMs: Long
-    get() = prefs.getLong(KEY_SLOW_INTERVAL_MS, 60_000L)
+    get() = prefs.getLong(KEY_SLOW_INTERVAL_MS, TrackingPolicy.SLOW_MS)
     set(value) {
       require(value > 0L) { "Slow interval must be positive" }
       check(prefs.edit().putLong(KEY_SLOW_INTERVAL_MS, value).commit()) {

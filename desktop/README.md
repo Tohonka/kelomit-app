@@ -77,6 +77,7 @@ phone (`energyDay`, `patterns`, `movementSummary`).
 | `KELOMIT_SCREENSHOT=/tmp/x.png` | capture the window after load and quit |
 | `KELOMIT_THEME=light` | force light or dark appearance |
 | `KELOMIT_REPORT_PDF=/tmp/r.pdf` | print 1–16 Sep 2026's report headlessly and quit |
+| `KELOMIT_TAB=points` | with `KELOMIT_VIEW=map`: open with the debug dots on |
 | `KELOMIT_PORT=8091` | run a dev instance beside the packaged app (which holds 8090) |
 
 To develop against real data, copy a backup's `kelomit.db` to `current.db` and

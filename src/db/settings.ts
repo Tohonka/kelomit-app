@@ -39,7 +39,7 @@ export async function getAllSettings(): Promise<Settings> {
   const map = await getRawSettings();
   return {
     gps_enabled: map.gps_enabled !== 'false',
-    gps_interval_ms: parseInt(map.gps_interval_ms ?? '60000', 10),
+    gps_interval_ms: parseInt(map.gps_interval_ms ?? '50000', 10),
     default_activity_type: (map.default_activity_type ?? 'work') as ActivityType,
     default_project_id: map.default_project_id
       ? parseInt(map.default_project_id, 10)

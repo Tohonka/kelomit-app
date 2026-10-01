@@ -106,7 +106,7 @@ const ACTIVITY_TYPES: ActivityType[] = ['work', 'personal_work', 'personal'];
 
 export const useSettingsStore = create<SettingsState>(set => ({
   gps_enabled: true,
-  gps_interval_ms: 60000,
+  gps_interval_ms: 50000,
   default_activity_type: 'work',
   default_project_id: null,
   usual_start: null,

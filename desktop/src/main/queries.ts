@@ -11,10 +11,11 @@ import {
 } from '../../../server/src/queries.ts';
 import type {MediaRow, RouteSegmentRow, RouteStopRow} from '../../../server/src/queries.ts';
 import {calcDayWorkSecs} from '../../../src/utils/hoursUtils.ts';
+import {distanceMeters} from '../../../src/services/locationUtils.ts';
 import {dayFood, dayHealth, foodMonth, foodProduct, foodSearch, gallery, habitsMonth, healthMonth, listNags, listPlaces, search} from './life.ts';
 import {insights} from './insights.ts';
 import {appUseRange, dayAppUse, excludedApps} from './appUse/read.ts';
-import type {Day, DayRouteStop, Entry, LeaveRange, ModeSpan, Project, RouteCoordinate, Tag} from '../../../src/types/index.ts';
+import type {Day, DayRouteStop, Entry, LeaveRange, ModeSpan, Project, RouteCoordinate, Tag, TripMode} from '../../../src/types/index.ts';
 
 /**
  * Read model for the renderer. Everything here is a synchronous read of the
@@ -188,6 +189,82 @@ export function dayRoute(db: Database.Database, date: string): DayRoute {
   };
 }
 
+export interface TrackPoint {
+  id: number;
+  latitude: number;
+  longitude: number;
+  accuracy: number | null;
+  altitude: number | null;
+  speed: number | null;
+  timestamp: string;
+  /** `trip:n` — trip is the route segment's sequence, 0 for a fix outside every trip. */
+  label: string;
+  /** Activity-recognition state at the fix (latest "enter" at or before it). */
+  activity: string | null;
+  /** The route's derived mode at the fix, when it falls inside a trip. */
+  mode: TripMode | null;
+  /** Step from the previous stored fix. */
+  dt_sec: number | null;
+  dist_m: number | null;
+}
+
+/** Route debug: every stored fix of the day, numbered so a spot can be named. */
+export function dayTrack(db: Database.Database, date: string): TrackPoint[] {
+  const day = getDay(db, date);
+  if (!day || day.id < 0) {
+    return [];
+  }
+  const rows = db
+    .prepare('SELECT id, latitude, longitude, accuracy, altitude, speed, timestamp FROM gps_track WHERE day_id = ? ORDER BY timestamp, id')
+    .all(day.id) as Omit<TrackPoint, 'label' | 'activity' | 'mode' | 'dt_sec' | 'dist_m'>[];
+  if (rows.length === 0) {
+    return [];
+  }
+  const trips = (
+    db.prepare('SELECT sequence, start_ts, end_ts, mode_spans_json FROM day_route_segments WHERE day_id = ? ORDER BY sequence').all(day.id) as {
+      sequence: number;
+      start_ts: string;
+      end_ts: string;
+      mode_spans_json: string | null;
+    }[]
+  ).map(t => {
+    let spans: ModeSpan[] = [];
+    try {
+      spans = (t.mode_spans_json && JSON.parse(t.mode_spans_json)) || [];
+    } catch {
+      // unparseable spans: the point just shows no mode
+    }
+    return {sequence: t.sequence, start: Date.parse(t.start_ts), end: Date.parse(t.end_ts), spans};
+  });
+  // The activity in force at the first fix started before it, possibly on an earlier day.
+  const enters = (where: string, order: string, ...args: string[]) =>
+    db.prepare(`SELECT activity, timestamp FROM activity_events WHERE transition = 'enter' AND ${where} ORDER BY timestamp ${order}`).all(...args) as {activity: string; timestamp: string}[];
+  const acts = [
+    ...enters('timestamp <= ?', 'DESC LIMIT 1', rows[0].timestamp),
+    ...enters('timestamp > ? AND timestamp <= ?', 'ASC', rows[0].timestamp, rows[rows.length - 1].timestamp),
+  ].map(a => ({activity: a.activity, t: Date.parse(a.timestamp)}));
+
+  const counts = new Map<number, number>();
+  let ai = -1;
+  return rows.map((r, i) => {
+    const t = Date.parse(r.timestamp);
+    const trip = trips.find(s => t >= s.start && t <= s.end);
+    const seq = trip?.sequence ?? 0;
+    const n = (counts.get(seq) ?? 0) + 1;
+    counts.set(seq, n);
+    while (ai + 1 < acts.length && acts[ai + 1].t <= t) ai++;
+    const prev = rows[i - 1];
+    return {
+      ...r,
+      label: `${seq}:${n}`,
+      activity: acts[ai]?.activity ?? null,
+      mode: trip?.spans.find(s => t >= Date.parse(s.startTs) && t <= Date.parse(s.endTs))?.mode ?? null,
+      dt_sec: prev ? (t - Date.parse(prev.timestamp)) / 1000 : null,
+      dist_m: prev ? distanceMeters(prev.latitude, prev.longitude, r.latitude, r.longitude) : null,
+    };
+  });
+}
+
 /** Leave ranges touching a calendar year. */
 export function listLeave(db: Database.Database, year: number): LeaveRange[] {
   return getLeaveRangesInRange(db, `${year}-01-01`, `${year}-12-31`);
@@ -206,6 +283,7 @@ export const QUERIES = {
   listTags,
   listLeave,
   dayRoute,
+  dayTrack,
   dayFood,
   foodSearch,
   foodProduct,

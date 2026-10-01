@@ -11,8 +11,11 @@ export const STATIONARY_STREAK_TO_SLOW = 3; // consecutive still fixes before ba
 // on an e-scooter (2026-07-09). ponytail: tune on device.
 export const SPRINT_ENTER_MS = 3.5; // m/s (~13 km/h) — cross UP into sprint
 export const SPRINT_EXIT_MS = 2.5; // m/s (~9 km/h) — drop back to normal fast
-export const SPRINT_INTERVAL_MS = 2_000;
-export const FAST_INTERVAL_MS = 4_000;
+// 2026-09-30: every level sampled 20 % denser (was 2 s / 4 s / 60 s) so the
+// desktop route-debug view has more to show. Mirrored in TrackingPolicy.kt.
+export const SPRINT_INTERVAL_MS = 1_667;
+export const FAST_INTERVAL_MS = 3_333;
+export const SLOW_INTERVAL_MS = 50_000;
 
 /**
  * Whether the device is moving: either signal clears the bar. Speed alone is

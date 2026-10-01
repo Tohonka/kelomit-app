@@ -1,8 +1,10 @@
 package com.kelomitapp.location
 
 object TrackingPolicy {
-  const val FAST_MS = 4_000L
-  const val SPRINT_MS = 2_000L
+  // Mirrors src/services/trackingMode.ts (20 % denser since 2026-09-30).
+  const val FAST_MS = 3_333L
+  const val SPRINT_MS = 1_667L
+  const val SLOW_MS = 50_000L
   const val MOVING_LEASE_MS = 120_000L
   const val STILL_FIXES_TO_SLOW = 3
   const val STILL_FIXES_TO_IDLE = 2

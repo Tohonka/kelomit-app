@@ -11,6 +11,7 @@ import {
   dedupGapMs,
   FAST_INTERVAL_MS,
   STATIONARY_STREAK_TO_SLOW,
+  SLOW_INTERVAL_MS,
   type TrackingMode,
 } from './trackingMode';
 import {insertGpsPoint} from '../db/gps';
@@ -56,7 +57,7 @@ let _lastRecordedPosition: KnownPosition | null = null;
 // (battery). The watch is re-armed when the mode changes. See trackingMode.ts.
 let _trackingMode: TrackingMode = 'fast';
 let _stationaryStreak = 0;
-let _slowIntervalMs = 60_000; // set from startTracking's arg (the gps_interval_ms setting)
+let _slowIntervalMs = SLOW_INTERVAL_MS; // set from startTracking's arg (the gps_interval_ms setting)
 // Current watch config, for change detection (sprint↔walk retunes within
 // 'fast' as well as mode changes) and for the interval-scaled dedup gap.
 let _currentIntervalMs = FAST_INTERVAL_MS;
@@ -284,7 +285,7 @@ export async function getCurrentPositionOnce(): Promise<KnownPosition | null> {
   return null;
 }
 
-export async function startTracking(intervalMs = 60_000): Promise<void> {
+export async function startTracking(intervalMs = SLOW_INTERVAL_MS): Promise<void> {
   if (_active) {
     return; // already running
   }

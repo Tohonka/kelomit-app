@@ -704,4 +704,12 @@ export const migrations: Migration[] = [
       'CREATE INDEX IF NOT EXISTS idx_app_use_assignments_date ON app_use_assignments(date)',
     ],
   },
+  {
+    version: 37,
+    up: [
+      // 20 % denser GPS sampling: the slow interval is a stored setting with no
+      // UI, so the old default has to be moved here. A hand-set value is kept.
+      "UPDATE settings SET value = '50000' WHERE key = 'gps_interval_ms' AND value = '60000'",
+    ],
+  },
 ];
